@@ -1,0 +1,77 @@
+package com.hdmapreforged;
+
+import java.awt.*;
+import java.util.*;
+import net.runelite.api.coords.*;
+
+/** One's grave while it stands, drawn over the other icons; clicked, its card offers a route there. Swing thread. */
+final class GraveMarker implements MapView.Overlay, MapView.HitLayer
+{
+    private final MapView view;
+    private WorldPoint at;
+    private Poi grave;
+
+    GraveMarker(MapView view)
+    {
+        this.view = view;
+        view.addOverlay(this);
+        view.addHitLayer(this);
+    }
+
+    /** Null when no grave stands. */
+    void set(WorldPoint at)
+    {
+        if (Objects.equals(at, this.at))
+        {
+            return;
+        }
+        if (grave != null && view.selected() == grave)
+        {
+            view.select(null);
+        }
+        this.at = at;
+        grave = null;
+        view.repaint();
+    }
+
+    /** Made once the map list knows the grave's map (it may stand before the map's data came), again for a new list. */
+    private Poi grave()
+    {
+        BaseMap on = at == null ? null : view.mapOf(at);
+        if (grave == null || grave.map != on)
+        {
+            grave = on == null ? null : new Poi(PoiType.GRAVE, "Your grave", at, on, null, Needs.NONE, "Grave", null, null);
+        }
+        return grave;
+    }
+
+    @Override
+    public void paint(Graphics2D g, MapView.Projection p)
+    {
+        Point center = center(p);
+        if (center != null)
+        {
+            boolean selected = view.selected() == grave;
+            double size = view.iconSize(p.zoom()) * (selected ? 1.25 : 1.1);
+            PoiIcons.paintCached(g, PoiType.GRAVE, center.x, center.y, size, selected);
+        }
+    }
+
+    @Override
+    public Poi hit(Point point, MapView.Projection p)
+    {
+        Point center = center(p);
+        return center != null && center.distance(point) <= view.iconSize(p.zoom()) * 0.6 ? grave : null;
+    }
+
+    private Point center(MapView.Projection p)
+    {
+        Poi shown = grave();
+        if (shown == null || !shown.isOn(p.map()))
+        {
+            return null;
+        }
+        WorldPoint at = p.shown(shown.location);
+        return new Point((int) p.screenX(at.getX() + 0.5), (int) p.screenY(at.getY() + 0.5));
+    }
+}

@@ -1,0 +1,77 @@
+package com.hdmapreforged;
+
+import java.awt.*;
+import java.awt.event.*;
+import java.util.function.*;
+import javax.swing.*;
+import javax.swing.event.*;
+import javax.swing.text.*;
+import lombok.*;
+
+/** A text field that shows a grey hint while it is empty and not typed in. */
+@RequiredArgsConstructor
+final class HintField extends JTextField
+{
+    private static final Color HINT = new Color(150, 150, 150);
+
+    private final Supplier<String> hint;
+
+    @Override
+    protected void paintComponent(Graphics g)
+    {
+        super.paintComponent(g);
+        if (getText().isEmpty() && !isFocusOwner())
+        {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setColor(HINT);
+            FontMetrics m = g2.getFontMetrics();
+            g2.drawString(hint.get(), getInsets().left + 2, (getHeight() + m.getAscent() - m.getDescent()) / 2);
+            g2.dispose();
+        }
+    }
+
+    static void onEdit(JTextComponent field, Runnable edited)
+    {
+        field.getDocument().addDocumentListener(new DocumentListener()
+        {
+            @Override
+            public void insertUpdate(DocumentEvent e)
+            {
+                edited.run();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e)
+            {
+                edited.run();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e)
+            {
+                edited.run();
+            }
+        });
+    }
+
+    /** A key of a focused field: {@code action} when {@code when} holds, else the key is left to the window. */
+    static void bind(JComponent field, int key, String name, Runnable action, BooleanSupplier when)
+    {
+        field.getInputMap().put(KeyStroke.getKeyStroke(key, 0), name);
+        field.getActionMap().put(name, new AbstractAction()
+        {
+            @Override
+            public boolean isEnabled()
+            {
+                return when.getAsBoolean();
+            }
+
+            @Override
+            public void actionPerformed(ActionEvent e)
+            {
+                action.run();
+            }
+        });
+    }
+}

@@ -1,0 +1,46 @@
+# Wilderness zones for the route planner (Tiles.wilderness), as kind <tab> x from, x to, y from, y to.
+# safe: safe zones in the Wilderness: the Ferox Enclave ("a safe area within the Wilderness", OSRS Wiki, Ferox
+# Enclave; CC BY-NC-SA 3.0) and the dungeon under its pub, where the Soul Wars portal is. Their tiles as the collision
+# map walks them: from inside the enclave up to its four barriers (Barrier 39652/39653), and from the foot of the
+# pub's stairs down (Stairs 39647).
+# outside: ground within the Wilderness's bounds that is south of its edge: the strip along the Wilderness Ditch's
+# south side (the ditch's line runs along y 3522, OSRS Wiki, Wilderness Ditch) and the Black Knights' Fortress's
+# grounds north of that line, which the ditch goes round. The tiles walking reaches from south of the edge without
+# crossing the ditch, in the collision map (game cache 2727).
+safe	3125 3140 3617 3638
+safe	3138 3141 3618 3643
+safe	3144 3150 3622 3641
+safe	3142 3154 3626 3641
+safe	3124 3124 3627 3629
+safe	3150 3155 3636 3645
+safe	3126 3126 3639 3639
+safe	3142 3145 3642 3643
+safe	3138 3140 3644 3644
+safe	3143 3145 3644 3645
+safe	3162 3165 10022 10028
+safe	3158 3168 10026 10028
+safe	3165 3167 10029 10034
+safe	3167 3171 10032 10042
+safe	3165 3175 10040 10041
+safe	3164 3166 10042 10044
+outside	2944 3341 3520 3520
+outside	2995 3037 3521 3521
+outside	2995 3036 3522 3522
+outside	2996 3035 3523 3523
+outside	2996 3033 3524 3524
+outside	2997 3032 3525 3525
+outside	2998 3031 3526 3526
+outside	2998 3030 3527 3527
+outside	2998 3029 3528 3528
+outside	2998 3028 3529 3530
+outside	2998 3026 3531 3531
+outside	2998 3025 3532 3533
+outside	3000 3025 3534 3534
+outside	3002 3025 3535 3535
+outside	3003 3025 3536 3536
+outside	3003 3024 3537 3537
+outside	3004 3024 3538 3538
+outside	3005 3024 3539 3540
+outside	3006 3023 3541 3541
+outside	3006 3022 3542 3542
+outside	3007 3021 3543 3543

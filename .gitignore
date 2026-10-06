@@ -1,0 +1,13 @@
+.gradle/
+build/
+out/
+.idea/
+*.iml
+
+# Local machine files and secrets
+.env
+.env.*
+*.log
+*.jks
+*.keystore
+.DS_Store
