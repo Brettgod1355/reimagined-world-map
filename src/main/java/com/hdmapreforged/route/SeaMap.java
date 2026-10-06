@@ -6,7 +6,7 @@ import lombok.*;
 
 /**
  * Where a boat can sail: ground floor water in CELL×CELL blocks, open sea when mostly water (boats keep off rivers
- * and shores). Each block takes the hazard level of the nearest named wiki sea (approximate near borders). Immutable.
+ * and shores). Each block takes the hazard level of the nearest named sea (approximate near borders). Immutable.
  */
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public final class SeaMap

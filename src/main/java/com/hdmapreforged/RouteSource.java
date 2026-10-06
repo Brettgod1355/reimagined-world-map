@@ -605,7 +605,7 @@ final class RouteSource
     }
 
     /**
-     * Half ticks a teleport takes: 4 ticks (OSRS Wiki: a teleport spell's speed, a teleport tablet's ticks); home teleports
+     * Half ticks a teleport takes: 4 ticks (a teleport spell's speed, a teleport tablet's ticks); home teleports
      * 19 to 25 ticks (Home Teleport) and minigame teleports 22 (Grouping), with their cooldown.
      */
     static int teleportTime(boolean home, String group)
@@ -629,7 +629,7 @@ final class RouteSource
                 return 8;
             case PORTAL:
                 return 6;
-            // A ship's trip is a few seconds of its map interlude (OSRS Wiki, Charter ship), a boat's with its talk more.
+            // A ship's trip is a few seconds of its map interlude, a boat's with its talk more.
             case CHARTER:
                 return 14;
             case BOAT:
@@ -711,8 +711,8 @@ final class RouteSource
     }
 
     /**
-     * The boat spells (standard spellbook; OSRS Wiki, Summon Boat and Teleport to Boat): Summon Boat brings a boat with a
-     * teleport focus to the dock one stands at, Teleport to Boat takes one to a boat with the greater focus.
+     * The boat spells (standard spellbook): Summon Boat brings a boat with a teleport focus to the dock one stands at,
+     * Teleport to Boat takes one to a boat with the greater focus.
      */
     private static final Needs SUMMON_BOAT = new Needs("56 Magic", "557=1&&555=1&&563=2", "", "4070=0");
     private static final Needs TELEPORT_TO_BOAT = new Needs("67 Magic", "557=2&&555=2&&563=2", "", "4070=0");
@@ -745,8 +745,7 @@ final class RouteSource
 
     /**
      * Whether what a step needs is carried. A fairy ring's staff (Dramen or Lunar) is not needed once the Lumbridge &
-     * Draynor Elite Diary is done: "If the elite Lumbridge & Draynor Diary is completed, no staff of either kind is
-     * needed" (OSRS Wiki, Fairy ring).
+     * Draynor Elite Diary is done.
      */
     static boolean carried(Unlocks unlocks, PlayerState state, PoiType type, Needs needs)
     {

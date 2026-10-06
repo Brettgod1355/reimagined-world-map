@@ -517,8 +517,6 @@ final class InfoCard extends Fitted
             add(Box.createVerticalStrut(3));
             add(SearchResults.clickableRow(SearchResults.pictureRow(icon, name, line), open));
         }
-        add(Box.createVerticalStrut(6));
-        add(grey(SearchResults.WIKI_CREDIT));
     }
 
     /** How a shop's wares are ordered; kept from one shop to the next. */

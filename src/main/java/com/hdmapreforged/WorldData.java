@@ -8,10 +8,10 @@ import lombok.*;
 import net.runelite.api.coords.*;
 
 /**
- * What the search finds, as our map server works it out once for every player from the lists it takes from the wiki
- * each week (its search.json, see {@code MapServer}): each NPC name's places with how many stand there or the way in,
- * the kind most seen and what they drop; each item's shops, spots on the ground and droppers; the shops' wares; the
- * names to suggest; and which map draws each place where maps overlap, for the map version it names. Immutable.
+ * What the search finds, as our map server works it out once for every player each week (its search.json, see
+ * {@code MapServer}): each NPC name's places with how many stand there or the way in, the kind most seen and what
+ * they drop; each item's shops, spots on the ground and droppers; the shops' wares; the names to suggest; and which
+ * map draws each place where maps overlap, for the map version it names. Immutable.
  */
 final class WorldData
 {
@@ -52,7 +52,7 @@ final class WorldData
         final int item;
         /** The game's name of the item. */
         final String name;
-        /** The wiki's words: "Always", "3/128", "Common". */
+        /** As the data words it: "Always", "3/128", "Common". */
         final String rarity;
         /** "5-10", "7"; empty for one. */
         final String quantity;

@@ -292,16 +292,13 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         refresh();
     }
 
-    /** Where monsters stand, their drops, and the shops and spawns of items come from the wiki's data, via our server. */
-    static final String WIKI_CREDIT = "Places, drops and shops: OSRS Wiki (CC BY-NC-SA 3.0)";
-
     /** A monster's places by name, nearest first, each with how many stand there at once. Pure. */
     static Result monsterResult(NpcSpawns found, Function<WorldPoint, MapData.Place> places, WorldPoint player)
     {
         List<NpcSpawns.Group> groups = named(found.groups, places, "Elsewhere");
         Result shown = new Result(found.page, found.page, "In " + places(groups.size()) + ", marked with green arrows"
             + (player != null ? ", nearest first" : "") + ". Click a place to see it; its card has the way there.",
-            nearestFirst(groups, player), WIKI_CREDIT);
+            nearestFirst(groups, player), null);
         shown.picture = found.npc;
         shown.drops = found.drops;
         shown.tables = found.tables;
@@ -440,7 +437,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             : "") + ". Click a place to see it.");
         List<NpcSpawns.Group> groups = new ArrayList<>(nearestFirst(named(shops, places, ""), player));
         groups.addAll(nearestFirst(named(grounds, places, ""), player));
-        Result shown = new Result(found.page, found.page, summary, groups, WIKI_CREDIT);
+        Result shown = new Result(found.page, found.page, summary, groups, null);
         shown.item = found.item;
         List<ItemSources.Dropper> droppers = new ArrayList<>(found.droppers);
         droppers.sort(Comparator.comparingDouble((ItemSources.Dropper d) -> rarity(d.rarity)).thenComparing(d -> d.name));
@@ -448,7 +445,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return shown;
     }
 
-    /** How often a drop comes, as a number to sort by: always first, then by chance, then the wiki's words. */
+    /** How often a drop comes, as a number to sort by: always first, then by chance, then by its words. */
     static double rarity(String words)
     {
         String w = words.toLowerCase(Locale.ROOT);
@@ -462,7 +459,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         {
             return -1;
         }
-        // The wiki's words, as the chances they stand for, roughly.
+        // The words, as the chances they stand for, roughly.
         String[] kinds = {"very common", "common", "uncommon", "very rare", "rare"};
         double[] chances = {1 / 4.0, 1 / 10.0, 1 / 50.0, 1 / 5000.0, 1 / 500.0};
         for (int i = 0; i < kinds.length; i++)
@@ -714,7 +711,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
 
     /**
      * Where one stands at a place: its spot, or beside it on its floor (a counter, a tree), else the nearest floor there
-     * that is ground. The wiki gives a place's floor as its map draws it: the Brimhaven Dungeon's raised paths on floor
+     * that is ground. A place's floor is given as its map draws it: the Brimhaven Dungeon's raised paths on floor
      * 1, walked on floor 2.
      */
     static WorldPoint standing(WorldPoint p, Predicate<WorldPoint> ground)
@@ -947,7 +944,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
                 refresh();
             }, width));
         List<WorldData.Drop> drops = dropOrder(shownDrops(), dropSort, prices::price);
-        // As the wiki's page lays them out: 100%, the main table, the rare drop table, tertiary.
+        // 100%, the main table, the rare drop table, tertiary.
         String[][] parts = {{"a", "100%"}, {"", "Main drops"}, {"r", "Rare drop table"}, {"t", "Tertiary"}};
         for (String[] part : parts)
         {
@@ -1053,7 +1050,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         }
     }
 
-    /** Drops in the order chosen: "page" as the wiki lists them, "rarity" surest first, "value" dearest first. */
+    /** Drops in the order chosen: "page" as listed, "rarity" surest first, "value" dearest first. */
     static List<WorldData.Drop> dropOrder(List<WorldData.Drop> drops, String sort, IntUnaryOperator price)
     {
         List<WorldData.Drop> sorted = new ArrayList<>(drops);

@@ -3016,9 +3016,9 @@ public final class RouteFeature
         }
 
         /**
-         * The jewellery box's menu in its order, which gives each place its key: 1 to 9, then A to R (the OSRS Wiki's
-         * "Ornate jewellery box", CC BY-NC-SA 3.0). Our name for the place, then the box's where it differs; kept as our
-         * name to the box's key and name ("burthorpe games room" to "5 Burthorpe").
+         * The jewellery box's menu in its order, which gives each place its key: 1 to 9, then A to R. Our name for the
+         * place, then the box's where it differs; kept as our name to the box's key and name ("burthorpe games room" to
+         * "5 Burthorpe").
          */
         private static final Map<String, String> BOX = box("Emir's Arena", "Castle Wars|Castle Wars Arena",
             "Ferox Enclave", "Fortis Colosseum", "Burthorpe Games Room|Burthorpe", "Barbarian Assault|Barbarian Outpost",
