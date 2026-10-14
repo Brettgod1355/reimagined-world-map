@@ -13,8 +13,9 @@ final class PartyMapRules
     static final long CHANGE_COOLDOWN_MILLIS = 5_000;
     /** RuneLite's Party plugin leaves after 30 minutes logged out; we do the same for a party we rejoined. */
     static final long IDLE_LEAVE_MILLIS = 30 * 60_000;
-    static final int MIN_SEND_TICKS = 5;
-    static final int GEAR_TICKS = 10;
+    /** Every tick something changed, as RuneLite's own Party plugin sends its status. */
+    static final int MIN_SEND_TICKS = 1;
+    static final int GEAR_TICKS = 1;
     static final int MAX_DROPS_PER_LOOT = 4;
     /** Sent at least this often while standing still, so newcomers and fading work. */
     static final int HEARTBEAT_TICKS = 50;

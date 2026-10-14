@@ -469,13 +469,22 @@ public final class Pathfinder
 
     public Route find(RouteRequest request, BooleanSupplier cancelled)
     {
-        Route route = walkOrSail(request, cancelled);
+        return find(request, cancelled, Integer.MAX_VALUE);
+    }
+
+    /**
+     * The same, giving up (as at the node limit, without a verdict) once no way under {@code costLimit} half ticks can
+     * be found: looking for the quickest of several places, a place that cannot beat the best so far stops early.
+     */
+    public Route find(RouteRequest request, BooleanSupplier cancelled, int costLimit)
+    {
+        Route route = walkOrSail(request, cancelled, costLimit);
         // Kept out of the Wilderness, yet no way around it gets there (the Mage Arena's bank, Entrana's dungeon without a
         // boat): through it after all, and the route says so.
         if (avoids(request) && route.keptOut && (route.outcome == Route.Outcome.NEAREST
             || route.outcome == Route.Outcome.NONE) && !cancelled.getAsBoolean())
         {
-            Route through = walkOrSail(request.throughWilderness(), cancelled);
+            Route through = walkOrSail(request.throughWilderness(), cancelled, costLimit);
             if (through.outcome == Route.Outcome.FOUND)
             {
                 return through.throughWilderness();
@@ -486,14 +495,14 @@ public final class Pathfinder
         return route;
     }
 
-    private Route walkOrSail(RouteRequest request, BooleanSupplier cancelled)
+    private Route walkOrSail(RouteRequest request, BooleanSupplier cancelled, int costLimit)
     {
-        Route route = search(request, cancelled);
+        Route route = search(request, cancelled, costLimit);
         // Left without their boat (a place on land): sail only when walking does not get there (an island).
         if (request.withBoat != null && (route.outcome == Route.Outcome.NEAREST || route.outcome == Route.Outcome.NONE)
             && !cancelled.getAsBoolean())
         {
-            Route sailed = search(request.withBoat, cancelled);
+            Route sailed = search(request.withBoat, cancelled, costLimit);
             return sailed.outcome == Route.Outcome.FOUND ? sailed : sailed.keptOut && !route.keptOut ? route.keptOut()
                 : route;
         }
@@ -507,7 +516,7 @@ public final class Pathfinder
         return request.avoidWilderness && !Tiles.wilderness(request.target) && !(start >= 0 && Tiles.wilderness(start));
     }
 
-    private Route search(RouteRequest request, BooleanSupplier cancelled)
+    private Route search(RouteRequest request, BooleanSupplier cancelled, int costLimit)
     {
         int target = request.target;
         int goal = resolveGoal(target);
@@ -565,6 +574,12 @@ public final class Pathfinder
             {
                 continue;
             }
+            if ((int) (item >>> 32) > costLimit)
+            {
+                // Every way left costs at least this (the heuristic never overestimates): nothing under the limit.
+                limited = true;
+                break;
+            }
             if ((++popped & (TURN - 1)) == 0)
             {
                 if (cancelled.getAsBoolean())
@@ -573,9 +588,10 @@ public final class Pathfinder
                 }
                 if (back != null && back.flood(TURN))
                 {
-                    if (back.reaches(start, all, startOffset, avoid))
+                    if (back.reaches(start, startOffset))
                     {
-                        back = null; // in reach: the search alone finds the way
+                        // In reach: the search alone finds the way.
+                        back = null;
                     }
                     else
                     {
@@ -652,8 +668,9 @@ public final class Pathfinder
         }
         // Tried everything, or proved from the goal's side: what was reached (or not) tells where else the target is out
         // of reach.
-        boolean exhausted = found < 0 && (proof != null || !limited && open.isEmpty());
-        Reached reached = found >= 0 ? null : open.isEmpty() && !limited ? new Reached(nodes.reached(), false) : proof;
+        boolean tried = !limited && open.isEmpty();
+        boolean exhausted = found < 0 && (proof != null || tried);
+        Reached reached = found >= 0 ? null : tried ? new Reached(nodes.reached(), false) : proof;
         int end = found >= 0 ? found : best;
         Route route;
         if (end < 0)
@@ -765,8 +782,8 @@ public final class Pathfinder
                         }
                         visitFrom(from);
                     }
-                    jumpsTo(passagesByDestination.get(node));
                 }
+                jumpsTo(passagesByDestination.get(node));
                 jumpsTo(requestByDestination.get(node));
             }
             return head == tail;
@@ -801,7 +818,7 @@ public final class Pathfinder
         }
 
         /** Done: whether the goal is in reach from the start or from where a jump from anywhere lands. */
-        boolean reaches(int start, List<Edge> all, int startOffset, boolean avoid)
+        boolean reaches(int start, int startOffset)
         {
             if (start >= 0 && seen.contains(start))
             {

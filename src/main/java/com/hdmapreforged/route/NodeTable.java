@@ -93,7 +93,7 @@ final class NodeTable
     /** The nodes reached. */
     NodeSet reached()
     {
-        long[][] bits = new long[Math.max(1, count)][];
+        long[][] bits = new long[count][];
         for (int b = 0; b < count; b++)
         {
             bits[b] = new long[64];

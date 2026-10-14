@@ -44,7 +44,8 @@ public final class RouteHouse
 
     /**
      * Where a route tile is in the scene: the plan of one's house lies at {@link HousePlan#X}/{@link HousePlan#Y}
-     * plus the house's own place, moved to where it is loaded now; null outside the scene.
+     * plus the house's own place, moved to where it is loaded now; null outside the scene, past its edge only as far as
+     * an expanded scene loads.
      */
     LocalPoint local(WorldView view, int point)
     {

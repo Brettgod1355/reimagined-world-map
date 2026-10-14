@@ -38,10 +38,18 @@ final class TourPanel
         {
         }
 
-        /** Puts text on the clipboard. */
-        default void copy(String text)
+        /** Puts text on the clipboard; whether it could (another program may hold the clipboard). */
+        default boolean copy(String text)
         {
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+            try
+            {
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+                return true;
+            }
+            catch (IllegalStateException e)
+            {
+                return false;
+            }
         }
 
         /** The clipboard's text, or null. */
@@ -252,16 +260,6 @@ final class TourPanel
         if (current.stops.size() > 1)
         {
             go.add(Box.createHorizontalStrut(4));
-            JButton fastest = button(ordering ? "Working it out…" : "Fastest order", () -> { });
-            fastest.addActionListener(e -> {
-                JPopupMenu how = new JPopupMenu();
-                item(how, "With what you have now", () -> order(current, false));
-                item(how, "With every teleport and transport in the game", () -> order(current, true));
-                popup(how, fastest);
-            });
-            fastest.setEnabled(!ordering);
-            go.add(tip(fastest, "Let the route planner put the stops in the quickest order from where you are"));
-            go.add(Box.createHorizontalStrut(4));
             JCheckBox loop = new JCheckBox("Loop", current.loop);
             loop.setOpaque(false);
             loop.setToolTipText("After the last stop, start again at the first");
@@ -272,21 +270,28 @@ final class TourPanel
             go.add(loop);
         }
         panel.add(go);
+        if (current.stops.size() > 1)
+        {
+            panel.add(Box.createVerticalStrut(4));
+            JPanel ordering = row();
+            JButton withItems = button(this.ordering ? "Working it out…" : "Order with current items",
+                () -> order(current, false));
+            withItems.setEnabled(!this.ordering);
+            ordering.add(tip(withItems, "Put the stops in the quickest order from where you are, with the teleports, "
+                + "transport and items you have now; a home or minigame teleport is used once at most"));
+            ordering.add(Box.createHorizontalStrut(4));
+            JButton fastest = button("Order fastest", () -> order(current, true));
+            fastest.setEnabled(!this.ordering);
+            ordering.add(tip(fastest, "The quickest order with every teleport and transport in the game, whatever you "
+                + "have; a home or minigame teleport is used once at most"));
+            panel.add(ordering);
+        }
         panel.add(Box.createVerticalStrut(4));
 
         JPanel share = row();
-        JButton export = button("Export", () -> { });
-        export.addActionListener(e -> {
-            JPopupMenu what = new JPopupMenu();
-            item(what, "This route", () -> {
-                actions.copy(Tour.share(List.of(current)));
-                actions.say("\"" + current.name + "\" copied to the clipboard");
-            });
-            item(what, "All routes", () -> {
-                actions.copy(Tour.share(tours));
-                actions.say(tours.size() + " routes copied to the clipboard");
-            });
-            popup(what, export);
+        JButton export = choice("Export", what -> {
+            item(what, "This route", () -> copy(Tour.share(List.of(current)), "\"" + current.name + "\""));
+            item(what, "All routes", () -> copy(Tour.share(tours), tours.size() + " routes"));
         });
         export.setEnabled(!current.stops.isEmpty());
         share.add(tip(export, "Copy the route as text, to keep or to share"));
@@ -330,51 +335,60 @@ final class TourPanel
         });
     }
 
-    /** Adds the routes on the clipboard, each under a name not taken; the last added is the one edited. */
+    private void copy(String text, String what)
+    {
+        actions.say(actions.copy(text) ? what + " copied to the clipboard" : "Could not copy: the clipboard is in use");
+    }
+
+    /** Adds the routes with stops on the clipboard, each under a name not taken; the last added is the one edited. */
     private void importRoutes(List<Tour> tours)
     {
         List<Tour> found = Tour.decode(actions.paste());
+        found.removeIf(t -> t.stops.isEmpty());
         if (found.isEmpty())
         {
             actions.say("Nothing to import: copy a route's text first (Export makes it)");
             return;
         }
         String last = null;
+        int added = 0;
         for (Tour t : found)
         {
             if (tours.size() >= Tour.MAX_TOURS)
             {
-                actions.say("Only " + Tour.MAX_TOURS + " routes can be kept: the rest was not imported");
                 break;
             }
             last = Tour.unique(tours, t.name);
             tours.add(t.renamed(last));
+            added++;
         }
         if (last != null)
         {
             save(tours, last);
-            actions.say(found.size() == 1 ? "\"" + last + "\" imported" : found.size() + " routes imported");
         }
+        actions.say(added < found.size() ? "Only " + Tour.MAX_TOURS + " routes can be kept: " + added + " of "
+            + found.size() + " imported" : added == 1 ? "\"" + last + "\" imported" : added + " routes imported");
     }
 
     /** The menu last opened under a button; a test reads it, as a menu shows only under a shown button. */
     private JPopupMenu lastMenu;
 
-    private void popup(JPopupMenu menu, JComponent under)
+    /** A button that opens a menu of choices under itself, filled by {@code choices} when clicked. */
+    private JButton choice(String text, Consumer<JPopupMenu> choices)
     {
-        lastMenu = menu;
-        if (under.isShowing())
-        {
-            menu.show(under, 0, under.getHeight());
-        }
+        JButton[] made = new JButton[1];
+        made[0] = button(text, () -> {
+            JPopupMenu menu = new JPopupMenu();
+            choices.accept(menu);
+            lastMenu = menu;
+            if (made[0].isShowing())
+            {
+                menu.show(made[0], 0, made[0].getHeight());
+            }
+        });
+        return made[0];
     }
 
-    private static void item(JPopupMenu menu, String text, Runnable action)
-    {
-        JMenuItem item = new JMenuItem(text);
-        item.addActionListener(e -> action.run());
-        menu.add(item);
-    }
 
     private void move(List<Tour> tours, Tour tour, int at, int by)
     {

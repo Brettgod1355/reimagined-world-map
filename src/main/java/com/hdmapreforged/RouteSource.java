@@ -463,13 +463,14 @@ final class RouteSource
         }
         String name = member.name.toLowerCase(Locale.ROOT);
         String category = member.group != null && !member.group.isEmpty() ? member.group : "Teleports";
-        if (call.avoiding.contains(name) || call.avoiding.contains(typeKey(category)))
+        boolean once = onceOnly(name, member.group);
+        if (call.avoiding.contains(name) || call.avoiding.contains(typeKey(category))
+            || once && call.avoiding.contains(ONCE_ONLY))
         {
             return;
         }
         into.add(new Edge(Edge.ANYWHERE, to, Edge.Kind.TELEPORT, member.name, needsText(call, member.needs),
-            teleportTime(name.contains("home teleport"), member.group), category)
-            .weighed(call.saving.teleport + lacking));
+            teleportTime(once), category).weighed(call.saving.teleport + lacking));
     }
 
     /** The planted spirit trees that stand grown for this account (see {@link PlantedSpiritTrees}). */
@@ -604,13 +605,29 @@ final class RouteSource
         }
     }
 
+    /** In the avoid set: no home or minigame teleport at all (an order's trips without the one cast they get). */
+    static final String ONCE_ONLY = TYPE + "home and minigame teleports";
+
+    /** A home or minigame teleport: cast once, then its cooldown (30 and 20 minutes). {@code name} lower case. */
+    static boolean onceOnly(String name, String group)
+    {
+        return name.contains("home teleport") || "Minigame teleports".equals(group);
+    }
+
+    /** Whether a route's step is such a teleport. */
+    static boolean onceOnly(Route.Step step)
+    {
+        return step.kind == Route.Step.Kind.TELEPORT && step.name != null
+            && onceOnly(step.name.toLowerCase(Locale.ROOT), step.category);
+    }
+
     /**
      * Half ticks a teleport takes: 4 ticks (a teleport spell's speed, a teleport tablet's ticks); home teleports
      * 19 to 25 ticks (Home Teleport) and minigame teleports 22 (Grouping), with their cooldown.
      */
-    static int teleportTime(boolean home, String group)
+    static int teleportTime(boolean once)
     {
-        return home || "Minigame teleports".equals(group) ? 44 : 8;
+        return once ? 44 : 8;
     }
 
     static int cost(PoiType type)

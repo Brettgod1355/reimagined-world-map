@@ -44,6 +44,7 @@ final class Tour
     /** The fastest order is solved exactly over all of them. */
     static final int MAX_STOPS = 12;
     static final int MAX_TOURS = 50;
+    static final int MAX_AVOIDED = 30;
     private static final String HEADER = "# route";
     /** Between the cells of a shared route's lines, where a tab would be lost in a chat. */
     static final String SHARED = " | ";
@@ -74,19 +75,6 @@ final class Tour
         this.stops = new ArrayList<>(stops);
         this.loop = loop;
         this.avoid = new LinkedHashSet<>(avoid);
-    }
-
-    /** Whether a way is left out of this route: by its name, or every one of its kind. */
-    boolean avoids(String name, String category)
-    {
-        for (String a : avoid)
-        {
-            if (a.equalsIgnoreCase(name) || category != null && a.equalsIgnoreCase(RouteSource.TYPE + category))
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** A left-out way as shown: "Every Teleports" for a kind, else its name. */
@@ -285,8 +273,6 @@ final class Tour
         return tours.size() > MAX_TOURS ? new ArrayList<>(tours.subList(0, MAX_TOURS)) : tours;
     }
 
-    static final int MAX_AVOIDED = 30;
-
     /** A line's cells, trimmed: parted by tabs, or without any by {@link #SHARED} (a bare "|" counts too). */
     private static String[] cells(String line)
     {
@@ -310,6 +296,15 @@ final class Tour
      */
     static List<Integer> fastestOrder(long[][] cost)
     {
+        return fastestOrder(cost, null);
+    }
+
+    /**
+     * The same, where {@code once[a][b]} (when given) is the trip's cost with a teleport that can be cast once in the
+     * route (a home or minigame teleport, with its cooldown): at most one trip takes it, the rest cost {@code cost}.
+     */
+    static List<Integer> fastestOrder(long[][] cost, long[][] once)
+    {
         int n = cost.length - 1;
         if (n <= 0)
         {
@@ -321,58 +316,85 @@ final class Tour
         }
         long unreachable = Long.MAX_VALUE / 4;
         int full = 1 << n;
-        long[][] best = new long[full][n];
-        int[][] from = new int[full][n];
-        for (long[] row : best)
+        // Per set of places visited, last place and whether the once-only teleport was taken (0 or 1).
+        long[][][] best = new long[full][n][2];
+        int[][][] from = new int[full][n][2];
+        for (long[][] row : best)
         {
-            Arrays.fill(row, unreachable);
+            for (long[] used : row)
+            {
+                Arrays.fill(used, unreachable);
+            }
         }
         for (int i = 0; i < n; i++)
         {
-            best[1 << i][i] = weight(cost[0][i + 1], unreachable);
-            from[1 << i][i] = -1;
+            best[1 << i][i][0] = weight(cost[0][i + 1], unreachable);
+            from[1 << i][i][0] = -1;
+            if (once != null)
+            {
+                best[1 << i][i][1] = weight(once[0][i + 1], unreachable);
+                from[1 << i][i][1] = -1;
+            }
         }
         for (int set = 1; set < full; set++)
         {
             for (int last = 0; last < n; last++)
             {
-                long here = best[set][last];
-                if ((set & 1 << last) == 0 || here >= unreachable)
+                for (int used = 0; used < 2; used++)
                 {
-                    continue;
-                }
-                for (int next = 0; next < n; next++)
-                {
-                    if ((set & 1 << next) != 0)
+                    long here = best[set][last][used];
+                    if ((set & 1 << last) == 0 || here >= unreachable)
                     {
                         continue;
                     }
-                    long via = here + weight(cost[last + 1][next + 1], unreachable);
-                    int with = set | 1 << next;
-                    if (via < best[with][next])
+                    for (int next = 0; next < n; next++)
                     {
-                        best[with][next] = via;
-                        from[with][next] = last;
+                        if ((set & 1 << next) != 0)
+                        {
+                            continue;
+                        }
+                        int with = set | 1 << next;
+                        long via = here + weight(cost[last + 1][next + 1], unreachable);
+                        if (via < best[with][next][used])
+                        {
+                            best[with][next][used] = via;
+                            from[with][next][used] = last << 1 | used;
+                        }
+                        if (used == 0 && once != null)
+                        {
+                            long taking = here + weight(once[last + 1][next + 1], unreachable);
+                            if (taking < best[with][next][1])
+                            {
+                                best[with][next][1] = taking;
+                                from[with][next][1] = last << 1;
+                            }
+                        }
                     }
                 }
             }
         }
         int end = 0;
-        for (int last = 1; last < n; last++)
+        int endUsed = 0;
+        for (int last = 0; last < n; last++)
         {
-            if (best[full - 1][last] < best[full - 1][end])
+            for (int used = 0; used < 2; used++)
             {
-                end = last;
+                if (best[full - 1][last][used] < best[full - 1][end][endUsed])
+                {
+                    end = last;
+                    endUsed = used;
+                }
             }
         }
         List<Integer> order = new ArrayList<>();
         int set = full - 1;
-        for (int at = end; at >= 0; )
+        for (int at = end, used = endUsed; at >= 0; )
         {
             order.add(at + 1);
-            int previous = from[set][at];
+            int previous = from[set][at][used];
             set &= ~(1 << at);
-            at = previous;
+            at = previous < 0 ? -1 : previous >> 1;
+            used = previous < 0 ? 0 : previous & 1;
         }
         Collections.reverse(order);
         return order;

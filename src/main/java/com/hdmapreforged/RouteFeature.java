@@ -289,16 +289,6 @@ public final class RouteFeature
      * scene, also an HD renderer's expanded one; it draws what lies in the scene, the nearest 1000 first.
      */
     static final int MARKER_REACH = Constants.EXTENDED_SCENE_SIZE;
-
-    /**
-     * Tiles past each edge of the scene an expanded scene loads (the GPU plugins' expanded map loading, in chunks of
-     * 8), at most to the extended scene's size; 0 without. Client thread.
-     */
-    int expandedTiles()
-    {
-        return Math.min((Constants.EXTENDED_SCENE_SIZE - Constants.SCENE_SIZE) / 2,
-            8 * Math.max(0, client.getExpandedMapLoading()));
-    }
     /** The scene's base when tiles were last sent (one's house moves with it). Client thread. */
     private long sentBase;
     /** Whether tiles were sent since the last clear. */
@@ -1527,12 +1517,13 @@ public final class RouteFeature
             return;
         }
         int asked = fastestAsked.incrementAndGet();
-        toast("Finding the fastest of " + candidates.size() + "…");
+        toast("Finding the fastest…");
         try
         {
             pool.execute(() -> {
                 WorldPoint best = candidates.get(0);
                 int bestTime = Integer.MAX_VALUE;
+                int bestCost = Integer.MAX_VALUE;
                 for (WorldPoint p : candidates)
                 {
                     if (fastestAsked.get() != asked)
@@ -1543,7 +1534,10 @@ public final class RouteFeature
                     Route route;
                     try
                     {
-                        route = request == null ? null : pathfinder.find(request, () -> fastestAsked.get() != asked);
+                        // Nearest as the crow flies first; a place that cannot beat the best so far is given up on
+                        // early (the search's cost weighs teleports a little heavier than their time).
+                        route = request == null ? null
+                            : pathfinder.find(request, () -> fastestAsked.get() != asked, bestCost);
                     }
                     catch (Throwable e)
                     {
@@ -1554,6 +1548,7 @@ public final class RouteFeature
                     {
                         best = p;
                         bestTime = route.time();
+                        bestCost = route.cost;
                     }
                 }
                 WorldPoint chosen = best;
@@ -1678,6 +1673,8 @@ public final class RouteFeature
         int skipped;
         /** The ways the route leaves out, as saved; a copy for the other threads. */
         volatile List<String> avoid = List.of();
+        /** Counts the plans of its parts: an older plan still running finds it is not wanted. */
+        volatile int plan;
     }
 
     /** Set on Swing; read on the client and extras threads too. */
@@ -1702,18 +1699,20 @@ public final class RouteFeature
             return;
         }
         List<Tour> all = tours();
-        for (Tour t : all)
+        Tour saved = all.stream().filter(t -> t.name.equals(r.tour.name)).findFirst().orElse(null);
+        if (saved == null || saved.avoid.size() >= Tour.MAX_AVOIDED)
         {
-            if (t.name.equals(r.tour.name) && t.avoid.size() < Tour.MAX_AVOIDED)
-            {
-                t.avoid.add(name);
-                r.avoid = new ArrayList<>(t.avoid);
-            }
+            toast(saved == null ? "\"" + r.tour.name + "\" is no longer saved" : "\"" + r.tour.name + "\" leaves out "
+                + Tour.MAX_AVOIDED + " ways already, as many as a route can");
+            return;
         }
+        saved.avoid.add(name);
+        r.avoid = new ArrayList<>(saved.avoid);
         saveTours(all, editingName());
         toast("\"" + r.tour.name + "\" now leaves out " + Tour.describe(name).toLowerCase(Locale.ROOT));
         settingsChanged();
         r.legs = new Route[r.points.length];
+        r.plan++;
         planLegs(r);
         refreshTours();
     }
@@ -1868,10 +1867,12 @@ public final class RouteFeature
         {
             return;
         }
+        int plan = running.plan;
+        BooleanSupplier stale = () -> tour != running || running.plan != plan || background == null;
         work.execute(() -> {
             for (int i = 1; i < running.points.length; i++)
             {
-                if (tour != running)
+                if (stale.getAsBoolean())
                 {
                     return;
                 }
@@ -1881,7 +1882,7 @@ public final class RouteFeature
                 Route leg;
                 try
                 {
-                    leg = request == null ? null : pf.find(request, () -> tour != running || background == null);
+                    leg = request == null ? null : pf.find(request, stale);
                 }
                 catch (Throwable e)
                 {
@@ -1892,6 +1893,10 @@ public final class RouteFeature
                 {
                     int at = i;
                     SwingUtilities.invokeLater(() -> {
+                        if (running.plan != plan)
+                        {
+                            return;
+                        }
                         Route[] legs = running.legs.clone();
                         legs[at] = leg;
                         running.legs = legs;
@@ -2117,20 +2122,31 @@ public final class RouteFeature
                 try
                 {
                     int n = points.size();
+                    // Each trip's cost with a home or minigame teleport (cast once in the route, then its cooldown),
+                    // and without: the order takes such a teleport on one trip at most.
+                    long[][] once = new long[n][n];
                     long[][] cost = new long[n][n];
                     // The same ways from any spot on land (the stops and the player are tiles): asked for once.
                     RouteRequest ways = request(0, 0, everything, false, leftOut);
+                    List<String> without = new ArrayList<>(leftOut);
+                    without.add(RouteSource.ONCE_ONLY);
+                    RouteRequest plainWays = request(0, 0, everything, false, without);
                     // Stop by stop: the searches to one stop share their heuristic, and one that tried everything tells
                     // where else that stop is out of reach. None back to the player: an order never returns there.
                     for (int b = 1; b < n && !cancelled.getAsBoolean(); b++)
                     {
                         List<Route> outOfReach = new ArrayList<>();
+                        List<Route> plainOutOfReach = new ArrayList<>();
                         for (int a = 0; a < n; a++)
                         {
-                            cost[a][b] = a == b ? 0 : between(pf, ways, points.get(a), points.get(b), outOfReach, cancelled);
+                            Route trip = a == b ? null : between(pf, ways, points.get(a), points.get(b), outOfReach, cancelled);
+                            once[a][b] = a == b ? 0 : trip == null ? -1 : trip.cost;
+                            // Without the teleport only where the trip took one.
+                            cost[a][b] = trip == null || trip.steps.stream().noneMatch(RouteSource::onceOnly) ? once[a][b]
+                                : tripCost(between(pf, plainWays, points.get(a), points.get(b), plainOutOfReach, cancelled));
                         }
                     }
-                    sorted = cancelled.getAsBoolean() ? null : Tour.fastestOrder(cost);
+                    sorted = cancelled.getAsBoolean() ? null : Tour.fastestOrder(cost, once);
                 }
                 catch (Throwable e)
                 {
@@ -2204,29 +2220,37 @@ public final class RouteFeature
     /** Which fastest-order run is current; any other stops and keeps nothing. */
     private final AtomicInteger orders = new AtomicInteger();
 
-    /** -1 when there is no way, also where an earlier search to {@code b} that tried everything got to. */
-    private static long between(Pathfinder pf, RouteRequest ways, WorldPoint a, WorldPoint b, List<Route> outOfReach,
+    private static long tripCost(Route trip)
+    {
+        return trip == null ? -1 : trip.cost;
+    }
+
+    /**
+     * The trip found, or null when there is no way, also where an earlier search to {@code b} that tried everything
+     * got to. From nowhere known (the player's place unknown) every first stop is as good: a trip costing nothing.
+     */
+    private static Route between(Pathfinder pf, RouteRequest ways, WorldPoint a, WorldPoint b, List<Route> outOfReach,
         BooleanSupplier cancelled)
     {
         if (b == null || ways == null)
         {
-            return -1;
+            return null;
         }
         if (a == null)
         {
-            return 0; // player's place unknown: every first stop is as good
+            return new Route(Outcome.FOUND, Collections.emptyList(), 0, pack(b), pack(b), false, false, 0);
         }
         int from = pf.startNode(pack(a));
         if (outOfReach.stream().anyMatch(proved -> proved.reached(from)))
         {
-            return -1;
+            return null;
         }
         Route route = pf.find(ways.between(pack(a), pack(b)), cancelled);
         if (route.exhausted && route.outcome != Outcome.FOUND)
         {
             outOfReach.add(route);
         }
-        return route.outcome == Outcome.FOUND ? route.cost : -1;
+        return route.outcome == Outcome.FOUND ? route : null;
     }
 
     /** Even with every requirement met there is no way: the data lacks a passage. */
@@ -2947,7 +2971,7 @@ public final class RouteFeature
             // No scene, also an expanded one, reaches further.
             eachTile(route, near(), Constants.EXTENDED_SCENE_SIZE, (point, color, strength) -> {
                 LocalPoint local = Tiles.z(point) != plane ? null : yourHouse.local(view, point);
-                Polygon tile = local == null ? null : Perspective.getCanvasTilePoly(client, local);
+                Polygon tile = local == null ? null : tilePoly(view, local, plane);
                 if (tile != null)
                 {
                     g.setColor(fillTint.of(color, fill * strength));
@@ -2962,6 +2986,57 @@ public final class RouteFeature
             g.setStroke(old);
             return null;
         }
+    }
+
+    /**
+     * Tiles past each edge of the scene an expanded scene loads (the GPU plugins' expanded map loading, in chunks of
+     * 8), at most to the extended scene's size; 0 without. Client thread.
+     */
+    int expandedTiles()
+    {
+        return Math.min(EXPANDED_EDGE, 8 * Math.max(0, client.getExpandedMapLoading()));
+    }
+
+    /** Tiles the extended scene reaches past each edge of the scene. */
+    private static final int EXPANDED_EDGE = (Constants.EXTENDED_SCENE_SIZE - Constants.SCENE_SIZE) / 2;
+
+    /**
+     * A tile's outline on the canvas, also past the scene's edge in an expanded scene: RuneLite's own takes the ground
+     * there as flat, so the corners' heights are read from the extended scene's heights.
+     */
+    private Polygon tilePoly(WorldView view, LocalPoint local, int plane)
+    {
+        int sx = local.getSceneX();
+        int sy = local.getSceneY();
+        if (sx >= 0 && sy >= 0 && sx < view.getSizeX() && sy < view.getSizeY())
+        {
+            return Perspective.getCanvasTilePoly(client, local);
+        }
+        int[][][] heights = view.getTileHeights();
+        int ex = sx + EXPANDED_EDGE;
+        int ey = sy + EXPANDED_EDGE;
+        if (heights == null || plane < 0 || plane >= heights.length || ex < 0 || ey < 0
+            || ex + 1 >= heights[plane].length || ey + 1 >= heights[plane][ex].length)
+        {
+            return null;
+        }
+        int half = Perspective.LOCAL_TILE_SIZE / 2;
+        int x = local.getX();
+        int y = local.getY();
+        Point sw = Perspective.localToCanvas(client, x - half, y - half, heights[plane][ex][ey]);
+        Point se = Perspective.localToCanvas(client, x + half, y - half, heights[plane][ex + 1][ey]);
+        Point ne = Perspective.localToCanvas(client, x + half, y + half, heights[plane][ex + 1][ey + 1]);
+        Point nw = Perspective.localToCanvas(client, x - half, y + half, heights[plane][ex][ey + 1]);
+        if (sw == null || se == null || ne == null || nw == null)
+        {
+            return null;
+        }
+        Polygon poly = new Polygon();
+        poly.addPoint(sw.getX(), sw.getY());
+        poly.addPoint(se.getX(), se.getY());
+        poly.addPoint(ne.getX(), ne.getY());
+        poly.addPoint(nw.getX(), nw.getY());
+        return poly;
     }
 
     static final class RouteText

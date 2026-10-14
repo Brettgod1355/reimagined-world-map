@@ -8,7 +8,6 @@ final class NodeSet
     private final IntMap blocks;
     private long[][] bits;
     private int count;
-    private int size;
 
     NodeSet()
     {
@@ -21,18 +20,6 @@ final class NodeSet
         this.blocks = blocks;
         this.bits = bits;
         this.count = count;
-        for (int b = 0; b < count; b++)
-        {
-            for (long word : bits[b])
-            {
-                size += Long.bitCount(word);
-            }
-        }
-    }
-
-    int size()
-    {
-        return size;
     }
 
     /** Whether the node was not in the set before. */
@@ -57,7 +44,6 @@ final class NodeSet
             return false;
         }
         bits[b][i >> 6] |= mask;
-        size++;
         return true;
     }
 
