@@ -65,8 +65,25 @@ public final class RouteHouse
             }
             return null;
         }
-        return !HousePlan.contains(x, y) ? LocalPoint.fromWorld(view, x, y)
-            : house.own() ? LocalPoint.fromScene(x - HousePlan.X + houseX, y - HousePlan.Y + houseY, view) : null;
+        if (HousePlan.contains(x, y))
+        {
+            return house.own() ? LocalPoint.fromScene(x - HousePlan.X + houseX, y - HousePlan.Y + houseY, view) : null;
+        }
+        LocalPoint local = LocalPoint.fromWorld(view, x, y);
+        if (local == null)
+        {
+            // Past the scene's edge, where an expanded scene (the GPU plugins' setting) draws the ground on: the
+            // route goes on there too, as far as the game loaded.
+            int beyond = routes.expandedTiles();
+            int sx = x - view.getBaseX();
+            int sy = y - view.getBaseY();
+            if (beyond > 0 && sx >= -beyond && sy >= -beyond && sx < view.getSizeX() + beyond
+                && sy < view.getSizeY() + beyond)
+            {
+                local = LocalPoint.fromScene(sx, sy, view);
+            }
+        }
+        return local;
     }
 
     /**

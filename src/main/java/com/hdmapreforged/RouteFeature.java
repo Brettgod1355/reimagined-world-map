@@ -289,6 +289,16 @@ public final class RouteFeature
      * scene, also an HD renderer's expanded one; it draws what lies in the scene, the nearest 1000 first.
      */
     static final int MARKER_REACH = Constants.EXTENDED_SCENE_SIZE;
+
+    /**
+     * Tiles past each edge of the scene an expanded scene loads (the GPU plugins' expanded map loading, in chunks of
+     * 8), at most to the extended scene's size; 0 without. Client thread.
+     */
+    int expandedTiles()
+    {
+        return Math.min((Constants.EXTENDED_SCENE_SIZE - Constants.SCENE_SIZE) / 2,
+            8 * Math.max(0, client.getExpandedMapLoading()));
+    }
     /** The scene's base when tiles were last sent (one's house moves with it). Client thread. */
     private long sentBase;
     /** Whether tiles were sent since the last clear. */
@@ -1413,6 +1423,13 @@ public final class RouteFeature
     /** With {@code everyItem}, the player's levels and quests but any item: what bringing something would give. */
     private RouteRequest request(int begin, int target, boolean anything, boolean everyItem)
     {
+        Running r = tour;
+        return request(begin, target, anything, everyItem, r == null ? List.of() : r.avoid);
+    }
+
+    /** Also without {@code leftOut}: what a custom route leaves out. */
+    private RouteRequest request(int begin, int target, boolean anything, boolean everyItem, List<String> leftOut)
+    {
         RouteSource from = source;
         MapScreen[] on = screens;
         if (from == null || begin < -1 || on.length == 0)
@@ -1422,7 +1439,7 @@ public final class RouteFeature
         MapView view = on[0].view();
         RouteSource.Options options = new RouteSource.Options(config.routeTeleports(), config.routeSailing(),
             shipwrights, anything || config.routeIgnoreLevels(),
-            anything || everyItem || config.routeIgnoreItems(), avoided(), anything ? RouteSource.Saving.NONE
+            anything || everyItem || config.routeIgnoreItems(), avoided(leftOut), anything ? RouteSource.Saving.NONE
                 : new RouteSource.Saving(config.routeSaveTeleport(), config.routeSaveShortcut(),
                     config.routeSaveTransport(), config.routeSaveCanoe(), config.routeSaveCarpet(), config.routeSaveShip()),
             anything, config.routeAvoidWilderness(), config.routeSailToLand());
@@ -1659,10 +1676,47 @@ public final class RouteFeature
         volatile Route[] legs = new Route[0];
         /** Stops skipped one after another, having no place. */
         int skipped;
+        /** The ways the route leaves out, as saved; a copy for the other threads. */
+        volatile List<String> avoid = List.of();
     }
 
     /** Set on Swing; read on the client and extras threads too. */
     private volatile Running tour;
+
+    /** The running custom route's name, or null. */
+    String runningTour()
+    {
+        Running r = tour;
+        return r == null ? null : r.tour.name;
+    }
+
+    /**
+     * Swing thread: a way (or every one of its kind) the running custom route leaves out from now on, saved with the
+     * route; the way to the current stop is looked for again, and the later parts planned again.
+     */
+    void avoidInRoute(String name)
+    {
+        Running r = tour;
+        if (r == null)
+        {
+            return;
+        }
+        List<Tour> all = tours();
+        for (Tour t : all)
+        {
+            if (t.name.equals(r.tour.name) && t.avoid.size() < Tour.MAX_AVOIDED)
+            {
+                t.avoid.add(name);
+                r.avoid = new ArrayList<>(t.avoid);
+            }
+        }
+        saveTours(all, editingName());
+        toast("\"" + r.tour.name + "\" now leaves out " + Tour.describe(name).toLowerCase(Locale.ROOT));
+        settingsChanged();
+        r.legs = new Route[r.points.length];
+        planLegs(r);
+        refreshTours();
+    }
 
     private List<Tour> tours()
     {
@@ -1750,9 +1804,15 @@ public final class RouteFeature
         }
 
         @Override
-        public void fastestOrder(Tour tour, Runnable done)
+        public void fastestOrder(Tour tour, boolean everything, Runnable done)
         {
-            RouteFeature.this.fastestOrder(tour, done);
+            RouteFeature.this.fastestOrder(tour, everything, done);
+        }
+
+        @Override
+        public void say(String text)
+        {
+            toast(text);
         }
 
         @Override
@@ -1789,6 +1849,7 @@ public final class RouteFeature
         }
         // A stop right after the same one is skipped.
         Running running = new Running(chosen.withoutRepeats());
+        running.avoid = new ArrayList<>(chosen.avoid);
         tour = running;
         List<WorldPoint> at = resolve(running.tour.stops, nearFrom(start));
         running.points = at.stream().mapToInt(p -> p == null ? -1 : pack(p)).toArray();
@@ -2028,7 +2089,7 @@ public final class RouteFeature
      * Orders the stops fastest from the player, by routes between every two (in the background), and saves it unless
      * the stops changed meanwhile. {@code done} always runs on Swing.
      */
-    private void fastestOrder(Tour chosen, Runnable done)
+    private void fastestOrder(Tour chosen, boolean everything, Runnable done)
     {
         ExecutorService work = background;
         Pathfinder pf = walker;
@@ -2045,7 +2106,9 @@ public final class RouteFeature
         List<WorldPoint> points = new ArrayList<>();
         points.add(me);
         points.addAll(resolve(stops, me));
-        toast("Working out the fastest order of " + stops.size() + " stops…");
+        List<String> leftOut = new ArrayList<>(chosen.avoid);
+        toast("Working out the fastest order of " + stops.size() + " stops"
+            + (everything ? " with everything in the game…" : "…"));
         BooleanSupplier cancelled = () -> background == null || orders.get() != order;
         try
         {
@@ -2056,7 +2119,7 @@ public final class RouteFeature
                     int n = points.size();
                     long[][] cost = new long[n][n];
                     // The same ways from any spot on land (the stops and the player are tiles): asked for once.
-                    RouteRequest ways = request(0, 0, false);
+                    RouteRequest ways = request(0, 0, everything, false, leftOut);
                     // Stop by stop: the searches to one stop share their heuristic, and one that tried everything tells
                     // where else that stop is out of reach. None back to the player: an order never returns there.
                     for (int b = 1; b < n && !cancelled.getAsBoolean(); b++)
@@ -2505,10 +2568,11 @@ public final class RouteFeature
         return names;
     }
 
-    private Set<String> avoided()
+    private Set<String> avoided(List<String> leftOut)
     {
         Set<String> all = new HashSet<>(routeAvoid);
         neverUsed().forEach(name -> all.add(name.toLowerCase(Locale.ROOT)));
+        leftOut.forEach(name -> all.add(name.toLowerCase(Locale.ROOT)));
         return all;
     }
 

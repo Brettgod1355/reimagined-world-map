@@ -187,11 +187,25 @@ final class RoutePanels
                 String category = step.category;
                 more.addActionListener(a -> {
                     JPopupMenu menu = new JPopupMenu();
-                    item(menu, "Avoid for this route", () -> actions.avoid(name));
-                    if (category != null)
+                    String running = actions.runningTour();
+                    if (running != null)
                     {
-                        item(menu, "Avoid every " + category + " for this route",
-                            () -> actions.avoid(RouteSource.TYPE + category));
+                        // Saved with the custom route: left out whenever it runs.
+                        item(menu, "Leave out of \"" + running + "\"", () -> actions.avoidInRoute(name));
+                        if (category != null)
+                        {
+                            item(menu, "Leave every " + category + " out of \"" + running + "\"",
+                                () -> actions.avoidInRoute(RouteSource.TYPE + category));
+                        }
+                    }
+                    else
+                    {
+                        item(menu, "Avoid for this route", () -> actions.avoid(name));
+                        if (category != null)
+                        {
+                            item(menu, "Avoid every " + category + " for this route",
+                                () -> actions.avoid(RouteSource.TYPE + category));
+                        }
                     }
                     menu.addSeparator();
                     item(menu, "Never use \"" + name + "\"", () -> actions.never(name));
@@ -218,9 +232,7 @@ final class RoutePanels
             panel.add(label("Never used:", width, Font.BOLD, ColorScheme.LIGHT_GRAY_COLOR));
             for (String never : actions.neverUsed())
             {
-                String shown = never.regionMatches(true, 0, RouteSource.TYPE, 0, RouteSource.TYPE.length())
-                    ? "Every " + never.substring(RouteSource.TYPE.length()) : never;
-                JButton allow = flat("✕  " + shown, "Use it again", () -> actions.allow(never));
+                JButton allow = flat("✕  " + Tour.describe(never), "Use it again", () -> actions.allow(never));
                 allow.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
                 panel.add(allow);
             }

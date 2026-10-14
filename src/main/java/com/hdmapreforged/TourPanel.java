@@ -3,6 +3,8 @@ package com.hdmapreforged;
 import static com.hdmapreforged.SearchResults.*;
 
 import java.awt.*;
+import java.awt.datatransfer.*;
+import java.io.*;
 import java.util.*;
 import java.util.List;
 import java.util.function.*;
@@ -25,8 +27,37 @@ final class TourPanel
 
         void run(Tour tour);
 
-        /** Saves the fastest order if the stops are unchanged, then runs {@code done} even on failure or cancel. */
-        void fastestOrder(Tour tour, Runnable done);
+        /**
+         * Saves the fastest order if the stops are unchanged, then runs {@code done} even on failure or cancel. With
+         * {@code everything}, as if the player had every teleport, transport, level and quest in the game.
+         */
+        void fastestOrder(Tour tour, boolean everything, Runnable done);
+
+        /** A short message to the player. */
+        default void say(String text)
+        {
+        }
+
+        /** Puts text on the clipboard. */
+        default void copy(String text)
+        {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+        }
+
+        /** The clipboard's text, or null. */
+        default String paste()
+        {
+            try
+            {
+                Transferable held = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
+                return held != null && held.isDataFlavorSupported(DataFlavor.stringFlavor)
+                    ? (String) held.getTransferData(DataFlavor.stringFlavor) : null;
+            }
+            catch (UnsupportedFlavorException | IOException | IllegalStateException e)
+            {
+                return null;
+            }
+        }
 
         default void cancelOrder()
         {
@@ -221,17 +252,12 @@ final class TourPanel
         if (current.stops.size() > 1)
         {
             go.add(Box.createHorizontalStrut(4));
-            JButton fastest = button(ordering ? "Working it out…" : "Fastest order", () -> {
-                ordering = true;
-                int run = ++orderings;
-                refresh();
-                actions.fastestOrder(current, () -> {
-                    if (run == orderings)
-                    {
-                        ordering = false;
-                        refresh();
-                    }
-                });
+            JButton fastest = button(ordering ? "Working it out…" : "Fastest order", () -> { });
+            fastest.addActionListener(e -> {
+                JPopupMenu how = new JPopupMenu();
+                item(how, "With what you have now", () -> order(current, false));
+                item(how, "With every teleport and transport in the game", () -> order(current, true));
+                popup(how, fastest);
             });
             fastest.setEnabled(!ordering);
             go.add(tip(fastest, "Let the route planner put the stops in the quickest order from where you are"));
@@ -246,7 +272,108 @@ final class TourPanel
             go.add(loop);
         }
         panel.add(go);
+        panel.add(Box.createVerticalStrut(4));
+
+        JPanel share = row();
+        JButton export = button("Export", () -> { });
+        export.addActionListener(e -> {
+            JPopupMenu what = new JPopupMenu();
+            item(what, "This route", () -> {
+                actions.copy(Tour.share(List.of(current)));
+                actions.say("\"" + current.name + "\" copied to the clipboard");
+            });
+            item(what, "All routes", () -> {
+                actions.copy(Tour.share(tours));
+                actions.say(tours.size() + " routes copied to the clipboard");
+            });
+            popup(what, export);
+        });
+        export.setEnabled(!current.stops.isEmpty());
+        share.add(tip(export, "Copy the route as text, to keep or to share"));
+        share.add(Box.createHorizontalStrut(4));
+        JButton doImport = button("Import", () -> importRoutes(tours));
+        doImport.setEnabled(!ordering);
+        share.add(tip(doImport, "Add the routes on the clipboard, as Export copies them"));
+        panel.add(share);
+
+        if (!current.avoid.isEmpty())
+        {
+            panel.add(Box.createVerticalStrut(8));
+            panel.add(tip(text("Leaves out:", ColorScheme.LIGHT_GRAY_COLOR, width),
+                "Ways this route never takes; chosen with ⋯ at a step while the route runs"));
+            for (String avoided : new ArrayList<>(current.avoid))
+            {
+                JPanel line = panel(new BorderLayout(4, 0));
+                line.add(text(Tour.describe(avoided), Color.WHITE, width - 40), BorderLayout.CENTER);
+                line.add(small("✕", () -> {
+                    current.avoid.remove(avoided);
+                    save(tours, current.name);
+                }, "Use it in this route again", true), BorderLayout.EAST);
+                line.setMaximumSize(new Dimension(Integer.MAX_VALUE, line.getPreferredSize().height));
+                panel.add(line);
+            }
+        }
         return panel;
+    }
+
+    private void order(Tour current, boolean everything)
+    {
+        ordering = true;
+        int run = ++orderings;
+        refresh();
+        actions.fastestOrder(current, everything, () -> {
+            if (run == orderings)
+            {
+                ordering = false;
+                refresh();
+            }
+        });
+    }
+
+    /** Adds the routes on the clipboard, each under a name not taken; the last added is the one edited. */
+    private void importRoutes(List<Tour> tours)
+    {
+        List<Tour> found = Tour.decode(actions.paste());
+        if (found.isEmpty())
+        {
+            actions.say("Nothing to import: copy a route's text first (Export makes it)");
+            return;
+        }
+        String last = null;
+        for (Tour t : found)
+        {
+            if (tours.size() >= Tour.MAX_TOURS)
+            {
+                actions.say("Only " + Tour.MAX_TOURS + " routes can be kept: the rest was not imported");
+                break;
+            }
+            last = Tour.unique(tours, t.name);
+            tours.add(t.renamed(last));
+        }
+        if (last != null)
+        {
+            save(tours, last);
+            actions.say(found.size() == 1 ? "\"" + last + "\" imported" : found.size() + " routes imported");
+        }
+    }
+
+    /** The menu last opened under a button; a test reads it, as a menu shows only under a shown button. */
+    private JPopupMenu lastMenu;
+
+    private void popup(JPopupMenu menu, JComponent under)
+    {
+        lastMenu = menu;
+        if (under.isShowing())
+        {
+            menu.show(under, 0, under.getHeight());
+        }
+    }
+
+    private static void item(JPopupMenu menu, String text, Runnable action)
+    {
+        JMenuItem item = new JMenuItem(text);
+        item.addActionListener(e -> action.run());
+        menu.add(item);
     }
 
     private void move(List<Tour> tours, Tour tour, int at, int by)
