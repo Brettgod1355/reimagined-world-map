@@ -3,7 +3,10 @@ package com.hdmapreforged.route;
 import lombok.*;
 import java.util.*;
 
-/** The jumps starting at each node, as indices into a list of edges; looked up without boxing. Immutable once made. */
+/**
+ * The jumps starting (or ending) at each node, as indices into a list of edges; looked up without boxing. Immutable
+ * once made.
+ */
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 final class EdgeIndex
 {
@@ -13,20 +16,32 @@ final class EdgeIndex
     /** By where they start (not {@link Edge#ANYWHERE}), each index plus {@code offset}. */
     static EdgeIndex of(List<Edge> edges, int offset)
     {
+        return of(edges, offset, false);
+    }
+
+    /** By where they end, each index plus {@code offset}: a flood back from a target. */
+    static EdgeIndex byDestination(List<Edge> edges, int offset)
+    {
+        return of(edges, offset, true);
+    }
+
+    private static EdgeIndex of(List<Edge> edges, int offset, boolean byDestination)
+    {
         IntMap slots = new IntMap(edges.size());
         List<int[]> lists = new ArrayList<>();
         int[] counts = new int[edges.size()];
         for (Edge e : edges)
         {
-            if (e.from == Edge.ANYWHERE)
+            int key = byDestination ? e.to : e.from;
+            if (key == Edge.ANYWHERE)
             {
                 continue;
             }
-            int slot = slots.get(e.from);
+            int slot = slots.get(key);
             if (slot == IntMap.MISSING)
             {
                 slot = lists.size();
-                slots.put(e.from, slot);
+                slots.put(key, slot);
                 lists.add(null);
             }
             counts[slot]++;
@@ -39,10 +54,10 @@ final class EdgeIndex
         }
         for (int i = 0; i < edges.size(); i++)
         {
-            Edge e = edges.get(i);
-            if (e.from != Edge.ANYWHERE)
+            int key = byDestination ? edges.get(i).to : edges.get(i).from;
+            if (key != Edge.ANYWHERE)
             {
-                int slot = slots.get(e.from);
+                int slot = slots.get(key);
                 made[slot][counts[slot]++] = offset + i;
             }
         }

@@ -67,7 +67,7 @@ public final class Route
     public final boolean exhausted;
     public final boolean limited;
     public final int nodes;
-    /** What a search that tried everything reached; else null. */
+    /** Where a search that proved the target out of reach proved it out of reach from; else null. */
     private final Reached reached;
     /** Through the Wilderness though the player keeps out of it: no way around it gets there. */
     public final boolean throughWilderness;
@@ -206,8 +206,8 @@ public final class Route
     }
 
     /**
-     * Whether this search tried everything and reached the node: from there the target is out of reach too, as long as
-     * the same ways may be used.
+     * Whether this search proved the target out of reach from the node too (it reached the node and tried everything,
+     * or flooded back from the target and never came to the node), as long as the same ways may be used.
      */
     public boolean reached(int node)
     {

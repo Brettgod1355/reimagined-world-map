@@ -1,6 +1,7 @@
 package com.hdmapreforged;
 
 import java.awt.*;
+import java.awt.event.*;
 import lombok.*;
 import net.runelite.client.config.*;
 
@@ -111,10 +112,10 @@ public interface HdMapReforgedConfig extends Config
     }
 
     @ConfigItem(keyName = "openMapKey", name = "Open map hotkey",
-        description = "Opens and closes the map over the game view; Escape also closes it")
+        description = "Opens and closes the map over the game view; Escape also closes it. Not while typing in the game")
     default Keybind openMapKey()
     {
-        return Keybind.NOT_SET;
+        return new Keybind(KeyEvent.VK_M, 0);
     }
 
     /** Icon kinds whose destination lines are hidden. */

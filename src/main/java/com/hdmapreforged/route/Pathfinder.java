@@ -9,7 +9,10 @@ import java.util.stream.*;
 /**
  * A* over tiles, sea blocks and jumps ({@link Edge}); costs in half ticks. The heuristic stays a lower bound by folding
  * underground y onto the surface (y − 6400) and bounding far/cheap jumps with a backward search over the jumps alone.
- * Thread-safe: each search keeps its own state; the maps are immutable (one's house is swapped whole).
+ * Beside it a flood runs back from the goal over the same ways ({@link Backward}): the first side to run out of nodes
+ * settles whether the goal is in reach at all, so a target shut off from the player (a quest's door, an island, an
+ * instance) is proved out of reach after its own small area instead of after the whole world. Thread-safe: each search
+ * keeps its own state; the maps are immutable (one's house is swapped whole).
  */
 public final class Pathfinder
 {
@@ -36,6 +39,7 @@ public final class Pathfinder
     final List<Edge> passages;
     private final List<ShortcutPassage> shortcutPassages;
     final EdgeIndex passagesByOrigin;
+    private final EdgeIndex passagesByDestination;
     /** The jumps the heuristic must know when a tile costs a half tick (running, sailing) and when it costs one. */
     private final List<Edge> heuristicPassages;
     private final List<Edge> walkingPassages;
@@ -108,6 +112,7 @@ public final class Pathfinder
         shortcutPassages = Collections.unmodifiableList(atShortcuts);
         passages = Collections.unmodifiableList(edges);
         passagesByOrigin = EdgeIndex.of(edges, 0);
+        passagesByDestination = EdgeIndex.byDestination(edges, 0);
         heuristicPassages = edges.stream().filter(e -> shortCut(e, RUN)).collect(Collectors.toUnmodifiableList());
         walkingPassages = edges.stream().filter(e -> shortCut(e, WALK)).collect(Collectors.toUnmodifiableList());
     }
@@ -541,12 +546,17 @@ public final class Pathfinder
         }
         // Whether a step or jump into the Wilderness was left out (else going through it gets nowhere further).
         boolean keptOut = jumps(IntStream.range(startOffset, all.size()).toArray(), all, nodes, open, heuristic, 0, avoid);
+        // Back from the goal, in turns with the search: once it runs out, the goal is in reach from exactly what it
+        // flooded. No goal (no ground near the target): out of reach from anywhere.
+        Backward back = goal >= 0 ? new Backward(goal, all, requestOffset, request, avoid) : null;
+        Reached proof = goal >= 0 ? null : new Reached(new NodeSet(), true);
+        int stopAt = goal >= 0 ? Integer.MAX_VALUE : NEAREST_NODES;
         int best = -1;
         long bestScore = Long.MAX_VALUE;
         int popped = 0;
         boolean limited = false;
         int found = -1;
-        while (!open.isEmpty())
+        while (!open.isEmpty() && popped < stopAt)
         {
             long item = open.pop();
             int node = (int) item;
@@ -555,9 +565,27 @@ public final class Pathfinder
             {
                 continue;
             }
-            if ((++popped & 4095) == 0 && cancelled.getAsBoolean())
+            if ((++popped & (TURN - 1)) == 0)
             {
-                return new Route(Route.Outcome.CANCELLED, Collections.emptyList(), 0, target, -1, false, false, popped);
+                if (cancelled.getAsBoolean())
+                {
+                    return new Route(Route.Outcome.CANCELLED, Collections.emptyList(), 0, target, -1, false, false, popped);
+                }
+                if (back != null && back.flood(TURN))
+                {
+                    if (back.reaches(start, all, startOffset, avoid))
+                    {
+                        back = null; // in reach: the search alone finds the way
+                    }
+                    else
+                    {
+                        // Out of reach: on a little further for the nearest spot the way gets to, then done.
+                        proof = new Reached(back.seen, true);
+                        keptOut |= back.keptOut;
+                        stopAt = popped + NEAREST_NODES;
+                        back = null;
+                    }
+                }
             }
             if (node == goal)
             {
@@ -622,10 +650,11 @@ public final class Pathfinder
             }
             keptOut |= jumps(requestByOrigin.get(node), all, nodes, open, heuristic, g, avoid);
         }
-        boolean exhausted = found < 0 && !limited;
+        // Tried everything, or proved from the goal's side: what was reached (or not) tells where else the target is out
+        // of reach.
+        boolean exhausted = found < 0 && (proof != null || !limited && open.isEmpty());
+        Reached reached = found >= 0 ? null : open.isEmpty() && !limited ? new Reached(nodes.reached(), false) : proof;
         int end = found >= 0 ? found : best;
-        // Tried everything: what it reached tells where else the target is out of reach.
-        Reached reached = exhausted ? nodes.reached() : null;
         Route route;
         if (end < 0)
         {
@@ -638,6 +667,156 @@ public final class Pathfinder
                 nodes.cost(end), target, end, exhausted, limited, popped, reached);
         }
         return keptOut ? route.keptOut() : route;
+    }
+
+    /** Nodes the search pops between turns of the flood back from the goal (and checks for a cancel); a power of two. */
+    private static final int TURN = 4096;
+    /**
+     * Nodes the search goes on for once the goal is proved out of reach, for the nearest spot it gets to (the far side
+     * of a locked door): the way there is what the player sees. A flood of the world would be about 1.7 million.
+     */
+    static final int NEAREST_NODES = 100_000;
+
+    /**
+     * The nodes the goal can be reached from, flooded back from it over the same ways the search takes forward (walking,
+     * sailing, passages, the request's jumps), a turn at a time. Done, it holds them all: the goal is in reach from the
+     * start or a teleport's landing only if they are in it.
+     */
+    private final class Backward
+    {
+        final NodeSet seen = new NodeSet();
+        private int[] queue = new int[TURN];
+        private int head;
+        private int tail;
+        private final List<Edge> all;
+        private final EdgeIndex requestByDestination;
+        private final int sailingLevel;
+        private final boolean avoid;
+        /** A step or jump out of the Wilderness was left out: through it, the goal may be in reach from more. */
+        boolean keptOut;
+
+        Backward(int goal, List<Edge> all, int requestOffset, RouteRequest request, boolean avoid)
+        {
+            this.all = all;
+            requestByDestination = EdgeIndex.byDestination(request.edges, requestOffset);
+            sailingLevel = request.sailingLevel;
+            this.avoid = avoid;
+            visit(goal);
+        }
+
+        private void visit(int node)
+        {
+            if (seen.add(node))
+            {
+                if (tail == queue.length)
+                {
+                    if (head > queue.length / 2)
+                    {
+                        System.arraycopy(queue, head, queue, 0, tail - head);
+                        tail -= head;
+                        head = 0;
+                    }
+                    else
+                    {
+                        queue = Arrays.copyOf(queue, queue.length * 2);
+                    }
+                }
+                queue[tail++] = node;
+            }
+        }
+
+        /** Floods up to {@code budget} nodes more; whether it is done (nothing more leads to the goal). */
+        boolean flood(int budget)
+        {
+            while (head < tail && budget-- > 0)
+            {
+                int node = queue[head++];
+                if (Tiles.isSea(node))
+                {
+                    // Sailed into from any block around it, when it can be sailed.
+                    int cx = Tiles.cellX(node);
+                    int cy = Tiles.cellY(node);
+                    if (sailingLevel >= 0 && sea.sailable(cx, cy, sailingLevel))
+                    {
+                        for (int d = 0; d < 8; d++)
+                        {
+                            visit(Tiles.sea(cx + DX[d], cy + DY[d]));
+                        }
+                    }
+                }
+                else
+                {
+                    int x = Tiles.x(node);
+                    int y = Tiles.y(node);
+                    int z = Tiles.z(node);
+                    for (int d = 0; d < 8; d++)
+                    {
+                        int px = x - DX[d];
+                        int py = y - DY[d];
+                        if (!map.canStep(px, py, z, DX[d], DY[d]))
+                        {
+                            continue;
+                        }
+                        int from = Tiles.pack(px, py, z);
+                        int closed = closedSteps.get(from);
+                        if (closed != IntMap.MISSING && (closed & 1 << d) != 0)
+                        {
+                            continue;
+                        }
+                        visitFrom(from);
+                    }
+                    jumpsTo(passagesByDestination.get(node));
+                }
+                jumpsTo(requestByDestination.get(node));
+            }
+            return head == tail;
+        }
+
+        private void jumpsTo(int[] edges)
+        {
+            if (edges != null)
+            {
+                for (int i : edges)
+                {
+                    int from = all.get(i).from;
+                    if (from != Edge.ANYWHERE)
+                    {
+                        visitFrom(from);
+                    }
+                }
+            }
+        }
+
+        /** Kept out of the Wilderness, the search never stands there: not a node the goal is reached from. */
+        private void visitFrom(int from)
+        {
+            if (avoid && Tiles.wilderness(from))
+            {
+                keptOut = true;
+            }
+            else
+            {
+                visit(from);
+            }
+        }
+
+        /** Done: whether the goal is in reach from the start or from where a jump from anywhere lands. */
+        boolean reaches(int start, List<Edge> all, int startOffset, boolean avoid)
+        {
+            if (start >= 0 && seen.contains(start))
+            {
+                return true;
+            }
+            for (int i = startOffset; i < all.size(); i++)
+            {
+                int to = all.get(i).to;
+                if (!(avoid && Tiles.wilderness(to)) && seen.contains(to))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     /** Relaxes the jumps; whether one into the Wilderness was left out. */

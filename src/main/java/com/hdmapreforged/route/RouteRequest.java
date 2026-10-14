@@ -7,7 +7,11 @@ import lombok.*;
 @AllArgsConstructor
 public final class RouteRequest
 {
-    /** Proving a place unreachable floods about 2.1 million nodes, about 1.5 s, well under 512 MB. */
+    /**
+     * Past it the search stops where it is, without a verdict. A flood of the world is about 1.7 million nodes (and
+     * the search table about 100 MB), which only a far trip with no way there at all still takes: a target shut off
+     * from the player is proved out of reach from its own side (Pathfinder's flood back from the goal).
+     */
     public static final int DEFAULT_NODE_LIMIT = 3_000_000;
 
     /** -1 when the route can only start with {@link #startEdges} (in a house). */
