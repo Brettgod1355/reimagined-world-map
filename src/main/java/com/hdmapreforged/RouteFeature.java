@@ -606,13 +606,16 @@ public final class RouteFeature
         {
             return;
         }
+        var other = shortestPathName();
+        log.debug("Directions from another plugin: {} {} (nearest {}), {} on, planner {}, follow {}",
+            message.getName(), targets, target, other, config.routePlanner(), config.routeFollowPlugins());
         directions = path ? message : null;
         if (target == null && handedOver != null)
         {
             forgetHandOver();
             invokeLater(() -> showShortestPath(false));
         }
-        else if (target != null && shortestPathOn())
+        else if (target != null && other != null)
         {
             handOver(target, ShortestPathBridge.path(null, ShortestPathBridge.config(message)), false);
         }
@@ -638,6 +641,7 @@ public final class RouteFeature
         if (c != null && !targets.isEmpty())
         {
             fastest(targets, true, () -> pluginAsked.get() != asked || controller != c, wilderness, best -> {
+                log.debug("Following another plugin's directions to {}", best);
                 fromPlugin = true;
                 pluginWilderness = wilderness;
                 routeAvoid.clear();
