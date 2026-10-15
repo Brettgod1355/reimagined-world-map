@@ -574,6 +574,7 @@ public final class RouteHouse
             return;
         }
         houseOf = routes.client.getAccountHash();
+        routes.loadBank();
         routes.planted.load(routes.configManager.getRSProfileConfiguration(HdMapReforgedConfig.GROUP,
             PlantedSpiritTrees.KEY));
         String saved = routes.configManager.getRSProfileConfiguration(HdMapReforgedConfig.GROUP, HOUSE_KEY);
@@ -656,7 +657,12 @@ public final class RouteHouse
         JComboBox<String> box = new JComboBox<>(new String[]{"No jewellery box", "Basic jewellery box",
             "Fancy jewellery box", "Ornate jewellery box"});
         box.setSelectedIndex(Arrays.asList(HouseSettings.BOXES).indexOf(HouseSettings.box(now)));
-        JCheckBox glory = new JCheckBox("Mounted amulet of glory", now.contains("glory"));
+        String[] amulets = {"Mounted amulet of glory", "Mounted Xeric's talisman", "Mounted digsite pendant"};
+        JCheckBox[] mounted = new JCheckBox[amulets.length];
+        for (int i = 0; i < amulets.length; i++)
+        {
+            mounted[i] = new JCheckBox(amulets[i], now.contains(HouseSettings.MOUNTED[i]));
+        }
         // A superior garden has one of these.
         JComboBox<String> garden = new JComboBox<>(new String[]{"No fairy ring or spirit tree", "Fairy ring",
             "Spirit tree", "Both (a spiritual fairy tree, or two gardens)"});
@@ -667,10 +673,24 @@ public final class RouteHouse
         JTextField portals = new JTextField(HouseSettings.places(now, HouseSettings.PORTAL));
         JTextField nexus = new JTextField(HouseSettings.places(now, HouseSettings.NEXUS));
         long account = houseOf;
-        Runnable save = () -> editHouse(account, HouseSettings.features(HouseSettings.BOXES[box.getSelectedIndex()],
-            glory.isSelected(), garden.getSelectedIndex(), obelisk.isSelected(), portals.getText(), nexus.getText()));
+        Runnable save = () ->
+        {
+            Set<String> amulet = new HashSet<>();
+            for (int i = 0; i < mounted.length; i++)
+            {
+                if (mounted[i].isSelected())
+                {
+                    amulet.add(HouseSettings.MOUNTED[i]);
+                }
+            }
+            editHouse(account, HouseSettings.features(HouseSettings.BOXES[box.getSelectedIndex()], amulet,
+                garden.getSelectedIndex(), obelisk.isSelected(), portals.getText(), nexus.getText()));
+        };
         box.addActionListener(e -> save.run());
-        glory.addActionListener(e -> save.run());
+        for (JCheckBox amulet : mounted)
+        {
+            amulet.addActionListener(e -> save.run());
+        }
         garden.addActionListener(e -> save.run());
         obelisk.addActionListener(e -> save.run());
         for (JTextField places : new JTextField[]{portals, nexus})
@@ -679,8 +699,11 @@ public final class RouteHouse
             FullMapWindow.typable(places);
             places.addActionListener(e -> save.run());
         }
-        for (JComponent part : new JComponent[]{box, glory, garden, obelisk, label("Portals:", width, Font.PLAIN, gray),
-            portals, label("Portal nexus:", width, Font.PLAIN, gray), nexus})
+        List<JComponent> parts = new ArrayList<>(List.of(box));
+        parts.addAll(List.of(mounted));
+        parts.addAll(List.of(garden, obelisk, label("Portals:", width, Font.PLAIN, gray), portals,
+            label("Portal nexus:", width, Font.PLAIN, gray), nexus));
+        for (JComponent part : parts)
         {
             part.setAlignmentX(Component.LEFT_ALIGNMENT);
             part.setOpaque(part instanceof JTextField);

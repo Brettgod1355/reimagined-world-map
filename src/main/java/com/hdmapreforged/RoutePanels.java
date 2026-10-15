@@ -183,7 +183,7 @@ final class RoutePanels
                 more.setFocusable(false);
                 more.setMargin(new Insets(0, 4, 0, 4));
                 more.setToolTipText("Leave this out of the route");
-                String name = step.name;
+                String name = BankDetour.plain(step.name);
                 String category = step.category;
                 more.addActionListener(a -> {
                     JPopupMenu menu = new JPopupMenu();

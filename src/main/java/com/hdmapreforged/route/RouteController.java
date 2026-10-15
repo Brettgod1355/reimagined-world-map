@@ -270,7 +270,7 @@ public final class RouteController
                 Route result = null;
                 try
                 {
-                    result = pathfinder.find(request, cancel::get);
+                    result = BankDetour.find(pathfinder, request, cancel::get);
                 }
                 catch (Throwable e)
                 {

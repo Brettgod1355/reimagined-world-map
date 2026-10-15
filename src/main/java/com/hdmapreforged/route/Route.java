@@ -28,7 +28,9 @@ public final class Route
     {
         public enum Kind
         {
-            WALK, SAIL, STAIRS, ENTRANCE, TELEPORT, TRANSPORT, SHIP, BOARD, DISEMBARK, HOUSE
+            WALK, SAIL, STAIRS, ENTRANCE, TELEPORT, TRANSPORT, SHIP, BOARD, DISEMBARK, HOUSE,
+            /** Take from the bank what the steps after it need ({@link BankDetour}): both points the bank's tile. */
+            BANK
         }
 
         public final Kind kind;
@@ -126,9 +128,19 @@ public final class Route
         int bestStep = -1;
         int bestIndex = 0;
         long bestDistance = (long) (NEAR + 1) * (NEAR + 1);
+        // Past a bank step nothing in one's house counts while one is in it: the route may go from the house to the bank
+        // and back (its fairy ring), and in the house before it the bank is still to do.
+        boolean banked = false;
+        boolean home = inHouse(player);
         for (int s = 0; s < steps.size(); s++)
         {
             Step step = steps.get(s);
+            if (step.kind == Step.Kind.BANK)
+            {
+                // Done only once what it takes out is used: standing at the bank it is still to do.
+                banked = true;
+                continue;
+            }
             if (step.isJump())
             {
                 int landing = step.last();
@@ -136,8 +148,12 @@ public final class Route
                 // Nearer where it starts (a gate, a door): not crossed yet.
                 boolean before = from >= 0 && !Tiles.isSea(from) && sameLevel(player, from)
                     && Tiles.distance(player, from) < Tiles.distance(player, landing);
+                if (banked && home && inHouse(landing))
+                {
+                    continue;
+                }
                 // Into one's house (a teleport, its portal): anywhere in it, it was taken, wherever the game put one.
-                boolean entered = from >= 0 && !inHouse(from) && inHouse(landing) && inHouse(player);
+                boolean entered = from >= 0 && !inHouse(from) && inHouse(landing) && home;
                 if (sameLevel(player, landing) && (Tiles.distance(player, landing) <= 2 || entered) && !before)
                 {
                     bestStep = s + 1;
@@ -149,7 +165,7 @@ public final class Route
             for (int i = 0; i < step.points.length; i++)
             {
                 int point = step.points[i];
-                if (!sameLevel(player, point))
+                if (!sameLevel(player, point) || banked && home && inHouse(point))
                 {
                     continue;
                 }

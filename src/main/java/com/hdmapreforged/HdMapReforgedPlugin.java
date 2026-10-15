@@ -633,7 +633,8 @@ public class HdMapReforgedPlugin extends Plugin
     {
         // The house (per account) is written as it is seen: nothing for the map's tiles.
         if (!HdMapReforgedConfig.GROUP.equals(event.getGroup())
-            || Set.of("fullMapBounds", RouteFeature.HOUSE_KEY, RouteFeature.PLAN_KEY).contains(event.getKey()))
+            || Set.of("fullMapBounds", RouteFeature.HOUSE_KEY, RouteFeature.PLAN_KEY, RouteFeature.BANK_KEY)
+            .contains(event.getKey()))
         {
             return;
         }

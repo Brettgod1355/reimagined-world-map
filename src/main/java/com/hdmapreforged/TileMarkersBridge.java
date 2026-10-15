@@ -8,9 +8,9 @@ import net.runelite.api.coords.*;
 import net.runelite.client.events.*;
 
 /**
- * The route's ground tiles via HD World Markers' public plugin messages ({@code tiles} and {@code clear}, one owner;
- * its guide's "For plugin developers"). It clears them on logout, world hop, connection loss and a profile change: they
- * are sent again after.
+ * The route's ground tiles via HD World Markers' public plugin messages ({@code tiles}, {@code lines} and
+ * {@code clear}, one owner; its guide's "For plugin developers"). It clears them on logout, world hop, connection loss
+ * and a profile change: they are sent again after.
  */
 final class TileMarkersBridge
 {
@@ -67,6 +67,31 @@ final class TileMarkersBridge
         data.put("owner", OWNER);
         data.put("tiles", list);
         return new PluginMessage(NAMESPACE, "tiles", data);
+    }
+
+    /**
+     * The route's walks as lines through the tiles' centres ({@code lines}; points next to each other are joined, a
+     * jump breaks the line), with an arrowhead every {@code arrows} tiles (0: none); an empty list takes them away.
+     */
+    static PluginMessage lines(List<List<WorldPoint>> lines, List<Color> colors, int width, int arrows)
+    {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (int i = 0; i < lines.size(); i++)
+        {
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("points", lines.get(i));
+            entry.put("color", colors.get(i));
+            entry.put("width", width);
+            if (arrows > 0)
+            {
+                entry.put("arrows", arrows);
+            }
+            list.add(entry);
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("owner", OWNER);
+        data.put("lines", list);
+        return new PluginMessage(NAMESPACE, "lines", data);
     }
 
     static PluginMessage clear()

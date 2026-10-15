@@ -30,32 +30,48 @@ public final class PlayerState
      * else -1.
      */
     public final int returnExit;
+    /** With the bank's items too ({@link #withBank}): what is carried without them; else null. */
+    public final ItemSnapshot carried;
 
     public PlayerState(ItemSnapshot items, int sailingLevel, boolean sailing, int[] boats, boolean running, boolean inHouse,
         int houseExit, boolean ownHouse, Set<String> houseFeatures, boolean landsInside)
     {
         this(items, sailingLevel, sailing, boats.clone(), new int[boats.length], running, inHouse, houseExit, ownHouse,
-            Collections.unmodifiableSet(new LinkedHashSet<>(houseFeatures)), landsInside, -1);
+            Collections.unmodifiableSet(new LinkedHashSet<>(houseFeatures)), landsInside, -1, null);
     }
 
     /** The same, with other items or Sailing. */
     public PlayerState with(ItemSnapshot items, int sailingLevel, boolean sailing)
     {
         return new PlayerState(items, sailingLevel, sailing, boats, boatFocus, running, inHouse, houseExit, ownHouse,
-            houseFeatures, landsInside, returnExit);
+            houseFeatures, landsInside, returnExit, carried);
+    }
+
+    /** The same with the bank's items too, keeping what is carried apart (to say what to take out). */
+    public PlayerState withBank(Map<Integer, Long> bank)
+    {
+        return new PlayerState(items.plus(bank), sailingLevel, sailing, boats, boatFocus, running, inHouse, houseExit,
+            ownHouse, houseFeatures, landsInside, returnExit, items);
+    }
+
+    /** The same, out of any house: a route's later part (on from a bank) starts outside. */
+    public PlayerState outOfHouse()
+    {
+        return !inHouse ? this : new PlayerState(items, sailingLevel, sailing, boats, boatFocus, running, false, houseExit,
+            false, houseFeatures, landsInside, returnExit, carried);
     }
 
     /** The same, in an area whose way out leads back to {@code exit} (or -1: none known). */
     public PlayerState withReturn(int exit)
     {
         return new PlayerState(items, sailingLevel, sailing, boats, boatFocus, running, inHouse, houseExit, ownHouse,
-            houseFeatures, landsInside, exit);
+            houseFeatures, landsInside, exit, carried);
     }
 
     /** The same, with each boat's teleport focus (see {@link #boatFocus}). */
     public PlayerState withBoatFocus(int[] focus)
     {
         return new PlayerState(items, sailingLevel, sailing, boats, Arrays.copyOf(focus, boats.length), running, inHouse,
-            houseExit, ownHouse, houseFeatures, landsInside, returnExit);
+            houseExit, ownHouse, houseFeatures, landsInside, returnExit, carried);
     }
 }

@@ -416,6 +416,14 @@ public interface HdMapReforgedConfig extends Config
         return true;
     }
 
+    @ConfigItem(keyName = "routeBankTeleports", name = "Own: Teleports from the bank", position = 9, section = route,
+        description = "Remember what your bank holds (seen when you open it) and go past the nearest bank first when "
+            + "taking something out gets you there notably sooner")
+    default boolean routeBankTeleports()
+    {
+        return false;
+    }
+
     @ConfigItem(keyName = "routeRunning", name = "Own: Running", position = 3, section = route,
         description = "Count on running (two tiles a tick) for how long a route takes")
     default boolean routeRunning()
@@ -465,6 +473,38 @@ public interface HdMapReforgedConfig extends Config
     default Color routeJumpColor()
     {
         return RouteFeature.JUMP;
+    }
+
+    @RequiredArgsConstructor
+    enum RouteStyle
+    {
+        TILES("Tiles"),
+        LINES("Lines"),
+        ARROWS("Lines with arrows");
+
+        private final String name;
+
+        @Override
+        public String toString()
+        {
+            return name;
+        }
+    }
+
+    @ConfigItem(keyName = "routeStyle", name = "Path style", position = 19, section = route,
+        description = "The route on the ground as tiles or as a line through them, with arrows the way to go if you like "
+            + "(also by HD World Markers)")
+    default RouteStyle routeStyle()
+    {
+        return RouteStyle.TILES;
+    }
+
+    @Range(min = 1, max = 16)
+    @ConfigItem(keyName = "routeLineWidth", name = "Line width", position = 26, section = route,
+        description = "Width of the route's line on the ground, with Path style Lines or Lines with arrows")
+    default int routeLineWidth()
+    {
+        return 3;
     }
 
     @Range(max = 255)

@@ -4,7 +4,10 @@ import lombok.*;
 import java.util.*;
 import java.util.regex.*;
 
-/** Items carried and runes a worn staff gives without limit: what a route may use (never the bank). Immutable. */
+/**
+ * Items carried and runes a worn staff gives without limit: what a route may use. The bank only through a
+ * {@link BankDetour} (setting), as {@link #plus}. Immutable.
+ */
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ItemSnapshot
 {
@@ -39,11 +42,36 @@ public final class ItemSnapshot
         return other != null && carried.equals(other.carried);
     }
 
+    /** Whether {@code other} carries the same of these items (and the same staff's runes). */
+    public boolean sameFor(ItemSnapshot other, Set<Integer> ids)
+    {
+        if (other == null || !unlimited.equals(other.unlimited))
+        {
+            return false;
+        }
+        for (int id : ids)
+        {
+            if (!carried.getOrDefault(id, 0L).equals(other.carried.getOrDefault(id, 0L)))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static ItemSnapshot of(Map<Integer, Long> carried, Set<Integer> unlimited)
     {
         Map<Integer, Long> all = new HashMap<>();
         carried.forEach((id, n) -> add(all, id, n));
         return new ItemSnapshot(Collections.unmodifiableMap(all), Collections.unmodifiableSet(new HashSet<>(unlimited)));
+    }
+
+    /** These items and {@code more} (a bank's), with the same staff's runes. */
+    public ItemSnapshot plus(Map<Integer, Long> more)
+    {
+        Map<Integer, Long> all = new HashMap<>(carried);
+        more.forEach((id, n) -> add(all, id, n));
+        return new ItemSnapshot(Collections.unmodifiableMap(all), unlimited);
     }
 
     private static void add(Map<Integer, Long> into, int id, long quantity)

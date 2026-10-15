@@ -53,13 +53,15 @@ public final class GameWalk
         return Arrays.copyOf(out, n);
     }
 
-    /** How far ahead one run pair (straight, then diagonal, or the other way round) is looked for. */
+    /** How far ahead one run pair (straight, then diagonal) is looked for. */
     static final int RUN = 64;
 
     /**
      * The walk in as few runs as the ground allows, as a player walks it: from each tile to the farthest one ahead that
-     * one straight run and one diagonal run reach in as many steps (the game's walk in the open goes straight first,
-     * then diagonally), so no time changes. Not through a door or onto an obstacle the walk kept clear of.
+     * one straight run and then one diagonal run reach in as many steps, so no time changes. That is the game's walk to
+     * a clicked tile in the open: its search tries west, east, south, north before the diagonals, so the path goes
+     * straight along the longer axis first, then diagonally; never diagonally first. Not through a door or onto an
+     * obstacle the walk kept clear of.
      */
     public static int[] straighten(CollisionMap map, int[] points)
     {
@@ -77,11 +79,7 @@ public final class GameWalk
             int to = i + 1;
             for (int j = Math.min(points.length - 1, i + RUN); j > i + 1 && best == null; j--)
             {
-                best = runs(map, points, i, j, true);
-                if (best == null)
-                {
-                    best = runs(map, points, i, j, false);
-                }
+                best = runs(map, points, i, j);
                 to = j;
             }
             if (best == null)
@@ -98,11 +96,11 @@ public final class GameWalk
     }
 
     /**
-     * From {@code points[i]} to {@code points[j]} by one straight and one diagonal run ({@code straightFirst}, or the
-     * diagonal first), in exactly {@code j - i} steps over walkable ground, crossing no door and stepping on no obstacle
-     * that {@code points[i..j]} does not; else null.
+     * From {@code points[i]} to {@code points[j]} by one straight run and then one diagonal run, in exactly
+     * {@code j - i} steps over walkable ground, crossing no door and stepping on no obstacle that {@code points[i..j]}
+     * does not; else null.
      */
-    private static int[] runs(CollisionMap map, int[] points, int i, int j, boolean straightFirst)
+    private static int[] runs(CollisionMap map, int[] points, int i, int j)
     {
         int from = points[i];
         int to = points[j];
@@ -126,7 +124,7 @@ public final class GameWalk
         int y = Tiles.y(from);
         for (int k = 0; k < steps; k++)
         {
-            boolean diagonalStep = straightFirst ? k >= steps - diagonal : k < diagonal;
+            boolean diagonalStep = k >= steps - diagonal;
             int mx = diagonalStep ? sx : ax;
             int my = diagonalStep ? sy : ay;
             if (!map.canStep(x, y, z, mx, my) || (mx == 0 || my == 0) && map.door(x, y, z, mx, my)

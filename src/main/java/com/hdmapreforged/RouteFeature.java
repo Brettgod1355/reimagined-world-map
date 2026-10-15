@@ -68,7 +68,7 @@ public final class RouteFeature
     static final Color JUMP = new Color(190, 120, 255);
     private static final Set<String> LOOK_KEYS = Set.of("routeColor", "routeJumpColor", "routeTileFill",
         "routeTileBorder", "routeTileWidth", "routeMinimap", "routeInGame", "routeHdTiles", "routeClearOnArrival",
-        "routeFollowPlugins");
+        "routeFollowPlugins", "routeStyle", "routeLineWidth");
 
     private static final Color[] LEG_COLORS = {
         new Color(90, 220, 130), new Color(255, 130, 200), new Color(255, 160, 70), new Color(120, 230, 255),
@@ -154,6 +154,7 @@ public final class RouteFeature
     /** Where the player came from into the Rune essence mine or the Shipyard, whose exits lead back there. */
     private final ReturnTracker returns = new ReturnTracker();
     private final RouteHouse yourHouse = new RouteHouse(this, house);
+    private final FairyRingLog fairyRingLog = new FairyRingLog(this);
     // Nothing on the game's own world map: projecting a long route there every frame is too heavy.
     private final List<Overlay> overlays = List.of(new GameOverlay(), new MinimapOverlay());
     private final MapView.Overlay mapOverlay = this::paintMap;
@@ -209,6 +210,12 @@ public final class RouteFeature
     /** A tile, a sea block, -1 in the house, -2 unknown. Written on the client thread. */
     private volatile int start = -2;
     private volatile Route shown;
+
+    /** The route drawn now, or null. */
+    Route shownRoute()
+    {
+        return shown;
+    }
     private boolean bringUp;
     private Boolean pandemonium;
     private int ticks;
@@ -293,6 +300,8 @@ public final class RouteFeature
     private long sentBase;
     /** Whether tiles were sent since the last clear. */
     private boolean sentTiles;
+    /** Whether the walks went as lines last time (so lines are taken away when tiles come back). */
+    private boolean sentLines;
     private int sentFrom = -1;
 
     /** Shift + right-click on the ground. RuneLite entries; nothing is sent to the game. */
@@ -371,6 +380,7 @@ public final class RouteFeature
             sentLegs = null;
             sentFrom = -1;
             sentTiles = false;
+            sentLines = false;
             lastHdTilesCheck = Integer.MIN_VALUE / 2;
         });
     }
@@ -389,6 +399,7 @@ public final class RouteFeature
                 eventBus.post(TileMarkersBridge.clear());
                 sentAhead = null;
                 sentTiles = false;
+                sentLines = false;
             }
             hdTiles = on;
         }
@@ -424,11 +435,62 @@ public final class RouteFeature
                 eventBus.post(TileMarkersBridge.clear());
             }
             sentTiles = false;
+            sentLines = false;
             return;
         }
         tileBorder = config.routeTileBorder();
         tileFill = config.routeTileFill();
         tileWidth = (int) Math.max(1, Math.round(config.routeTileWidth()));
+        // As a line: the walks go as lines, the tiles keep only the teleports' named tiles.
+        boolean asLines = config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES;
+        List<List<WorldPoint>> lines = new ArrayList<>();
+        List<Color> lineColors = new ArrayList<>();
+        if (asLines)
+        {
+            eachLine(route, (points, color) -> {
+                List<WorldPoint> line = new ArrayList<>();
+                for (int point : points)
+                {
+                    WorldPoint at = player < 0 || Tiles.distance(point, player) <= MARKER_REACH ? markerPoint(point)
+                        : null;
+                    // Out of reach or not drawable: the line breaks there (HD World Markers joins only neighbours).
+                    if (at != null)
+                    {
+                        line.add(at);
+                    }
+                    else if (!line.isEmpty())
+                    {
+                        lines.add(line);
+                        lineColors.add(color);
+                        line = new ArrayList<>();
+                    }
+                }
+                if (!line.isEmpty())
+                {
+                    lines.add(line);
+                    lineColors.add(color);
+                }
+            });
+        }
+        if (asLines)
+        {
+            Color walked = current();
+            eachFadingPiece(route, now, (piece, alpha) -> {
+                WorldPoint a = markerPoint(piece[0]);
+                WorldPoint b = markerPoint(piece[1]);
+                if (a != null && b != null)
+                {
+                    lines.add(List.of(a, b));
+                    lineColors.add(alpha(walked, walked.getAlpha() * alpha));
+                }
+            });
+        }
+        if (asLines || sentLines)
+        {
+            eventBus.post(TileMarkersBridge.lines(lines, lineColors, config.routeLineWidth(),
+                config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS ? ARROW_EVERY : 0));
+            sentLines = asLines;
+        }
         List<TileMarkersBridge.Tile> tiles = new ArrayList<>();
         Set<Integer> taken = new HashSet<>();
         int blocked = RouteText.blockedFrom(route);
@@ -439,7 +501,7 @@ public final class RouteFeature
             Color color = blocked >= 0 && index >= blocked ? CANNOT : current();
             if (step.kind == Kind.WALK)
             {
-                for (int point : step.points)
+                for (int point : asLines ? new int[0] : step.points)
                 {
                     if (player < 0 || Tiles.distance(point, player) <= MARKER_REACH)
                     {
@@ -448,7 +510,8 @@ public final class RouteFeature
                     }
                 }
             }
-            else if (step.isJump() && step.name != null && !Tiles.isSea(step.first()) && step.first() != step.last())
+            else if (step.isJump() && step.name != null && !Tiles.isSea(step.first())
+                && (step.first() != step.last() || step.kind == Kind.BANK))
             {
                 int at = step.first();
                 if (player < 0 || Tiles.distance(at, player) <= MARKER_REACH)
@@ -463,7 +526,7 @@ public final class RouteFeature
             }
         }
         // Fading tiles last: HD World Markers takes 1000, and the route near the player matters more.
-        for (Map.Entry<Integer, Long> entry : fading.entrySet())
+        for (Map.Entry<Integer, Long> entry : asLines ? Map.<Integer, Long>of().entrySet() : fading.entrySet())
         {
             float alpha = fadeAlpha(entry.getValue(), now);
             int point = entry.getKey();
@@ -473,7 +536,7 @@ public final class RouteFeature
             }
         }
         // The nearer part wins where they cross.
-        for (int i = later.size() - 1; i >= 0; i--)
+        for (int i = asLines ? -1 : later.size() - 1; i >= 0; i--)
         {
             Color color = legColor(later.get(i).getKey());
             for (Step step : later.get(i).getValue().steps)
@@ -752,6 +815,7 @@ public final class RouteFeature
         overlays.forEach(overlayManager::add);
         eventBus.register(this);
         eventBus.register(yourHouse);
+        eventBus.register(fairyRingLog);
         // The map version's route data, when it came before this start.
         loadPlanner();
         // Started while logged in: this account's house, as at login.
@@ -801,7 +865,7 @@ public final class RouteFeature
                     }
                     walker = pathfinder;
                     controller = new RouteController(searches, SwingUtilities::invokeLater, pathfinder,
-                        target -> request(start, target, false),
+                        target -> withBank(request(start, target, false), start, target),
                         c -> changed(), System::currentTimeMillis);
                 });
             }
@@ -836,8 +900,10 @@ public final class RouteFeature
         loads.incrementAndGet();
         eventBus.unregister(this);
         eventBus.unregister(yourHouse);
+        eventBus.unregister(fairyRingLog);
         overlays.forEach(overlayManager::remove);
         fadeTimer.stop();
+        itemReroute.stop();
         fading.clear();
         appearing.clear();
         if (hdTiles)
@@ -890,6 +956,7 @@ public final class RouteFeature
             sentFrom = -1;
             sentFade = 1;
             sentTiles = false;
+            sentLines = false;
             lastHdTilesCheck = Integer.MIN_VALUE / 2;
             warned = false;
         });
@@ -1286,22 +1353,69 @@ public final class RouteFeature
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged event)
     {
+        if (event.getContainerId() == InventoryID.BANK)
+        {
+            rememberBank(event.getItemContainer());
+            return;
+        }
         PlayerState before = state;
         state = capture();
-        // A tip shows what to bring: once something is picked up (or put away), the route is looked for again, so
-        // bringing it takes the quicker way at once. Not more than once in a while: an inventory changes often.
-        long now = System.currentTimeMillis();
-        if (tipShown && !state.items.sameAs(before.items) && now - lastItemReroute >= ITEM_REROUTE_MS)
+        // What a route may use changed (a staff banked, a teleport's runes or jewellery picked up): the route is looked
+        // for again once the items have settled, and after the bank is closed, so it takes the quicker way, no longer
+        // one without what it needs, and a bank step names only what is still to take. Other items (logs, drops) change
+        // nothing.
+        Set<Integer> used = routeItemIds;
+        boolean changed = shown != null && (used == null ? !state.items.sameAs(before.items)
+            : !state.items.sameFor(before.items, used));
+        if (changed || tipShown && !state.items.sameAs(before.items))
         {
-            lastItemReroute = now;
-            SwingUtilities.invokeLater(this::settingsChanged);
+            // Not while the bank is open: once it is closed, with what was taken out.
+            if (atBank)
+            {
+                changedAtBank = true;
+            }
+            else
+            {
+                rerouteSoon();
+            }
         }
     }
 
-    /** At most one search again for a change of what is carried this often. */
-    static final long ITEM_REROUTE_MS = 2_000;
-    /** Client thread. */
-    private long lastItemReroute;
+    private void rerouteSoon()
+    {
+        SwingUtilities.invokeLater(() -> {
+            itemReroute.setRepeats(false);
+            itemReroute.restart();
+        });
+    }
+
+    /** Whether the bank or a deposit box is open, and what a route may use changed meanwhile. Client thread. */
+    private boolean atBank;
+    private boolean changedAtBank;
+
+    @Subscribe
+    public void onWidgetLoaded(WidgetLoaded event)
+    {
+        atBank |= event.getGroupId() == InterfaceID.BANKMAIN || event.getGroupId() == InterfaceID.BANK_DEPOSITBOX;
+    }
+
+    @Subscribe
+    public void onWidgetClosed(WidgetClosed event)
+    {
+        if (event.getGroupId() == InterfaceID.BANKMAIN || event.getGroupId() == InterfaceID.BANK_DEPOSITBOX)
+        {
+            atBank = false;
+            if (changedAtBank)
+            {
+                changedAtBank = false;
+                rerouteSoon();
+            }
+        }
+    }
+
+    /** Milliseconds what is carried must stay the same before the route is looked for again. */
+    static final int ITEM_REROUTE_MS = 600;
+    private final Timer itemReroute = new Timer(ITEM_REROUTE_MS, e -> settingsChanged());
     /** Whether a tip is shown now (set on the Swing thread, read on the client thread). */
     private volatile boolean tipShown;
 
@@ -1329,6 +1443,8 @@ public final class RouteFeature
         {
             start = -2;
             state = PlayerState.UNKNOWN;
+            atBank = false;
+            changedAtBank = false;
         }
     }
 
@@ -1420,6 +1536,13 @@ public final class RouteFeature
     /** Also without {@code leftOut}: what a custom route leaves out. */
     private RouteRequest request(int begin, int target, boolean anything, boolean everyItem, List<String> leftOut)
     {
+        return request(begin, target, anything, everyItem, leftOut, state);
+    }
+
+    /** For {@code player} (the player with their bank's items). */
+    private RouteRequest request(int begin, int target, boolean anything, boolean everyItem, List<String> leftOut,
+        PlayerState player)
+    {
         RouteSource from = source;
         MapScreen[] on = screens;
         if (from == null || begin < -1 || on.length == 0)
@@ -1436,7 +1559,73 @@ public final class RouteFeature
         nameItems(view.pois());
         from.itemNames(itemNames);
         from.plantedSpiritTrees(planted.grown());
-        return from.request(begin, target, view.pois(), view.unlocks(), state, options, RouteRequest.DEFAULT_NODE_LIMIT);
+        return from.request(begin, target, view.pois(), view.unlocks(), player, options, RouteRequest.DEFAULT_NODE_LIMIT);
+    }
+
+    /**
+     * {@code plain} with a way past a bank to weigh (setting): every bank (the detour tries those quickest to reach),
+     * and the same search with the items of this account's bank as last seen. Unchanged without them.
+     */
+    private RouteRequest withBank(RouteRequest plain, int begin, int target)
+    {
+        Map<Integer, Long> bank = bankItems;
+        MapScreen[] on = screens;
+        if (plain == null || begin < -1 || bank.isEmpty() || !config.routeBankTeleports() || config.routeIgnoreItems()
+            || on.length == 0)
+        {
+            return plain;
+        }
+        int[][] banks = Poi.flatten(on[0].view().pois()).stream().filter(p -> p.type == PoiType.BANK)
+            .map(p -> RouteSource.bankStands(pack(p.location))).toArray(int[][]::new);
+        Running r = tour;
+        // On from the bank: out of the house, with the bank's items.
+        PlayerState player = state.outOfHouse();
+        RouteRequest banked = banks.length == 0 ? null : request(begin, target, false, false,
+            r == null ? List.of() : r.avoid, player.withBank(bank));
+        return banked == null ? plain : plain.withBank(new BankDetour(banks, banked));
+    }
+
+    /** Per account (RS profile): the bank's items any teleport or transport needs, as last seen. */
+    static final String BANK_KEY = "bankItems";
+    /** This account's bank as last seen (item id to amount): only what routes may need. */
+    private volatile Map<Integer, Long> bankItems = Map.of();
+    /** The item ids any teleport or transport of the places needs; null before the places are known. */
+    private volatile Set<Integer> routeItemIds;
+
+    /** This account's bank as kept, on its login. */
+    void loadBank()
+    {
+        String saved = configManager.getRSProfileConfiguration(HdMapReforgedConfig.GROUP, BANK_KEY);
+        Map<Integer, Long> items = new TreeMap<>();
+        for (String entry : saved == null ? new String[0] : saved.split(","))
+        {
+            String[] parts = entry.split(":");
+            if (parts.length == 2 && parts[0].matches("\\d{1,9}") && parts[1].matches("\\d{1,18}"))
+            {
+                items.put(Integer.parseInt(parts[0]), Long.parseLong(parts[1]));
+            }
+        }
+        bankItems = Collections.unmodifiableMap(items);
+    }
+
+    /** The open bank, kept for this account when what routes may need in it changed. Client thread. */
+    private void rememberBank(ItemContainer bank)
+    {
+        Map<Integer, Long> items = new TreeMap<>();
+        count(bank, items);
+        items.values().removeIf(n -> n <= 0);
+        Set<Integer> wanted = routeItemIds;
+        if (wanted != null)
+        {
+            items.keySet().retainAll(wanted);
+        }
+        if (items.equals(bankItems) || configManager.getRSProfileKey() == null)
+        {
+            return;
+        }
+        bankItems = Collections.unmodifiableMap(items);
+        configManager.setRSProfileConfiguration(HdMapReforgedConfig.GROUP, BANK_KEY, items.entrySet().stream()
+            .map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(",")));
     }
 
     /** The game's item names, so a step says what it lacks by name; set by the plugin. */
@@ -1449,7 +1638,10 @@ public final class RouteFeature
         itemNames = names;
     }
 
-    /** Asks the game once per place list for the names of the items its teleports and transports need. */
+    /**
+     * Asks the game once per place list for the names of the items its teleports and transports need; they are also
+     * what is kept of the bank.
+     */
     private void nameItems(List<Poi> pois)
     {
         ItemNames names = itemNames;
@@ -1466,6 +1658,7 @@ public final class RouteFeature
                 ids.addAll(Requirements.itemIds(member.needs.items));
             }
         }
+        routeItemIds = Collections.unmodifiableSet(ids);
         names.resolve(ids, () -> { });
     }
 
@@ -1823,8 +2016,7 @@ public final class RouteFeature
         @Override
         public String running()
         {
-            Running r = RouteFeature.this.tour;
-            return r == null ? null : r.tour.name;
+            return runningTour();
         }
 
         @Override
@@ -2889,6 +3081,151 @@ public final class RouteFeature
         }
     }
 
+    /**
+     * Each walk of the later parts of a custom route, then of the route, with its colour, as {@link #eachTile} does
+     * (no fades): the points in walking order.
+     */
+    private void eachLine(Route route, BiConsumer<int[], Color> sink)
+    {
+        for (Map.Entry<Integer, Route> leg : laterLegs())
+        {
+            Color color = legColor(leg.getKey());
+            for (Step step : leg.getValue().steps)
+            {
+                if (step.kind == Kind.WALK)
+                {
+                    sink.accept(step.points, color);
+                }
+            }
+        }
+        int blocked = RouteText.blockedFrom(route);
+        List<Step> steps = route == null ? List.of() : route.steps;
+        for (int index = 0; index < steps.size(); index++)
+        {
+            if (steps.get(index).kind == Kind.WALK)
+            {
+                sink.accept(steps.get(index).points, blocked >= 0 && index >= blocked ? CANNOT : current());
+            }
+        }
+    }
+
+    /**
+     * The passed tiles still fading, as pieces of line: between two of them next to each other, and from one to the
+     * route's first tile; with how visible each is (the fainter end's), as tiles fade.
+     */
+    private void eachFadingPiece(Route route, long now, BiConsumer<int[], Float> sink)
+    {
+        Step walk = route == null ? null : route.first(Kind.WALK);
+        int first = walk == null ? -1 : walk.first();
+        for (Map.Entry<Integer, Long> entry : fading.entrySet())
+        {
+            int p = entry.getKey();
+            float alpha = fadeAlpha(entry.getValue(), now);
+            for (int dx = -1; dx <= 1 && alpha > 0.05f; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int q = Tiles.pack(Tiles.x(p) + dx, Tiles.y(p) + dy, Tiles.z(p));
+                    Long other = q == first ? null : fading.get(q);
+                    if ((dx | dy) != 0 && (q == first || other != null && q > p))
+                    {
+                        sink.accept(new int[]{p, q}, other == null ? alpha : Math.min(alpha, fadeAlpha(other, now)));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The route as lines through the tiles' centres on the ground, as Shortest Path's Lines: broken where a step is not
+     * to a neighbour, off this floor or off the scene.
+     */
+    private void paintLines(Graphics2D g, Route route, WorldView view, int plane)
+    {
+        int me = near();
+        boolean arrows = config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS;
+        g.setStroke(new BasicStroke(config.routeLineWidth(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        eachLine(route, (points, color) -> {
+            Path2D path = new Path2D.Float();
+            List<Runnable> heads = new ArrayList<>();
+            int previous = -1;
+            for (int i = 0; i < points.length; i++)
+            {
+                int point = points[i];
+                LocalPoint local = Tiles.z(point) != plane || Tiles.distance(point, me) > Constants.EXTENDED_SCENE_SIZE
+                    ? null : yourHouse.local(view, point);
+                Point at = local == null ? null : Perspective.localToCanvas(client, local, plane);
+                if (at != null && previous >= 0 && Tiles.distance(previous, point) == 1)
+                {
+                    path.lineTo(at.getX(), at.getY());
+                }
+                else if (at != null)
+                {
+                    path.moveTo(at.getX(), at.getY());
+                }
+                previous = at == null ? -1 : point;
+                if (arrows && at != null && i % ARROW_EVERY == ARROW_EVERY / 2 && i + 1 < points.length
+                    && Tiles.distance(point, points[i + 1]) == 1 && Tiles.z(points[i + 1]) == plane)
+                {
+                    LocalPoint on = local;
+                    int dx = Tiles.x(points[i + 1]) - Tiles.x(point);
+                    int dy = Tiles.y(points[i + 1]) - Tiles.y(point);
+                    heads.add(() -> arrow(g, on, dx, dy, plane));
+                }
+            }
+            g.setColor(color);
+            g.draw(path);
+            heads.forEach(Runnable::run);
+        });
+        Color walked = current();
+        eachFadingPiece(route, System.currentTimeMillis(), (piece, alpha) -> {
+            Point a = canvas(view, piece[0], plane, me);
+            Point b = canvas(view, piece[1], plane, me);
+            if (a != null && b != null)
+            {
+                g.setColor(alpha(walked, walked.getAlpha() * alpha));
+                g.drawLine(a.getX(), a.getY(), b.getX(), b.getY());
+            }
+        });
+    }
+
+    /** A route tile's centre on the canvas: on this floor, within the extended scene; else null. */
+    private Point canvas(WorldView view, int point, int plane, int me)
+    {
+        LocalPoint local = Tiles.z(point) != plane || Tiles.distance(point, me) > Constants.EXTENDED_SCENE_SIZE ? null
+            : yourHouse.local(view, point);
+        return local == null ? null : Perspective.localToCanvas(client, local, plane);
+    }
+
+    /** With Path style Lines with arrows: an arrowhead every this many tiles, as HD World Markers draws them. */
+    static final int ARROW_EVERY = 3;
+    /** An arrowhead's size in local units (128 a tile), as HD World Markers draws it: tip ahead, back behind, half width. */
+    private static final int TIP = 26;
+    private static final int BACK = 22;
+    private static final int HALF = 20;
+
+    /** A small filled arrowhead on the ground around {@code at}, pointing (dx, dy). */
+    private void arrow(Graphics2D g, LocalPoint at, int dx, int dy, int plane)
+    {
+        double length = Math.hypot(dx, dy);
+        double ux = dx / length;
+        double uy = dy / length;
+        double[][] corners = {{ux * TIP, uy * TIP}, {-ux * BACK - uy * HALF, -uy * BACK + ux * HALF},
+            {-ux * BACK + uy * HALF, -uy * BACK - ux * HALF}};
+        Polygon head = new Polygon();
+        for (double[] corner : corners)
+        {
+            Point p = Perspective.localToCanvas(client, new LocalPoint(at.getX() + (int) Math.round(corner[0]),
+                at.getY() + (int) Math.round(corner[1]), at.getWorldView()), plane);
+            if (p == null)
+            {
+                return;
+            }
+            head.addPoint(p.getX(), p.getY());
+        }
+        g.fill(head);
+    }
+
     /** Dots on the minimap: above the widgets, or the minimap would cover them. */
     private final class MinimapOverlay extends Overlay
     {
@@ -2963,6 +3300,12 @@ public final class RouteFeature
             }
             int plane = view.getPlane();
             Stroke old = g.getStroke();
+            if (config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES)
+            {
+                paintLines(g, route, view, plane);
+                g.setStroke(old);
+                return null;
+            }
             int fill = config.routeTileFill();
             int borderAlpha = config.routeTileBorder();
             double tileWidth = config.routeTileWidth();
@@ -3183,7 +3526,8 @@ public final class RouteFeature
 
         /**
          * What a house step uses in the house, as the game says it: "Jewellery box 5 Burthorpe" (with the key the box's
-         * menu gives it), "Mounted glory Edgeville", "Portal Falador", "Fairy ring BKS", "Obelisk level 27".
+         * menu gives it), "Mounted glory Edgeville", "Mounted talisman Xeric's Heart", "Portal Falador",
+         * "Fairy ring BKS", "Obelisk level 27".
          */
         static String inHouse(String name)
         {
@@ -3196,6 +3540,11 @@ public final class RouteFeature
                 String keyed = BOX.get(place.toLowerCase(Locale.ROOT));
                 return what.startsWith("Mounted") ? "Mounted glory " + (keyed == null ? place : keyed.substring(2))
                     : "Jewellery box " + (keyed == null ? place : keyed);
+            }
+            if (what.startsWith("Mounted "))
+            {
+                // "Mounted talisman Xeric's Heart", "Mounted pendant Lithkren".
+                return what.substring(0, what.indexOf(": ")) + " " + place;
             }
             if (what.startsWith("House obelisk: "))
             {

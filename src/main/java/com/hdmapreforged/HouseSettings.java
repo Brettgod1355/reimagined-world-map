@@ -3,7 +3,7 @@ package com.hdmapreforged;
 import java.util.*;
 import java.util.stream.*;
 
-/** The house panel's choices to and from the house scan's words ("box:ornate", "glory", "portal:Varrock"). */
+/** The house panel's choices to and from the house scan's words ("box:ornate", "glory", "xeric", "portal:Varrock"). */
 final class HouseSettings
 {
     static final String PORTAL = "portal:";
@@ -14,6 +14,9 @@ final class HouseSettings
     static final String BOTH = "spirit tree+fairy ring";
     /** The superior gardens' teleports: none, fairy ring, spirit tree, both. */
     static final String[] GARDENS = {"", "fairy ring", "spirit tree", BOTH};
+    /** The Achievement Gallery's mounted amulets, as the scan names them, and their teleports' group. */
+    static final String[] MOUNTED = {"glory", "xeric", "digsite"};
+    static final String[] MOUNTED_GROUPS = {"Amulet of glory", "Xeric's talisman", "Digsite pendant"};
 
     /** Whether a house with these features has this one ("both" has a spirit tree and a fairy ring). */
     static boolean has(Set<String> features, String feature)
@@ -26,8 +29,9 @@ final class HouseSettings
     {
     }
 
-    /** {@code box}: a tier (any case), else none. */
-    static Set<String> features(String box, boolean glory, int garden, boolean obelisk, String portals, String nexus)
+    /** {@code box}: a tier (any case), else none; {@code mounted}: of {@link #MOUNTED}. */
+    static Set<String> features(String box, Set<String> mounted, int garden, boolean obelisk, String portals,
+        String nexus)
     {
         Set<String> features = new LinkedHashSet<>();
         String tier = box == null ? "none" : box.toLowerCase(Locale.ROOT);
@@ -35,9 +39,12 @@ final class HouseSettings
         {
             features.add("box:" + tier);
         }
-        if (glory)
+        for (String amulet : MOUNTED)
         {
-            features.add("glory");
+            if (mounted != null && mounted.contains(amulet))
+            {
+                features.add(amulet);
+            }
         }
         if (garden > 0 && garden < GARDENS.length)
         {

@@ -187,7 +187,8 @@ public final class HouseTracker
         }
         return lower.equals("fairy ring") || lower.equals("spirit tree") || lower.equals("obelisk") ? lower
             : lower.equals("spiritual fairy tree") ? "spirit tree+fairy ring"
-            : lower.contains("amulet of glory") ? "glory" : null;
+            : lower.contains("amulet of glory") ? "glory" : lower.contains("xeric's talisman") ? "xeric"
+            : lower.contains("digsite pendant") ? "digsite" : null;
     }
 
     public Set<String> features()
@@ -201,7 +202,8 @@ public final class HouseTracker
         for (String f : saved)
         {
             if (f.startsWith("portal:") || f.startsWith("nexus:") || f.startsWith("box:")
-                || Set.of("fairy ring", "spirit tree", "spirit tree+fairy ring", "glory", "obelisk").contains(f))
+                || Set.of("fairy ring", "spirit tree", "spirit tree+fairy ring", "glory", "xeric", "digsite", "obelisk")
+                .contains(f))
             {
                 features.add(f);
             }

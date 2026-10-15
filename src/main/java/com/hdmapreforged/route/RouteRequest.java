@@ -31,6 +31,8 @@ public final class RouteRequest
     public final boolean avoidWilderness;
     /** The same with their boat, searched when this one (left without it) does not arrive; else null. */
     public final RouteRequest withBoat;
+    /** A way past a bank first, for what is kept there (setting); else null. */
+    public final BankDetour bank;
 
     public RouteRequest(int start, int target, List<Edge> startEdges, List<Edge> edges, int sailingLevel, boolean running,
         int nodeLimit)
@@ -42,21 +44,28 @@ public final class RouteRequest
         int nodeLimit, boolean avoidWilderness)
     {
         this(start, target, Collections.unmodifiableList(startEdges), Collections.unmodifiableList(edges), sailingLevel,
-            running, nodeLimit, avoidWilderness, null);
+            running, nodeLimit, avoidWilderness, null, null);
     }
 
     /** The same ways between other ends. */
     public RouteRequest between(int start, int target)
     {
         return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, avoidWilderness,
-            withBoat == null ? null : withBoat.between(start, target));
+            withBoat == null ? null : withBoat.between(start, target), null);
     }
 
     /** The same ways, through the Wilderness too: searched when staying out of it does not arrive. */
     public RouteRequest throughWilderness()
     {
         return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, false,
-            withBoat == null ? null : withBoat.throughWilderness());
+            withBoat == null ? null : withBoat.throughWilderness(), bank);
+    }
+
+    /** The same, with a way past a bank to weigh. */
+    public RouteRequest withBank(BankDetour detour)
+    {
+        return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, avoidWilderness,
+            withBoat, detour);
     }
 
     /** Whether a search may use the same ways as with {@code other} (jumps and sea): what it reaches differs by start only. */
