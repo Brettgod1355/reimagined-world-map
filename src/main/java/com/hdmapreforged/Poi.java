@@ -29,7 +29,7 @@ final class Poi
     /** Where an entrance or passage leads, or null. */
     final BaseMap target;
     final String note;
-    private final List<Link> links = new ArrayList<>();
+    final List<Link> links = new ArrayList<>();
     /**
      * Where the map draws it when not at {@link #location}: a teleport or transport on an upper floor of a building on
      * the surface is drawn on the ground floor (where its map icon stands), so it is seen on the map; routes go to its
@@ -44,7 +44,7 @@ final class Poi
     }
 
     /** Teleports stacked on this icon; empty for a single one. */
-    private final List<Poi> members = new ArrayList<>();
+    final List<Poi> members = new ArrayList<>();
     /** Other things at the same place this icon stands for. */
     final List<Poi> nearby = new ArrayList<>();
 
@@ -81,8 +81,8 @@ final class Poi
     /** Icons with the things they stand for. */
     static List<Poi> flatten(List<Poi> pois)
     {
-        List<Poi> all = new ArrayList<>(pois.size() + 16);
-        for (Poi poi : pois)
+        var all = new ArrayList<Poi>(pois.size() + 16);
+        for (var poi : pois)
         {
             all.add(poi);
             all.addAll(poi.nearby);
@@ -107,16 +107,16 @@ final class Poi
         {
             return null;
         }
-        for (Poi member : members())
+        for (var member : members())
         {
             if (group.equals(member.group))
             {
                 return member;
             }
         }
-        for (Poi other : nearby)
+        for (var other : nearby)
         {
-            Poi member = other.memberOf(group);
+            var member = other.memberOf(group);
             if (member != null)
             {
                 return member;

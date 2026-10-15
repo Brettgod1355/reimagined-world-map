@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static java.lang.Math.*;
+
 import java.util.concurrent.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -15,6 +17,8 @@ import net.runelite.api.coords.*;
 import net.runelite.client.ui.*;
 import lombok.*;
 import net.runelite.client.util.*;
+import com.hdmapreforged.NpcSpawns.Group;
+import com.hdmapreforged.WorldData.Drop;
 
 /** What a search found (a monster, an item's sources, a kind of place), marked on the map and listed. Swing thread. */
 final class SearchResults implements MapView.Overlay, MapView.HitLayer
@@ -35,7 +39,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         final String title;
         final String page;
         final String summary;
-        final List<NpcSpawns.Group> groups;
+        final List<Group> groups;
         final String credit;
         String kind;
         /** The NPC whose picture heads it; -1 for none. */
@@ -43,13 +47,13 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         /** The item it is about, for its picture and price; -1 for none. */
         int item = -1;
         /** A monster's drops: its standard table's. */
-        List<WorldData.Drop> drops = Collections.emptyList();
+        List<Drop> drops = Collections.emptyList();
         /** All its page's drop tables, the standard one first. */
         List<WorldData.Table> tables = Collections.emptyList();
         /** An item's droppers. */
         List<ItemSources.Dropper> droppers = Collections.emptyList();
 
-        Result(String title, String page, String summary, List<NpcSpawns.Group> groups, String credit)
+        Result(String title, String page, String summary, List<Group> groups, String credit)
         {
             this.title = title;
             this.page = page;
@@ -61,37 +65,37 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
 
     static final String SHOPS = "Shops";
     static final String GROUND = "On the ground";
-    private static final Pattern FRACTION = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*/\\s*(\\d+(?:\\.\\d+)?)");
+    static final Pattern FRACTION = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*/\\s*(\\d+(?:\\.\\d+)?)");
 
     static final Color DOT = new Color(70, 220, 90);
     static final Color SHOP = new Color(255, 196, 60);
     static final Color GROUND_COLOR = new Color(120, 200, 255);
-    private static final Color DOT_EDGE = new Color(0, 50, 10, 230);
-    private static final Color LABEL_BACKGROUND = new Color(16, 16, 20, 215);
-    private static final Font LABEL_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 11);
-    private static final Color LINK = ColorScheme.GRAND_EXCHANGE_LIMIT;
+    static final Color DOT_EDGE = new Color(0, 50, 10, 230);
+    static final Color LABEL_BACKGROUND = new Color(16, 16, 20, 215);
+    static final Font LABEL_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 11);
+    static final Color LINK = ColorScheme.GRAND_EXCHANGE_LIMIT;
 
-    private final MapView view;
-    private final Supplier<WorldData> world;
-    private final Card card;
-    private Function<WorldPoint, MapData.Place> places = point -> null;
-    private Result result;
-    private String failed;
+    final MapView view;
+    final Supplier<WorldData> world;
+    final Card card;
+    Function<WorldPoint, MapData.Place> places = point -> null;
+    Result result;
+    String failed;
     /** What the search failed to find, for its Wiki button. */
-    private String failedName;
+    String failedName;
     /** The results clicked through from (a drop, a dropper), for Back. */
-    private final History history = new History();
+    final History history = new History();
     static final int HISTORY = 20;
     /** The tab shown of the current result (a kind of place, "drops", "droppers"); null for the first. */
-    private String tab;
+    String tab;
     /** Which of a monster's drop tables the Drops tab shows. */
-    private int table;
+    int table;
     /** How the Shops tab is ordered ("nearest", "stock", "name"); null for nearest while the player is known, else stock. */
-    private String shopSort;
+    String shopSort;
     /** How a drops table is ordered within its parts ("page", "rarity", "value"); kept from one search to the next. */
-    private String dropSort = "page";
+    String dropSort = "page";
     @Setter
-    private Prices prices = Prices.NONE;
+    Prices prices = Prices.NONE;
 
     /** The Grand Exchange prices the game client knows ({@link ItemNames}). */
     interface Prices
@@ -119,7 +123,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     /** The results clicked through from, newest last, at most {@link #HISTORY}; Back takes the newest. */
     static final class History
     {
-        private final Deque<Visit> visits = new ArrayDeque<>();
+        final Deque<Visit> visits = new ArrayDeque<>();
 
         void push(Visit visit)
         {
@@ -170,23 +174,23 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
      * Filters the Dropped by list by name as one types: one field however often the panel is built, so the typing goes
      * on when a late answer builds it again ({@link #rebuild}).
      */
-    private final JTextField filter = new HintField(() -> "Filter by name");
+    final JTextField filter = new HintField(() -> "Filter by name");
     /** The Dropped by list as last built: the line saying none matches, then each row after the space above it. */
-    private JPanel listed = column();
+    JPanel listed = column();
     /** A Dropped by row's monster, kept on the row for the filter. */
     static final String NAMED = "monster";
 
     /** Typed in the filter: the rows that match show from the top; nothing else is built again. */
-    private void filtered()
+    void filtered()
     {
         filterRows();
         listed.scrollRectToVisible(new Rectangle(0, 0, 1, 1));
     }
 
     /** Shows the rows whose monster's name holds the words typed, each with the space above it, else that none does. */
-    private void filterRows()
+    void filterRows()
     {
-        Component[] parts = listed.getComponents();
+        var parts = listed.getComponents();
         boolean any = false;
         for (int i = 2; i < parts.length; i += 2)
         {
@@ -209,7 +213,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Builds the panel again with {@code build}; the filter being typed in keeps the keys where it is shown again. */
-    private void rebuild(Runnable build)
+    void rebuild(Runnable build)
     {
         boolean typing = filter.isFocusOwner();
         build.run();
@@ -220,23 +224,23 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     @Setter
-    private Consumer<Tour.Stop> stopAdder;
+    Consumer<Tour.Stop> stopAdder;
     @Setter
-    private NpcPictures npcPictures = new NpcPictures((id, done) -> done.accept(null));
+    NpcPictures npcPictures = new NpcPictures((id, done) -> done.accept(null));
     @Setter
-    private BiConsumer<Integer, JLabel> itemPictures = (id, label) -> { };
+    BiConsumer<Integer, JLabel> itemPictures = (id, label) -> { };
 
     @Setter
-    private Consumer<List<WorldPoint>> fastest;
+    Consumer<List<WorldPoint>> fastest;
 
     /**
      * What to call a place of the search: the map it is shown on ({@link #mapOf}) when that is a dungeon's, so the name
      * and the map agree (the Brimhaven Dungeon, not the Ardent Ocean Underground around it); else the map's naming.
      */
-    private MapData.Place placeOf(WorldPoint point)
+    MapData.Place placeOf(WorldPoint point)
     {
-        BaseMaps maps = view.maps();
-        BaseMap map = maps == null ? null : world.get().drawnBy(maps).get(point);
+        var maps = view.maps();
+        var map = maps == null ? null : world.get().drawnBy(maps).get(point);
         return map != null && map.id != BaseMap.SURFACE && map.id != BaseMap.FULL ? MapScreen.mapPlace(map, point)
             : places.apply(point);
     }
@@ -254,7 +258,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     /** The monster, its Drops tab on the table named {@code table} (a dropper's: the version dropping the item). */
     void findMonster(String name, String table)
     {
-        NpcSpawns found = world.get().spawns(name);
+        var found = world.get().spawns(name);
         Result shown = found == null ? null : monsterResult(found, this::placeOf, view.near());
         answer(shown, "No places of \"" + name + "\" are known.", name,
             shown == null ? 0 : tableNamed(shown.tables, table));
@@ -274,7 +278,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** What a search for {@code name} found, on its drop table {@code table}, else {@code none}: why nothing shows. */
-    private void answer(Result found, String none, String name, int table)
+    void answer(Result found, String none, String name, int table)
     {
         if (found != null)
         {
@@ -295,7 +299,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     /** A monster's places by name, nearest first, each with how many stand there at once. Pure. */
     static Result monsterResult(NpcSpawns found, Function<WorldPoint, MapData.Place> places, WorldPoint player)
     {
-        List<NpcSpawns.Group> groups = named(found.groups, places, "Elsewhere");
+        var groups = named(found.groups, places, "Elsewhere");
         Result shown = new Result(found.page, found.page, "In " + places(groups.size()) + ", marked with green arrows"
             + (player != null ? ", nearest first" : "") + ". Click a place to see it; its card has the way there.",
             nearestFirst(groups, player), null);
@@ -310,26 +314,26 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
      * words): places of one name say which side of it they are, an upper floor says so, else the same side is
      * numbered. Pure.
      */
-    static List<NpcSpawns.Group> named(List<NpcSpawns.Group> found, Function<WorldPoint, MapData.Place> places,
+    static List<Group> named(List<Group> found, Function<WorldPoint, MapData.Place> places,
         String unnamed)
     {
-        List<MapData.Place> known = new ArrayList<>();
-        Map<String, Integer> uses = new HashMap<>();
-        for (NpcSpawns.Group group : found)
+        var known = new ArrayList<MapData.Place>();
+        var uses = new HashMap<String, Integer>();
+        for (var group : found)
         {
-            MapData.Place place = places.apply(group.center());
+            var place = places.apply(group.center());
             known.add(place);
             if (place != null)
             {
                 uses.merge(place.name, 1, Integer::sum);
             }
         }
-        List<NpcSpawns.Group> groups = new ArrayList<>();
-        Map<String, Integer> numbered = new HashMap<>();
+        var groups = new ArrayList<Group>();
+        var numbered = new HashMap<String, Integer>();
         for (int i = 0; i < found.size(); i++)
         {
-            NpcSpawns.Group group = found.get(i);
-            MapData.Place place = known.get(i);
+            var group = found.get(i);
+            var place = known.get(i);
             String name = place == null ? unnamed : place.name;
             if (name.isEmpty())
             {
@@ -350,14 +354,14 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
 
     void findItem(String name)
     {
-        ItemSources found = world.get().item(name);
+        var found = world.get().item(name);
         answer(found == null ? null : itemResult(found, this::placeOf, view.near()),
             "Nothing known about \"" + name + "\": no shop, ground spawn or drop.", name, 0);
     }
 
     void showKind(KindIndex.Kind kind, Function<WorldPoint, String> placeName)
     {
-        List<NpcSpawns.Group> groups = kindGroups(kind, placeName, view.near());
+        var groups = kindGroups(kind, placeName, view.near());
         Result shown = new Result(kind.label, kind.page, places(groups.size()) + ", marked with green arrows" + (view.near() != null ? ", nearest first" : "") + ". Click one to go there.",
             groups, kind.type == null ? "Skilling spots: RuneLite (BSD 2-Clause)" : null);
         shown.kind = kind.label;
@@ -365,18 +369,18 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** A kind's places, those close together in one town merged ("Catherby, 4 spots"). */
-    static List<NpcSpawns.Group> kindGroups(KindIndex.Kind kind, Function<WorldPoint, String> placeName, WorldPoint player)
+    static List<Group> kindGroups(KindIndex.Kind kind, Function<WorldPoint, String> placeName, WorldPoint player)
     {
-        List<NpcSpawns.Group> groups = new ArrayList<>();
+        var groups = new ArrayList<Group>();
         entries:
-        for (KindIndex.Entry entry : kind.entries)
+        for (var entry : kind.entries)
         {
             String place = placeName.apply(entry.point);
             place = place == null ? "" : place;
             String name = kind.type == null && !place.isEmpty() ? place : entry.name;
-            for (NpcSpawns.Group group : groups)
+            for (var group : groups)
             {
-                WorldPoint first = group.points.get(0);
+                var first = group.points.get(0);
                 if (!place.isEmpty() && group.location.equals(place) && group.name.equals(name)
                     && first.distanceTo(entry.point) <= NpcSpawns.TOGETHER)
                 {
@@ -384,7 +388,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
                     continue entries;
                 }
             }
-            NpcSpawns.Group group = new NpcSpawns.Group(name, place,
+            var group = new Group(name, place,
                 new ArrayList<>(Collections.singletonList(entry.point)), null, entry.detail == null ? "" : entry.detail,
                 null);
             group.poi = entry.poi;
@@ -403,23 +407,23 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
      */
     static Result itemResult(ItemSources found, Function<WorldPoint, MapData.Place> places, WorldPoint player)
     {
-        List<NpcSpawns.Group> shops = new ArrayList<>();
-        for (ItemSources.Store store : found.stores)
+        var shops = new ArrayList<Group>();
+        for (var store : found.stores)
         {
-            NpcSpawns.Group shop = new NpcSpawns.Group(store.shop, "", Collections.singletonList(store.point), SHOPS,
+            var shop = new Group(store.shop, "", Collections.singletonList(store.point), SHOPS,
                 ItemSources.stockText(store.stock), SHOP);
             shop.stock = store.stock;
             shops.add(shop);
         }
-        List<NpcSpawns.Group> grounds = new ArrayList<>();
-        for (ItemSources.Ground ground : found.grounds)
+        var grounds = new ArrayList<Group>();
+        for (var ground : found.grounds)
         {
-            NpcSpawns.Group group = new NpcSpawns.Group(found.page, "", Collections.singletonList(ground.point), GROUND,
+            var group = new Group(found.page, "", Collections.singletonList(ground.point), GROUND,
                 ground.count + " here", GROUND_COLOR);
             group.seen = ground.count;
             grounds.add(group);
         }
-        List<String> parts = new ArrayList<>();
+        var parts = new ArrayList<String>();
         if (!shops.isEmpty())
         {
             parts.add("sold in " + shops.size() + (shops.size() == 1 ? " shop" : " shops"));
@@ -435,11 +439,11 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         String summary = Character.toUpperCase(parts.get(0).charAt(0)) + String.join(", ", parts).substring(1)
             + (shops.isEmpty() && grounds.isEmpty() ? "." : ": marked on the map" + (player != null ? ", nearest first"
             : "") + ". Click a place to see it.");
-        List<NpcSpawns.Group> groups = new ArrayList<>(nearestFirst(named(shops, places, ""), player));
+        var groups = new ArrayList<Group>(nearestFirst(named(shops, places, ""), player));
         groups.addAll(nearestFirst(named(grounds, places, ""), player));
         Result shown = new Result(found.page, found.page, summary, groups, null);
         shown.item = found.item;
-        List<ItemSources.Dropper> droppers = new ArrayList<>(found.droppers);
+        var droppers = new ArrayList<ItemSources.Dropper>(found.droppers);
         droppers.sort(Comparator.comparingDouble((ItemSources.Dropper d) -> rarity(d.rarity)).thenComparing(d -> d.name));
         shown.droppers = droppers;
         return shown;
@@ -472,9 +476,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return 1;
     }
 
-    static List<NpcSpawns.Group> nearestFirst(List<NpcSpawns.Group> groups, WorldPoint player)
+    static List<Group> nearestFirst(List<Group> groups, WorldPoint player)
     {
-        List<NpcSpawns.Group> sorted = new ArrayList<>(groups);
+        var sorted = new ArrayList<Group>(groups);
         if (player != null)
         {
             sorted.sort(Comparator.comparingLong(g -> distance(g.center(), player)));
@@ -482,19 +486,19 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return sorted;
     }
 
-    private static String places(int n)
+    static String places(int n)
     {
         return n + (n == 1 ? " place" : " places");
     }
 
-    private static long distance(WorldPoint a, WorldPoint b)
+    static long distance(WorldPoint a, WorldPoint b)
     {
         long dx = a.getX() - b.getX();
         long dy = a.getY() - b.getY();
         return dx * dx + dy * dy;
     }
 
-    private void refresh()
+    void refresh()
     {
         rebuild(() -> card.show(this::section));
         view.repaint();
@@ -506,7 +510,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Shows a result on {@code tab} (null: its first) and, for a monster, on its drop table {@code table}. */
-    private void show(Result found, String tab, int table)
+    void show(Result found, String tab, int table)
     {
         filter.setText("");
         resetFound();
@@ -521,9 +525,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Asks the game for the prices of what the result shows, and shows them when they come. */
-    private void askPrices(Result found)
+    void askPrices(Result found)
     {
-        Set<Integer> ids = new HashSet<>();
+        var ids = new HashSet<Integer>();
         if (found.item >= 0)
         {
             ids.add(found.item);
@@ -551,7 +555,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Forgets the caches a shown result fills (tags, centers, per-group lookups) and any failure message. */
-    private void resetFound()
+    void resetFound()
     {
         failed = null;
         failedName = null;
@@ -562,14 +566,14 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Whether no map draws this place: going there would show only black. */
-    private boolean undrawn(NpcSpawns.Group group)
+    boolean undrawn(Group group)
     {
         return mapOf(group) == null;
     }
 
-    private void look(NpcSpawns.Group group)
+    void look(Group group)
     {
-        BaseMap map = mapOf(group);
+        var map = mapOf(group);
         if (map == null)
         {
             return;
@@ -577,19 +581,19 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         view.setFollowing(false);
         view.rememberForBack(map);
         // Where the map draws it: a place drawn elsewhere (Dagannoth Kings' lair) would otherwise land in a corner.
-        view.showMap(map, MapView.shownOn(map, standing(group.center(), view.ground())), Math.max(view.targetZoom(), 2));
+        view.showMap(map, MapView.shownOn(map, standing(group.center(), view.ground())), max(view.targetZoom(), 2));
         view.select(iconOf(group, map));
     }
 
-    private Poi iconOf(NpcSpawns.Group group, BaseMap map)
+    Poi iconOf(Group group, BaseMap map)
     {
         if (group.poi != null)
         {
             return group.poi;
         }
-        WorldPoint c = standing(group.center(), view.ground());
+        var c = standing(group.center(), view.ground());
         boolean shop = SHOPS.equals(group.category);
-        Optional<Poi> icon = view.searchExtras().stream().filter(poi -> shop && poi.type == PoiType.SHOP
+        var icon = view.searchExtras().stream().filter(poi -> shop && poi.type == PoiType.SHOP
             && poi.location.distanceTo(c) <= WorldData.SHOP_RADIUS)
             .min(Comparator.comparingInt(poi -> poi.location.distanceTo2D(c)));
         if (icon.isPresent())
@@ -607,33 +611,33 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** One per place of the result shown, so a click and a hover pick the same. */
-    private final Map<NpcSpawns.Group, Poi> foundPois = new IdentityHashMap<>();
+    final Map<Group, Poi> foundPois = new IdentityHashMap<>();
 
     /** A place's arrows on the map: clicked, the place is selected, and the map shows the way there. */
     @Override
     public Poi hit(Point point, MapView.Projection projection)
     {
         Result shown = result;
-        BaseMap viewMap = projection.map();
+        var viewMap = projection.map();
         if (shown == null || viewMap == null)
         {
             return null;
         }
         double r = arrowRadius(projection.zoom());
-        for (NpcSpawns.Group group : shown.groups)
+        for (var group : shown.groups)
         {
-            BaseMap map = mapOf(group);
+            var map = mapOf(group);
             if (map == null || viewMap.id != BaseMap.FULL && map != viewMap)
             {
                 continue;
             }
-            WorldPoint first = group.points.get(0);
-            WorldPoint moved = projection.shown(first);
-            for (WorldPoint p : group.points)
+            var first = group.points.get(0);
+            var moved = projection.shown(first);
+            for (var p : group.points)
             {
                 double x = projection.screenX(p.getX() + moved.getX() - first.getX() + 0.5);
                 double y = projection.screenY(p.getY() + moved.getY() - first.getY() + 0.5) - r;
-                if (Math.hypot(point.x - x, point.y - y) <= r * 2)
+                if (hypot(point.x - x, point.y - y) <= r * 2)
                 {
                     return iconOf(group, map);
                 }
@@ -643,9 +647,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Arrows grow a little when zoomed in, so a spawn tile stays easy to spot. */
-    private static double arrowRadius(double zoom)
+    static double arrowRadius(double zoom)
     {
-        return zoom < -1 ? 3 : zoom < 2 ? 4.5 : 4.5 + Math.min(4, (zoom - 2) * 1.5);
+        return zoom < -1 ? 3 : zoom < 2 ? 4.5 : 4.5 + min(4, (zoom - 2) * 1.5);
     }
 
     void lookAtPoint(WorldPoint at)
@@ -657,15 +661,15 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Each place's map, worked out once per result and maps, not in every frame. */
-    private final Map<NpcSpawns.Group, Optional<BaseMap>> groupMaps = new IdentityHashMap<>();
-    private Map<WorldPoint, BaseMap> groupMapsFor;
-    private BaseMaps groupMapsFrom;
+    final Map<Group, Optional<BaseMap>> groupMaps = new IdentityHashMap<>();
+    Map<WorldPoint, BaseMap> groupMapsFor;
+    BaseMaps groupMapsFrom;
 
     /** The map that draws a place: where maps overlap as our map server worked it out ({@link WorldData#drawnBy}). */
-    private BaseMap mapOf(NpcSpawns.Group group)
+    BaseMap mapOf(Group group)
     {
-        BaseMaps maps = view.maps();
-        Map<WorldPoint, BaseMap> placeMaps = world.get().drawnBy(maps);
+        var maps = view.maps();
+        var placeMaps = world.get().drawnBy(maps);
         if (groupMapsFor != placeMaps || groupMapsFrom != maps)
         {
             groupMaps.clear();
@@ -676,18 +680,18 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             .orElse(null);
     }
 
-    private final Map<NpcSpawns.Group, int[]> groupBounds = new IdentityHashMap<>();
+    final Map<Group, int[]> groupBounds = new IdentityHashMap<>();
 
-    private int[] bounds(NpcSpawns.Group group)
+    int[] bounds(Group group)
     {
         return groupBounds.computeIfAbsent(group, g -> {
             int[] b = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-            for (WorldPoint p : g.points)
+            for (var p : g.points)
             {
-                b[0] = Math.min(b[0], p.getX());
-                b[1] = Math.min(b[1], p.getY());
-                b[2] = Math.max(b[2], p.getX());
-                b[3] = Math.max(b[3], p.getY());
+                b[0] = min(b[0], p.getX());
+                b[1] = min(b[1], p.getY());
+                b[2] = max(b[2], p.getX());
+                b[3] = max(b[3], p.getY());
             }
             return b;
         });
@@ -697,15 +701,15 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
      * The map a place is shown on: the map server's answer for its spot, or where one stands there on another floor
      * ({@link #standing}) the map showing a player standing there.
      */
-    static BaseMap mapOf(NpcSpawns.Group group, BaseMaps maps, Map<WorldPoint, BaseMap> placeMaps,
+    static BaseMap mapOf(Group group, BaseMaps maps, Map<WorldPoint, BaseMap> placeMaps,
         Predicate<WorldPoint> ground)
     {
         if (maps == null)
         {
             return null;
         }
-        WorldPoint c = group.center();
-        WorldPoint at = standing(c, ground);
+        var c = group.center();
+        var at = standing(c, ground);
         return at.equals(c) && placeMaps.containsKey(c) ? placeMaps.get(c) : maps.find(at);
     }
 
@@ -724,7 +728,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         {
             for (int floor : new int[]{p.getPlane() + d, p.getPlane() - d})
             {
-                WorldPoint other = new WorldPoint(p.getX(), p.getY(), floor);
+                var other = new WorldPoint(p.getX(), p.getY(), floor);
                 if (floor >= 0 && floor < 4 && groundNear(other, ground))
                 {
                     return other;
@@ -735,7 +739,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Ground at the spot or within two tiles of it, on its floor. */
-    private static boolean groundNear(WorldPoint p, Predicate<WorldPoint> ground)
+    static boolean groundNear(WorldPoint p, Predicate<WorldPoint> ground)
     {
         for (int dx = -2; dx <= 2; dx++)
         {
@@ -751,14 +755,14 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** The corners after the tip, in radii: right, up. */
-    private static final double[][] ARROW = {{-1.2, 1.4}, {-0.45, 1.4}, {-0.45, 2.6}, {0.45, 2.6}, {0.45, 1.4},
+    static final double[][] ARROW = {{-1.2, 1.4}, {-0.45, 1.4}, {-0.45, 2.6}, {0.45, 2.6}, {0.45, 1.4},
         {1.2, 1.4}};
 
     static Path2D arrow(double x, double y, double r)
     {
         Path2D arrow = new Path2D.Double();
         arrow.moveTo(x, y);
-        for (double[] corner : ARROW)
+        for (var corner : ARROW)
         {
             arrow.lineTo(x + r * corner[0], y - r * corner[1]);
         }
@@ -795,7 +799,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         });
     }
 
-    private static void paintArrow(Graphics2D g, Path2D arrow, Color fill, BasicStroke edge)
+    static void paintArrow(Graphics2D g, Path2D arrow, Color fill, BasicStroke edge)
     {
         g.setColor(fill);
         g.fill(arrow);
@@ -805,7 +809,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** A result's panel: the header (title, summary, buttons, tabs, sort) kept in view, the list below it scrolling. */
-    private JComponent section(int width)
+    JComponent section(int width)
     {
         JPanel header = column();
         if (result == null)
@@ -824,7 +828,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             }, width));
             header.add(Box.createVerticalStrut(4));
         }
-        JComponent title = text(result.title, Color.WHITE, true, width - 70);
+        var title = text(result.title, Color.WHITE, true, width - 70);
         if (result.picture >= 0)
         {
             header.add(pictureRow(pictureLabel(result.picture, NpcPictures.LARGE), title));
@@ -846,14 +850,14 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             header.add(grey("Grand Exchange " + gp(price), width));
         }
         add(header, 6, wrapLabels(buttons(result.page), 4, width + 70));
-        List<String[]> tabs = tabs();
+        var tabs = tabs();
         if (tabs.isEmpty())
         {
             return header;
         }
         String shown = tabs.stream().map(t -> t[0]).filter(key -> key.equals(tab)).findFirst().orElse(tabs.get(0)[0]);
-        List<JComponent> labels = new ArrayList<>();
-        for (String[] t : tabs)
+        var labels = new ArrayList<JComponent>();
+        for (var t : tabs)
         {
             boolean active = t[0].equals(shown);
             JLabel label = new JLabel(t[1]);
@@ -887,23 +891,23 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** The tabs of the result shown, {key, label}: places by kind (a monster's all as "Locations"), drops, droppers. */
-    private List<String[]> tabs()
+    List<String[]> tabs()
     {
-        List<String> categories = new ArrayList<>();
-        for (NpcSpawns.Group group : result.groups)
+        var categories = new ArrayList<String>();
+        for (var group : result.groups)
         {
             if (!categories.contains(category(group)))
             {
                 categories.add(category(group));
             }
         }
-        List<String[]> tabs = new ArrayList<>();
+        var tabs = new ArrayList<String[]>();
         for (String category : categories)
         {
             long n = result.groups.stream().filter(g -> category.equals(category(g))).count();
             tabs.add(new String[]{category, category + " (" + n + ")"});
         }
-        List<WorldData.Drop> drops = shownDrops();
+        var drops = shownDrops();
         if (!drops.isEmpty())
         {
             tabs.add(new String[]{"drops", "Drops (" + drops.size() + ")"});
@@ -915,24 +919,24 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return tabs;
     }
 
-    private static String category(NpcSpawns.Group group)
+    static String category(Group group)
     {
         return group.category == null ? "Locations" : group.category;
     }
 
     /** Which of the page's drop tables is chosen. */
-    private int chosenTable()
+    int chosenTable()
     {
-        return Math.min(table, Math.max(0, result.tables.size() - 1));
+        return min(table, max(0, result.tables.size() - 1));
     }
 
-    private List<WorldData.Drop> shownDrops()
+    List<Drop> shownDrops()
     {
         return result.tables.isEmpty() ? result.drops : result.tables.get(chosenTable()).drops;
     }
 
     /** The Drops tab: the table chosen, its order, then the drops under the parts of the page. */
-    private void dropsTab(JPanel header, JPanel body, int width)
+    void dropsTab(JPanel header, JPanel body, int width)
     {
         if (result.tables.size() > 1)
         {
@@ -943,13 +947,13 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
                 dropSort = sort;
                 refresh();
             }, width));
-        List<WorldData.Drop> drops = dropOrder(shownDrops(), dropSort, prices::price);
+        var drops = dropOrder(shownDrops(), dropSort, prices::price);
         // 100%, the main table, the rare drop table, tertiary.
         String[][] parts = {{"a", "100%"}, {"", "Main drops"}, {"r", "Rare drop table"}, {"t", "Tertiary"}};
-        for (String[] part : parts)
+        for (var part : parts)
         {
             boolean first = true;
-            for (WorldData.Drop drop : drops)
+            for (var drop : drops)
             {
                 if (!drop.part.equals(part[0]))
                 {
@@ -980,7 +984,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
      * The Dropped by tab: each monster with its picture, how often and many, and in how many places it stands; a long
      * list with a filter by name above it.
      */
-    private void droppersTab(JPanel header, JPanel body, int width)
+    void droppersTab(JPanel header, JPanel body, int width)
     {
         if (result.droppers.size() > FILTERED)
         {
@@ -991,7 +995,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         listed = column();
         listed.add(grey("No monster of that name drops it.", width));
         int shown = 0;
-        for (ItemSources.Dropper dropper : result.droppers)
+        for (var dropper : result.droppers)
         {
             JLabel icon = shown++ < PICTURED ? pictureLabel(dropper.npc, PICTURE) : pictureIcon(PICTURE);
             Runnable open = () -> findMonster(dropper.name, dropper.table);
@@ -1006,9 +1010,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** A tab of places: shops in the order chosen, the rest as the result lists them. */
-    private void placesTab(String shown, JPanel header, JPanel body, int width)
+    void placesTab(String shown, JPanel header, JPanel body, int width)
     {
-        List<NpcSpawns.Group> groups = result.groups.stream().filter(g -> shown.equals(category(g)))
+        var groups = result.groups.stream().filter(g -> shown.equals(category(g)))
             .collect(Collectors.toList());
         if (shown.equals(SHOPS))
         {
@@ -1021,7 +1025,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             groups.sort(shopOrder(sort, view.near(), result.title));
         }
         boolean first = true;
-        for (NpcSpawns.Group group : groups)
+        for (var group : groups)
         {
             add(body, first ? 4 : 3, place(group, width));
             first = false;
@@ -1032,9 +1036,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
      * Shops in the order chosen: "nearest" the player (as listed, without one), "stock" fullest first, "name" by the
      * shop's, as the list names it.
      */
-    static Comparator<NpcSpawns.Group> shopOrder(String sort, WorldPoint player, String title)
+    static Comparator<Group> shopOrder(String sort, WorldPoint player, String title)
     {
-        Comparator<NpcSpawns.Group> byName = Comparator.comparing((NpcSpawns.Group g) -> placeName(g, title),
+        var byName = Comparator.comparing((Group g) -> placeName(g, title),
             String.CASE_INSENSITIVE_ORDER);
         switch (sort)
         {
@@ -1051,17 +1055,17 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Drops in the order chosen: "page" as listed, "rarity" surest first, "value" dearest first. */
-    static List<WorldData.Drop> dropOrder(List<WorldData.Drop> drops, String sort, IntUnaryOperator price)
+    static List<Drop> dropOrder(List<Drop> drops, String sort, IntUnaryOperator price)
     {
-        List<WorldData.Drop> sorted = new ArrayList<>(drops);
-        Comparator<WorldData.Drop> byName = Comparator.comparing((WorldData.Drop d) -> d.name, String.CASE_INSENSITIVE_ORDER);
+        var sorted = new ArrayList<Drop>(drops);
+        var byName = Comparator.comparing((Drop d) -> d.name, String.CASE_INSENSITIVE_ORDER);
         if (sort.equals("rarity"))
         {
-            sorted.sort(Comparator.comparingDouble((WorldData.Drop d) -> rarity(d.rarity)).thenComparing(byName));
+            sorted.sort(Comparator.comparingDouble((Drop d) -> rarity(d.rarity)).thenComparing(byName));
         }
         else if (sort.equals("value"))
         {
-            sorted.sort(Comparator.comparingLong((WorldData.Drop d) -> {
+            sorted.sort(Comparator.comparingLong((Drop d) -> {
                 long value = value(price.applyAsInt(d.item), d.quantity);
                 return value < 0 ? Long.MAX_VALUE : -value;
             }).thenComparing(byName));
@@ -1069,7 +1073,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return sorted;
     }
 
-    private static final Pattern NUMBER = Pattern.compile("\\d{1,9}");
+    static final Pattern NUMBER = Pattern.compile("\\d{1,9}");
 
     /**
      * What a drop is worth at the Grand Exchange: the price times the least that drops ("5-10": five); -1 while the
@@ -1092,9 +1096,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** The choice of a monster's drop table: its versions (the Wilderness Slayer Cave), loot that is not a drop. */
-    private JComboBox<String> versions(List<WorldData.Table> tables, int chosen, int width)
+    JComboBox<String> versions(List<WorldData.Table> tables, int chosen, int width)
     {
-        JComboBox<String> versions = new JComboBox<>(tables.stream().map(t -> t.name.isEmpty() ? "Standard" : t.name)
+        var versions = new JComboBox<String>(tables.stream().map(t -> t.name.isEmpty() ? "Standard" : t.name)
             .toArray(String[]::new));
         versions.setSelectedIndex(chosen);
         versions.setForeground(Color.WHITE);
@@ -1116,7 +1120,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     static final int PICTURE = 36;
 
     /** An NPC's picture {@code size} wide and high once it came; an empty square meanwhile. */
-    private JLabel pictureLabel(int npc, int size)
+    JLabel pictureLabel(int npc, int size)
     {
         JLabel label = pictureIcon(size);
         npcPictures.show(npc, label);
@@ -1141,16 +1145,16 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         JPanel row = panel(new BorderLayout(8, 0));
         row.add(icon, BorderLayout.WEST);
         JPanel column = column();
-        for (JComponent word : words)
+        for (var word : words)
         {
             column.add(word);
         }
         row.add(column, BorderLayout.CENTER);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Math.max(PICTURE, row.getPreferredSize().height)));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, max(PICTURE, row.getPreferredSize().height)));
         return row;
     }
 
-    private JComponent place(NpcSpawns.Group group, int width)
+    JComponent place(Group group, int width)
     {
         JPanel row = column();
         String where = placeName(group, result.title);
@@ -1160,7 +1164,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         {
             row.add(text("Not on the map yet", new Color(255, 190, 120), false, width));
         }
-        BaseMap map = mapOf(group);
+        var map = mapOf(group);
         int floor = group.points.get(0).getPlane();
         String facts = dotted(group.note, map != null && map.id != BaseMap.SURFACE && !map.name.equals(where) ? map.name
             : null, floor > 0 ? "Floor " + floor : null, away(view.near(), group.center()));
@@ -1227,7 +1231,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         JPanel rows = column();
         JPanel line = null;
         int used = 0;
-        for (JComponent part : parts)
+        for (var part : parts)
         {
             int w = part.getPreferredSize().width;
             if (line == null || used + gap + w > width)
@@ -1254,12 +1258,12 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     /** A row of choices ("Sort by  Nearest  Stock  Name"), the one chosen white; another clicked is picked. */
     static JComponent choice(String[][] options, String chosen, Consumer<String> pick, int width)
     {
-        List<JComponent> parts = new ArrayList<>();
+        var parts = new ArrayList<JComponent>();
         JLabel sort = new JLabel("Sort by");
         sort.setForeground(SOFT);
         sort.setFont(FontManager.getRunescapeSmallFont());
         parts.add(sort);
-        for (String[] option : options)
+        for (var option : options)
         {
             boolean active = option[0].equals(chosen);
             JLabel label = new JLabel(option[1]);
@@ -1270,12 +1274,12 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return wrapLabels(parts, 10, width);
     }
 
-    private static final Color LIT = new Color(255, 255, 255, 18);
+    static final Color LIT = new Color(255, 255, 255, 18);
 
     /** A see-through panel that can be lit faintly: a row under the mouse. */
     static final class Lit extends JPanel
     {
-        private boolean lit;
+        boolean lit;
 
         Lit(LayoutManager layout)
         {
@@ -1296,7 +1300,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         {
             if (lit)
             {
-                Graphics2D g2 = (Graphics2D) g.create();
+                var g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(LIT);
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
@@ -1334,7 +1338,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Lights the row {@code c} is on: the nearest panel up from it with a mouse listener of its own. */
-    private static void light(Component c, boolean lit)
+    static void light(Component c, boolean lit)
     {
         for (Component at = c; at != null; at = at.getParent())
         {
@@ -1352,7 +1356,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** The label above a place on the map: what and how many stand there ("Fire giant ×7"), else where it is. */
-    static String tag(NpcSpawns.Group group)
+    static String tag(Group group)
     {
         if (group.entrance)
         {
@@ -1365,7 +1369,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return group.location.isEmpty() ? group.name : group.location;
     }
 
-    static String placeName(NpcSpawns.Group group, String title)
+    static String placeName(Group group, String title)
     {
         if (group.location.isEmpty())
         {
@@ -1379,19 +1383,19 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     }
 
     /** The result's buttons, for {@link #wrapLabels} to lay out in rows. */
-    private List<JButton> buttons(String page)
+    List<JButton> buttons(String page)
     {
-        List<JButton> buttons = new ArrayList<>();
+        var buttons = new ArrayList<JButton>();
         if (result != null && result.kind != null && stopAdder != null)
         {
             String kind = result.kind;
             buttons.add(tip(button("+ Stop", () -> stopAdder.accept(Tour.Stop.kind(kind))),
                 "Add \"the nearest of these\" to your custom route"));
         }
-        NpcSpawns.Group closest = closest();
+        var closest = closest();
         if (closest != null && fastest != null)
         {
-            List<WorldPoint> places = new ArrayList<>();
+            var places = new ArrayList<WorldPoint>();
             result.groups.stream().filter(group -> !undrawn(group)).forEach(group -> places.addAll(group.points));
             buttons.add(tip(button("Fastest", () -> fastest.accept(places)),
                 "Show the place you get to soonest, with your teleports and transport"));
@@ -1408,20 +1412,20 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return buttons;
     }
 
-    private NpcSpawns.Group closest()
+    Group closest()
     {
-        WorldPoint me = view.near();
+        var me = view.near();
         return me == null || result == null ? null : closest(result.groups.stream()
             .filter(group -> !undrawn(group)).collect(Collectors.toList()), me);
     }
 
-    static NpcSpawns.Group closest(List<NpcSpawns.Group> groups, WorldPoint me)
+    static Group closest(List<Group> groups, WorldPoint me)
     {
-        NpcSpawns.Group best = null;
+        Group best = null;
         long bestDistance = Long.MAX_VALUE;
-        for (NpcSpawns.Group group : groups)
+        for (var group : groups)
         {
-            for (WorldPoint p : group.points)
+            for (var p : group.points)
             {
                 long d = distance(p, me);
                 if (d < bestDistance)
@@ -1450,7 +1454,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return panel;
     }
 
-    private static void add(JPanel panel, int space, Component c)
+    static void add(JPanel panel, int space, Component c)
     {
         panel.add(Box.createVerticalStrut(space));
         panel.add(c);
@@ -1498,7 +1502,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     /** The second line of a row, the summary: lighter than the names, still easy to read. */
     static final Color SOFT = new Color(205, 205, 210);
 
-    private static JLabel grey(String text, int width)
+    static JLabel grey(String text, int width)
     {
         return text(text, SOFT, false, width);
     }
@@ -1543,7 +1547,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return label;
     }
 
-    private static JLabel link(String text, Runnable action, int width)
+    static JLabel link(String text, Runnable action, int width)
     {
         return clickable(text(text, LINK, false, width), action, true);
     }
@@ -1572,18 +1576,18 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return label;
     }
 
-    private static final BasicStroke EDGE = new BasicStroke(1.2f);
-    private final Map<NpcSpawns.Group, WorldPoint> centers = new IdentityHashMap<>();
+    static final BasicStroke EDGE = new BasicStroke(1.2f);
+    final Map<Group, WorldPoint> centers = new IdentityHashMap<>();
 
     /**
      * Arrows and each place's label as pictures made once: drawing hundreds of shapes and texts every frame was slow.
      * Labels for {@link #tagsDevice}; a label's colour follows from its place.
      */
-    private final Map<NpcSpawns.Group, BufferedImage> tags = new IdentityHashMap<>();
-    private double tagsDevice;
-    private final Map<Long, BufferedImage> arrows = new HashMap<>();
+    final Map<Group, BufferedImage> tags = new IdentityHashMap<>();
+    double tagsDevice;
+    final Map<Long, BufferedImage> arrows = new HashMap<>();
 
-    private static void cap(Map<?, ?> cache, int max)
+    static void cap(Map<?, ?> cache, int max)
     {
         if (cache.size() > max)
         {
@@ -1591,9 +1595,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         }
     }
 
-    private BufferedImage arrowSprite(Color fill, double r, double device)
+    BufferedImage arrowSprite(Color fill, double r, double device)
     {
-        long key = (long) fill.getRGB() << 32 | (Math.round(r * 4) & 0xffffL) << 16 | Math.round(device * 10) & 0xffffL;
+        long key = (long) fill.getRGB() << 32 | (round(r * 4) & 0xffffL) << 16 | round(device * 10) & 0xffffL;
         cap(arrows, 500);
         return arrows.computeIfAbsent(key, k -> {
             double w = r * 2.4 + 4;
@@ -1602,7 +1606,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         });
     }
 
-    private static BufferedImage labelSprite(String label, Color color, FontMetrics metrics, double device)
+    static BufferedImage labelSprite(String label, Color color, FontMetrics metrics, double device)
     {
         int width = metrics.stringWidth(label) + 10;
         int height = metrics.getHeight() + 2;
@@ -1619,13 +1623,13 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         });
     }
 
-    private static final Map<Color, Color> FADED = new ConcurrentHashMap<>();
+    static final Map<Color, Color> FADED = new ConcurrentHashMap<>();
 
     @Override
     public void paint(Graphics2D g, MapView.Projection projection)
     {
         Result shown = result;
-        BaseMap viewMap = projection.map();
+        var viewMap = projection.map();
         if (shown == null || viewMap == null)
         {
             return;
@@ -1633,18 +1637,18 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         double zoom = projection.zoom();
         double r = arrowRadius(zoom);
         g.setFont(LABEL_FONT);
-        FontMetrics metrics = g.getFontMetrics();
-        double device = Math.max(1, Math.min(4, Math.abs(g.getTransform().getScaleX())));
+        var metrics = g.getFontMetrics();
+        double device = max(1, min(4, abs(g.getTransform().getScaleX())));
         cap(groupBounds, 5000);
         cap(tags, device != tagsDevice ? -1 : 5000);
         tagsDevice = device;
-        for (NpcSpawns.Group group : shown.groups)
+        for (var group : shown.groups)
         {
-            int[] b = bounds(group);
+            var b = bounds(group);
             // A place the map draws elsewhere (the Kalphite Lair, the Brimhaven Dungeon's raised paths) moves as its first
             // point does, on the floor one stands on there.
-            WorldPoint first = standing(group.points.get(0), view.ground());
-            WorldPoint moved = projection.shown(first);
+            var first = standing(group.points.get(0), view.ground());
+            var moved = projection.shown(first);
             int dx = moved.getX() - first.getX();
             int dy = moved.getY() - first.getY();
             double left = projection.screenX(b[0] + dx);
@@ -1655,7 +1659,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             {
                 continue;
             }
-            BaseMap map = mapOf(group);
+            var map = mapOf(group);
             if (map == null || viewMap.id != BaseMap.FULL && map != viewMap)
             {
                 continue;
@@ -1666,7 +1670,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             BufferedImage arrow = arrowSprite(fill, r, device);
             double half = arrow.getWidth() / device / 2;
             double tall = arrow.getHeight() / device - 2;
-            for (WorldPoint p : group.points)
+            for (var p : group.points)
             {
                 double x = projection.screenX(p.getX() + dx + 0.5);
                 double y = projection.screenY(p.getY() + dy + 0.5);
@@ -1681,7 +1685,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
                 continue;
             }
             cap(centers, 5000);
-            WorldPoint c = centers.computeIfAbsent(group, NpcSpawns.Group::center);
+            var c = centers.computeIfAbsent(group, Group::center);
             double x = projection.screenX(c.getX() + dx + 0.5);
             double y = projection.screenY(c.getY() + dy + 0.5) - r * 3 - 4;
             BufferedImage tag = tags.computeIfAbsent(group, k -> labelSprite(tag(group), color, metrics, device));

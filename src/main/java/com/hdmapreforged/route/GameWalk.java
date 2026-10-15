@@ -1,5 +1,7 @@
 package com.hdmapreforged.route;
 
+import static com.hdmapreforged.route.Tiles.*;
+
 import java.util.*;
 
 /**
@@ -11,17 +13,17 @@ public final class GameWalk
     static final int HALF = 64;
     /** Well inside the search area. */
     static final int PIECE = 48;
-    private static final int[] DX = {-1, 1, 0, 0, -1, 1, -1, 1};
-    private static final int[] DY = {0, 0, -1, 1, -1, -1, 1, 1};
+    static final int[] DX = {-1, 1, 0, 0, -1, 1, -1, 1};
+    static final int[] DY = {0, 0, -1, 1, -1, -1, 1, 1};
 
-    private GameWalk()
+    GameWalk()
     {
     }
 
     /** A route's walk as the game would take it; pieces the game cannot do as short keep the route's tiles. */
     public static int[] follow(CollisionMap map, int[] points)
     {
-        if (points.length < 3 || Tiles.isSea(points[0]))
+        if (points.length < 3 || isSea(points[0]))
         {
             return points;
         }
@@ -32,12 +34,12 @@ public final class GameWalk
         while (i < points.length - 1)
         {
             int j = i + 1;
-            while (j + 1 < points.length && Tiles.z(points[j + 1]) == Tiles.z(points[i])
-                && Tiles.distance(points[i], points[j + 1]) <= PIECE)
+            while (j + 1 < points.length && z(points[j + 1]) == z(points[i])
+                && distance(points[i], points[j + 1]) <= PIECE)
             {
                 j++;
             }
-            int[] piece = Tiles.z(points[j]) == Tiles.z(points[i]) ? path(map, out[n - 1], points[j]) : null;
+            var piece = z(points[j]) == z(points[i]) ? path(map, out[n - 1], points[j]) : null;
             if (piece == null || piece.length > j - i + 1 || newObstacle(map, piece, points, i, j))
             {
                 piece = Arrays.copyOfRange(points, i, j + 1);
@@ -65,7 +67,7 @@ public final class GameWalk
      */
     public static int[] straighten(CollisionMap map, int[] points)
     {
-        if (points.length < 3 || Tiles.isSea(points[0]))
+        if (points.length < 3 || isSea(points[0]))
         {
             return points;
         }
@@ -100,15 +102,15 @@ public final class GameWalk
      * {@code j - i} steps over walkable ground, crossing no door and stepping on no obstacle that {@code points[i..j]}
      * does not; else null.
      */
-    private static int[] runs(CollisionMap map, int[] points, int i, int j)
+    static int[] runs(CollisionMap map, int[] points, int i, int j)
     {
         int from = points[i];
         int to = points[j];
-        int z = Tiles.z(from);
-        int dx = Tiles.x(to) - Tiles.x(from);
-        int dy = Tiles.y(to) - Tiles.y(from);
+        int z = z(from);
+        int dx = x(to) - x(from);
+        int dy = y(to) - y(from);
         int steps = Math.max(Math.abs(dx), Math.abs(dy));
-        if (Tiles.z(to) != z || steps != j - i)
+        if (z(to) != z || steps != j - i)
         {
             return null;
         }
@@ -120,8 +122,8 @@ public final class GameWalk
         int ay = Math.abs(dx) > Math.abs(dy) ? 0 : sy;
         int[] path = new int[steps + 1];
         path[0] = from;
-        int x = Tiles.x(from);
-        int y = Tiles.y(from);
+        int x = x(from);
+        int y = y(from);
         for (int k = 0; k < steps; k++)
         {
             boolean diagonalStep = k >= steps - diagonal;
@@ -134,7 +136,7 @@ public final class GameWalk
             }
             x += mx;
             y += my;
-            path[k + 1] = Tiles.pack(x, y, z);
+            path[k + 1] = pack(x, y, z);
             if (newObstacle(map, new int[]{path[k + 1]}, points, i, j))
             {
                 return null;
@@ -144,12 +146,12 @@ public final class GameWalk
     }
 
     /** Whether {@code points[i..j]} steps from (x, y) by (mx, my) itself (so a door it opens may be crossed). */
-    private static boolean crossed(int[] points, int i, int j, int x, int y, int mx, int my)
+    static boolean crossed(int[] points, int i, int j, int x, int y, int mx, int my)
     {
         for (int k = i; k < j; k++)
         {
-            if (Tiles.x(points[k]) == x && Tiles.y(points[k]) == y && Tiles.x(points[k + 1]) == x + mx
-                && Tiles.y(points[k + 1]) == y + my)
+            if (x(points[k]) == x && y(points[k]) == y && x(points[k + 1]) == x + mx
+                && y(points[k + 1]) == y + my)
             {
                 return true;
             }
@@ -158,11 +160,11 @@ public final class GameWalk
     }
 
     /** Whether {@code piece} crosses an obstacle (vines, rocks) that {@code points[i..j]} kept clear of. */
-    private static boolean newObstacle(CollisionMap map, int[] piece, int[] points, int i, int j)
+    static boolean newObstacle(CollisionMap map, int[] piece, int[] points, int i, int j)
     {
         for (int t : piece)
         {
-            if (map.isObstacle(Tiles.x(t), Tiles.y(t), t)
+            if (map.isObstacle(x(t), y(t), t)
                 && Arrays.stream(points, i, j + 1).noneMatch(p -> p == t))
             {
                 return true;
@@ -174,15 +176,15 @@ public final class GameWalk
     /** Both ends included, or null. */
     public static int[] path(CollisionMap map, int from, int to)
     {
-        int z = Tiles.z(from);
-        if (Tiles.z(to) != z)
+        int z = z(from);
+        if (z(to) != z)
         {
             return null;
         }
-        int ox = Tiles.x(from) - HALF;
-        int oy = Tiles.y(from) - HALF;
-        int tx = Tiles.x(to) - ox;
-        int ty = Tiles.y(to) - oy;
+        int ox = x(from) - HALF;
+        int oy = y(from) - HALF;
+        int tx = x(to) - ox;
+        int ty = y(to) - oy;
         int size = HALF * 2;
         if (tx < 0 || ty < 0 || tx >= size || ty >= size)
         {
@@ -193,7 +195,7 @@ public final class GameWalk
         Arrays.fill(via, (byte) -1);
         int start = HALF * size + HALF;
         via[start] = 8;
-        ArrayDeque<Integer> queue = new ArrayDeque<>();
+        var queue = new ArrayDeque<Integer>();
         queue.add(start);
         int goal = ty * size + tx;
         while (!queue.isEmpty() && via[goal] < 0)
@@ -238,7 +240,7 @@ public final class GameWalk
         for (int k = 0; k < length; k++)
         {
             int c = back[length - 1 - k];
-            path[k + 1] = Tiles.pack(c % size + ox, c / size + oy, z);
+            path[k + 1] = pack(c % size + ox, c / size + oy, z);
         }
         return path;
     }

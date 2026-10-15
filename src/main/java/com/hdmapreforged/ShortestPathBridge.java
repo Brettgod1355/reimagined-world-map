@@ -16,7 +16,7 @@ final class ShortestPathBridge
     /** Cap per message: messages come from other plugins. */
     static final int MAX_POINTS = 64;
 
-    private ShortestPathBridge()
+    ShortestPathBridge()
     {
     }
 
@@ -31,12 +31,12 @@ final class ShortestPathBridge
      */
     static PluginMessage path(WorldPoint target, Map<?, ?> config)
     {
-        Map<String, Object> data = new HashMap<>();
+        var data = new HashMap<String, Object>();
         if (target != null)
         {
             data.put(TARGET, target);
         }
-        Map<Object, Object> wanted = new HashMap<>(config);
+        var wanted = new HashMap<Object, Object>(config);
         wanted.put("postTransports", true);
         data.put("config", wanted);
         return new PluginMessage(NAMESPACE, PATH, data);
@@ -65,7 +65,7 @@ final class ShortestPathBridge
         return is(message, TRANSPORTS);
     }
 
-    private static boolean is(PluginMessage message, String name)
+    static boolean is(PluginMessage message, String name)
     {
         return NAMESPACE.equals(message.getNamespace()) && name.equals(message.getName());
     }
@@ -73,19 +73,19 @@ final class ShortestPathBridge
     /** In order; empty when unreadable. */
     static List<Jump> jumps(PluginMessage message)
     {
-        Map<String, Object> data = message.getData();
+        var data = message.getData();
         if (data == null || !(data.get("origin") instanceof List<?>) || !(data.get("destination") instanceof List<?>))
         {
             return Collections.emptyList();
         }
-        List<?> origins = (List<?>) data.get("origin");
-        List<?> destinations = (List<?>) data.get("destination");
-        List<?> names = data.get("displayInfo") instanceof List<?> ? (List<?>) data.get("displayInfo") : Collections.emptyList();
-        List<Jump> jumps = new ArrayList<>();
+        var origins = (List<?>) data.get("origin");
+        var destinations = (List<?>) data.get("destination");
+        var names = data.get("displayInfo") instanceof List<?> ? (List<?>) data.get("displayInfo") : Collections.emptyList();
+        var jumps = new ArrayList<Jump>();
         for (int i = 0; i < origins.size() && i < destinations.size() && jumps.size() < MAX_POINTS; i++)
         {
-            WorldPoint from = point(origins.get(i));
-            WorldPoint to = point(destinations.get(i));
+            var from = point(origins.get(i));
+            var to = point(destinations.get(i));
             if (from == null || to == null)
             {
                 continue;
@@ -115,16 +115,16 @@ final class ShortestPathBridge
     /** A WorldPoint, a packed point, or a collection of either; empty when none or unreadable. */
     static List<WorldPoint> targets(PluginMessage message)
     {
-        Map<String, Object> data = message.getData();
+        var data = message.getData();
         Object target = data == null ? null : data.get(TARGET);
-        List<WorldPoint> points = new ArrayList<>();
+        var points = new ArrayList<WorldPoint>();
         for (Object one : target instanceof Collection<?> ? (Collection<?>) target : Collections.singletonList(target))
         {
             if (points.size() >= MAX_POINTS)
             {
                 break;
             }
-            WorldPoint point = point(one);
+            var point = point(one);
             if (point != null)
             {
                 points.add(point);
@@ -158,7 +158,7 @@ final class ShortestPathBridge
     {
         WorldPoint best = null;
         int bestDistance = Integer.MAX_VALUE;
-        for (WorldPoint target : targets)
+        for (var target : targets)
         {
             int d = from == null ? 0 : target.getPlane() == from.getPlane() ? target.distanceTo2D(from)
                 : target.distanceTo2D(from) + 1000;

@@ -20,7 +20,7 @@ final class PartyMapRules
     /** Sent at least this often while standing still, so newcomers and fading work. */
     static final int HEARTBEAT_TICKS = 50;
 
-    private PartyMapRules()
+    PartyMapRules()
     {
     }
 
@@ -56,9 +56,9 @@ final class PartyMapRules
     /** {@link #shouldSend} runs on the client thread; party events reset and force it from other threads. */
     static final class Throttle
     {
-        private WorldPoint lastSent;
-        private int lastTick = Integer.MIN_VALUE / 2;
-        private volatile boolean forced;
+        WorldPoint lastSent;
+        int lastTick = Integer.MIN_VALUE / 2;
+        volatile boolean forced;
 
         void force()
         {

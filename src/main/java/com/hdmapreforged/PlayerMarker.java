@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static java.awt.BasicStroke.*;
+
 import java.awt.*;
 import java.awt.geom.*;
 
@@ -7,10 +9,10 @@ import java.awt.geom.*;
 final class PlayerMarker
 {
     static final Color YELLOW = new Color(255, 214, 64);
-    private static final Color SHADOW = new Color(0, 0, 0, 170);
-    private static final Font FONT = new Font(Font.SANS_SERIF, Font.BOLD, 11);
+    static final Color SHADOW = new Color(0, 0, 0, 170);
+    static final Font FONT = new Font(Font.SANS_SERIF, Font.BOLD, 11);
 
-    private PlayerMarker()
+    PlayerMarker()
     {
     }
 
@@ -29,21 +31,21 @@ final class PlayerMarker
             g.draw(box);
             label(g, text, "Home", x, y - ring - 16);
         }
-        float[] dash = otherFloor ? new float[]{4f, 3f} : null;
+        var dash = otherFloor ? new float[]{4f, 3f} : null;
         // A glow, so it reads on bright and dark areas alike.
         g.setColor(new Color(255, 214, 64, otherFloor ? 30 : 60));
         g.fill(circle(x, y, ring + 5));
         for (int pass = 0; pass < 2; pass++)
         {
             g.setColor(pass == 0 ? SHADOW : YELLOW);
-            g.setStroke(new BasicStroke(pass == 0 ? 5f : 2.6f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f, dash, 0f));
+            g.setStroke(new BasicStroke(pass == 0 ? 5f : 2.6f, CAP_BUTT, JOIN_ROUND, 10f, dash, 0f));
             g.draw(circle(x, y, ring));
         }
         double in = ring - 5;
         double out = ring + 5;
         for (int pass = 0; pass < 2; pass++)
         {
-            g.setStroke(new BasicStroke(pass == 0 ? 2.4f : 1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g.setStroke(new BasicStroke(pass == 0 ? 2.4f : 1.4f, CAP_ROUND, JOIN_ROUND));
             g.setColor(pass == 0 ? SHADOW : YELLOW);
             for (int i = 0; i < 4; i++)
             {
@@ -75,11 +77,11 @@ final class PlayerMarker
         arrow.lineTo(-4, 0);
         arrow.lineTo(-8, 9);
         arrow.closePath();
-        AffineTransform at = AffineTransform.getTranslateInstance(x, y);
+        var at = AffineTransform.getTranslateInstance(x, y);
         at.rotate(angle);
         Shape shape = at.createTransformedShape(arrow);
         g.setColor(SHADOW);
-        g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setStroke(new BasicStroke(4f, CAP_ROUND, JOIN_ROUND));
         g.draw(shape);
         g.setColor(YELLOW);
         g.fill(shape);
@@ -89,10 +91,10 @@ final class PlayerMarker
         label(g, text, "You", x - Math.cos(angle) * 22, y - Math.sin(angle) * 22 + 4);
     }
 
-    private static void label(Graphics2D g, TextSprites text, String label, double cx, double top)
+    static void label(Graphics2D g, TextSprites text, String label, double cx, double top)
     {
         g.setFont(FONT);
-        FontMetrics metrics = g.getFontMetrics();
+        var metrics = g.getFontMetrics();
         text.draw(g, label, FONT, (float) (cx - metrics.stringWidth(label) / 2.0), (float) (top + metrics.getAscent() / 2.0),
             YELLOW);
     }

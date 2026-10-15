@@ -26,21 +26,21 @@ final class NpcPictures
     /** Asked for at once at most: scrolling through hundreds of rows never sends hundreds of requests. */
     static final int AT_ONCE = 4;
     /** A picture the server did not send is asked for again after this long. */
-    private static final long RETRY_MS = 60_000;
+    static final long RETRY_MS = 60_000;
 
     /** Where a picture comes from, called back on any thread, with null when there is none. */
-    private final BiConsumer<Integer, Consumer<BufferedImage>> source;
+    final BiConsumer<Integer, Consumer<BufferedImage>> source;
     /** Each NPC's picture at {@link #SMALL} and {@link #LARGE}, those shown last kept. */
-    private final Map<Integer, Icon[]> icons = new LruMap<>(16, KEPT);
+    final Map<Integer, Icon[]> icons = new LruMap<>(16, KEPT);
     /** Asked for and not answered yet, or waiting their turn, with the labels waiting for each. */
-    private final Map<Integer, List<JLabel>> waiting = new HashMap<>();
+    final Map<Integer, List<JLabel>> waiting = new HashMap<>();
     /** Waiting their turn, the last painted first: a list paints its rows from the last up, so its top row is first. */
-    private final Deque<Integer> queued = new ArrayDeque<>();
-    private int asking;
+    final Deque<Integer> queued = new ArrayDeque<>();
+    int asking;
     /** Whether {@link #next} runs once all the labels painted together have asked. */
-    private boolean nextLater;
+    boolean nextLater;
     /** When a picture the server did not send was asked for. */
-    private final Map<Integer, Long> missing = new HashMap<>();
+    final Map<Integer, Long> missing = new HashMap<>();
 
     /**
      * The NPC's picture in {@code label}, at the label's preferred width: now when kept, else an empty square that asks
@@ -48,7 +48,7 @@ final class NpcPictures
      */
     void show(int npc, JLabel label)
     {
-        Icon[] known = icons.get(npc);
+        var known = icons.get(npc);
         if (known != null)
         {
             put(known, label);
@@ -58,9 +58,9 @@ final class NpcPictures
     }
 
     /** A label painted: its picture waits its turn; not when the server had none just now. */
-    private void want(int npc, JLabel label)
+    void want(int npc, JLabel label)
     {
-        Icon[] known = icons.get(npc);
+        var known = icons.get(npc);
         if (known != null)
         {
             put(known, label);
@@ -71,7 +71,7 @@ final class NpcPictures
         {
             return;
         }
-        List<JLabel> labels = waiting.get(npc);
+        var labels = waiting.get(npc);
         if (labels == null)
         {
             waiting.put(npc, labels = new ArrayList<>());
@@ -86,13 +86,13 @@ final class NpcPictures
     }
 
     /** Asks for the next while fewer than {@link #AT_ONCE} are; those out of view now ask again once painted again. */
-    private void next()
+    void next()
     {
         nextLater = false;
         while (asking < AT_ONCE && !queued.isEmpty())
         {
             int npc = queued.pop();
-            List<JLabel> labels = waiting.get(npc);
+            var labels = waiting.get(npc);
             if (labels.stream().anyMatch(label -> label.isShowing() && !label.getVisibleRect().isEmpty()))
             {
                 asking++;
@@ -109,10 +109,10 @@ final class NpcPictures
         }
     }
 
-    private void arrived(int npc, BufferedImage image)
+    void arrived(int npc, BufferedImage image)
     {
         asking--;
-        List<JLabel> labels = waiting.remove(npc);
+        var labels = waiting.remove(npc);
         if (image == null)
         {
             missing.put(npc, System.currentTimeMillis());
@@ -129,18 +129,18 @@ final class NpcPictures
         next();
     }
 
-    private static void put(Icon[] both, JLabel label)
+    static void put(Icon[] both, JLabel label)
     {
         label.setIcon(both[label.getPreferredSize().width == LARGE ? 1 : 0]);
     }
 
     /** An empty square of the picture's size, so the picture comes without a new layout; asks for it once painted. */
     @RequiredArgsConstructor
-    private final class Pending implements Icon
+    final class Pending implements Icon
     {
-        private final int npc;
-        private final int size;
-        private boolean asked;
+        final int npc;
+        final int size;
+        boolean asked;
 
         @Override
         public void paintIcon(Component c, Graphics g, int x, int y)

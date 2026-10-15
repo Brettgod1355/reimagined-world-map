@@ -10,8 +10,8 @@ import java.util.*;
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 final class EdgeIndex
 {
-    private final IntMap slots;
-    private final int[][] lists;
+    final IntMap slots;
+    final int[][] lists;
 
     /** By where they start (not {@link Edge#ANYWHERE}), each index plus {@code offset}. */
     static EdgeIndex of(List<Edge> edges, int offset)
@@ -25,10 +25,10 @@ final class EdgeIndex
         return of(edges, offset, true);
     }
 
-    private static EdgeIndex of(List<Edge> edges, int offset, boolean byDestination)
+    static EdgeIndex of(List<Edge> edges, int offset, boolean byDestination)
     {
-        IntMap slots = new IntMap(edges.size());
-        List<int[]> lists = new ArrayList<>();
+        var slots = new IntMap(edges.size());
+        var lists = new ArrayList<int[]>();
         int[] counts = new int[edges.size()];
         for (Edge e : edges)
         {

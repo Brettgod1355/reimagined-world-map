@@ -5,7 +5,7 @@ import java.util.*;
 /** How far a dungeon, cave or room reaches on its floor, to fit the map to the dungeon one enters. */
 public final class WalkableArea
 {
-    private WalkableArea()
+    WalkableArea()
     {
     }
 
@@ -22,14 +22,14 @@ public final class WalkableArea
         int size = 1024;
         int ox = Tiles.x(start) - size / 2;
         int oy = Tiles.y(start) - size / 2;
-        ArrayDeque<int[]> open = new ArrayDeque<>();
+        var open = new ArrayDeque<int[]>();
         open.add(new int[]{Tiles.x(start), Tiles.y(start)});
         seen.set((Tiles.x(start) - ox) * size + (Tiles.y(start) - oy));
         int[] b = {Tiles.x(start), Tiles.y(start), Tiles.x(start), Tiles.y(start)};
         int count = 0;
         while (!open.isEmpty())
         {
-            int[] p = open.poll();
+            var p = open.poll();
             if (++count > limit)
             {
                 return null;

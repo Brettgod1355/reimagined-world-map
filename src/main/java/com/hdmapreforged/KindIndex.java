@@ -31,7 +31,7 @@ final class KindIndex
         final List<Entry> entries = new ArrayList<>();
     }
 
-    private final List<Kind> kinds;
+    final List<Kind> kinds;
 
     List<Kind> all()
     {

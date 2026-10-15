@@ -20,7 +20,7 @@ final class TileMarkersBridge
     /** It takes at most this many tiles from one sender. */
     static final int MAX_TILES = 1000;
 
-    private TileMarkersBridge()
+    TileMarkersBridge()
     {
     }
 
@@ -43,14 +43,14 @@ final class TileMarkersBridge
 
     static PluginMessage tiles(List<Tile> tiles)
     {
-        List<Map<String, Object>> list = new ArrayList<>();
+        var list = new ArrayList<Map<String, Object>>();
         for (Tile tile : tiles)
         {
             if (list.size() >= MAX_TILES)
             {
                 break;
             }
-            Map<String, Object> entry = new HashMap<>();
+            var entry = new HashMap<String, Object>();
             entry.put("point", tile.point);
             entry.put("color", tile.color);
             // Follows the colour's transparency, so fading tiles fade as a whole.
@@ -63,7 +63,7 @@ final class TileMarkersBridge
             }
             list.add(entry);
         }
-        Map<String, Object> data = new HashMap<>();
+        var data = new HashMap<String, Object>();
         data.put("owner", OWNER);
         data.put("tiles", list);
         return new PluginMessage(NAMESPACE, "tiles", data);
@@ -75,10 +75,10 @@ final class TileMarkersBridge
      */
     static PluginMessage lines(List<List<WorldPoint>> lines, List<Color> colors, int width, int arrows)
     {
-        List<Map<String, Object>> list = new ArrayList<>();
+        var list = new ArrayList<Map<String, Object>>();
         for (int i = 0; i < lines.size(); i++)
         {
-            Map<String, Object> entry = new HashMap<>();
+            var entry = new HashMap<String, Object>();
             entry.put("points", lines.get(i));
             entry.put("color", colors.get(i));
             entry.put("width", width);
@@ -88,7 +88,7 @@ final class TileMarkersBridge
             }
             list.add(entry);
         }
-        Map<String, Object> data = new HashMap<>();
+        var data = new HashMap<String, Object>();
         data.put("owner", OWNER);
         data.put("lines", list);
         return new PluginMessage(NAMESPACE, "lines", data);
@@ -96,7 +96,7 @@ final class TileMarkersBridge
 
     static PluginMessage clear()
     {
-        Map<String, Object> data = new HashMap<>();
+        var data = new HashMap<String, Object>();
         data.put("owner", OWNER);
         return new PluginMessage(NAMESPACE, "clear", data);
     }

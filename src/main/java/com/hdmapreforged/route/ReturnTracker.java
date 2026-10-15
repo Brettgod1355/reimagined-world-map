@@ -7,13 +7,13 @@ package com.hdmapreforged.route;
  */
 public final class ReturnTracker
 {
-    private int lastOutside = -1;
-    private ReturnAreas.Area inside;
-    private int exit = -1;
+    int lastOutside = -1;
+    ReturnAreas.Area inside;
+    int exit = -1;
 
     public void update(int node)
     {
-        ReturnAreas.Area area = node < 0 ? null : ReturnAreas.at(node);
+        var area = node < 0 ? null : ReturnAreas.at(node);
         if (area != null)
         {
             if (inside != area)

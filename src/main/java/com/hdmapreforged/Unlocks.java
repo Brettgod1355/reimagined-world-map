@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static net.runelite.api.gameval.VarPlayerID.*;
+
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.*;
@@ -14,20 +16,20 @@ import net.runelite.api.gameval.*;
 final class Unlocks
 {
     /** A varbit condition ("4070=0"), or a varp one with a p ("p4130>11999"). */
-    private static final Pattern VAR = Pattern.compile("(p?)(\\d+)([=<>&])(\\d+)");
+    static final Pattern VAR = Pattern.compile("(p?)(\\d+)([=<>&])(\\d+)");
 
-    private final Map<String, Integer> levels = new HashMap<>();
-    private final Map<String, Boolean> quests = new HashMap<>();
+    final Map<String, Integer> levels = new HashMap<>();
+    final Map<String, Boolean> quests = new HashMap<>();
     /** Quests begun or finished, for a requirement "Swan Song (started)" (a place open during the quest and after). */
-    private final Map<String, Boolean> started = new HashMap<>();
+    final Map<String, Boolean> started = new HashMap<>();
     static final String STARTED = " (started)";
-    private final Map<Integer, Integer> varbits = new HashMap<>();
-    private final Map<Integer, Integer> varps = new HashMap<>();
-    private final Map<Needs, Boolean> usable = new ConcurrentHashMap<>();
+    final Map<Integer, Integer> varbits = new HashMap<>();
+    final Map<Integer, Integer> varps = new HashMap<>();
+    final Map<Needs, Boolean> usable = new ConcurrentHashMap<>();
     static final int CACHED = 20_000;
     /** When the last home and minigame teleports were cast, in minutes since 1970 (0: never), as core's timers read them. */
-    private int lastHome;
-    private int lastMinigame;
+    int lastHome;
+    int lastMinigame;
     static final int HOME_WAIT = 30;
     static final int MINIGAME_WAIT = 20;
 
@@ -41,9 +43,9 @@ final class Unlocks
 
         Watched(Collection<Needs> needs)
         {
-            Set<String> names = new HashSet<>();
-            Set<Integer> ids = new TreeSet<>();
-            Set<Integer> varpIds = new TreeSet<>();
+            var names = new HashSet<String>();
+            var ids = new TreeSet<Integer>();
+            var varpIds = new TreeSet<Integer>();
             for (Needs need : needs)
             {
                 for (String quest : need.quests.split(";"))
@@ -80,7 +82,7 @@ final class Unlocks
     /** Client thread only. Quests run a client script each, so unless {@code checkQuests} they come from {@code previous}. */
     static Unlocks capture(Client client, Watched watched, Unlocks previous, boolean checkQuests)
     {
-        Unlocks unlocks = new Unlocks();
+        var unlocks = new Unlocks();
         for (Skill skill : Skill.values())
         {
             if (!"Overall".equals(skill.getName()))
@@ -90,7 +92,7 @@ final class Unlocks
         }
         unlocks.levels.put("total", client.getTotalLevel());
         // "32 Quest" in a requirement: quest points.
-        unlocks.levels.put("quest", client.getVarpValue(VarPlayerID.QP));
+        unlocks.levels.put("quest", client.getVarpValue(QP));
         Player player = client.getLocalPlayer();
         if (player != null)
         {
@@ -100,7 +102,7 @@ final class Unlocks
         {
             for (Quest quest : watched.quests)
             {
-                QuestState state = quest.getState(client);
+                var state = quest.getState(client);
                 String name = quest.getName().toLowerCase(Locale.ROOT);
                 unlocks.quests.put(name, state == QuestState.FINISHED);
                 unlocks.started.put(name, state != QuestState.NOT_STARTED);
@@ -111,15 +113,15 @@ final class Unlocks
             unlocks.quests.putAll(previous.quests);
             unlocks.started.putAll(previous.started);
         }
-        unlocks.lastHome = client.getVarpValue(VarPlayerID.AIDE_TELE_TIMER);
-        unlocks.lastMinigame = client.getVarpValue(VarPlayerID.SLUG2_REGIONUID);
+        unlocks.lastHome = client.getVarpValue(AIDE_TELE_TIMER);
+        unlocks.lastMinigame = client.getVarpValue(SLUG2_REGIONUID);
         capture(watched.varbits, client::getVarbitValue, unlocks.varbits);
         capture(watched.varps, client::getVarpValue, unlocks.varps);
         return unlocks;
     }
 
     /** {@code read(id)} into {@code into}; gone after a game update, or otherwise unknown, counts as met. */
-    private static void capture(int[] ids, IntUnaryOperator read, Map<Integer, Integer> into)
+    static void capture(int[] ids, IntUnaryOperator read, Map<Integer, Integer> into)
     {
         for (int id : ids)
         {
@@ -134,7 +136,7 @@ final class Unlocks
         }
     }
 
-    private static void ids(String column, Set<Integer> varbits, Set<Integer> varps)
+    static void ids(String column, Set<Integer> varbits, Set<Integer> varps)
     {
         Matcher matcher = VAR.matcher(column);
         while (matcher.find())
@@ -148,7 +150,7 @@ final class Unlocks
     }
 
     /** -1 when too long to be one (a broken line). */
-    private static int number(String digits)
+    static int number(String digits)
     {
         return digits.length() <= 9 ? Integer.parseInt(digits) : -1;
     }
@@ -164,7 +166,7 @@ final class Unlocks
     /** The varps of the teleport timers; a change makes a new capture due. */
     static boolean timesTeleports(int varp)
     {
-        return varp == VarPlayerID.AIDE_TELE_TIMER || varp == VarPlayerID.SLUG2_REGIONUID;
+        return varp == AIDE_TELE_TIMER || varp == SLUG2_REGIONUID;
     }
 
     /** Whether a home or minigame teleport still waits out its cooldown at this minute (since 1970). */
@@ -239,9 +241,9 @@ final class Unlocks
         return value != null && value == 1;
     }
 
-    private boolean check(Needs needs)
+    boolean check(Needs needs)
     {
-        for (Requirements.Line line : Requirements.skillsAndQuests(needs))
+        for (var line : Requirements.skillsAndQuests(needs))
         {
             if (Boolean.FALSE.equals(met(line)))
             {
@@ -252,7 +254,7 @@ final class Unlocks
     }
 
     /** Conditions like {@code "4070=0;6069<3;4560&2;p4130>11999"} (a p: a varp). */
-    private static boolean vars(String column, Map<Integer, Integer> varbits, Map<Integer, Integer> varps)
+    static boolean vars(String column, Map<Integer, Integer> varbits, Map<Integer, Integer> varps)
     {
         Matcher matcher = VAR.matcher(column);
         while (matcher.find())

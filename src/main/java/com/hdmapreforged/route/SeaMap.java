@@ -1,5 +1,7 @@
 package com.hdmapreforged.route;
 
+import static com.hdmapreforged.route.Tiles.CELL;
+
 import java.io.*;
 import java.util.*;
 import lombok.*;
@@ -31,8 +33,8 @@ public final class SeaMap
     }
 
     /** Per region, per 16×16 block: the level needed, NONE or CLOSED; null when no sea. */
-    private final byte[][] blocks = new byte[1 << 15][];
-    private final List<Area> areas;
+    final byte[][] blocks = new byte[1 << 15][];
+    final List<Area> areas;
 
     public static SeaMap build(CollisionMap collision) throws IOException
     {
@@ -47,7 +49,7 @@ public final class SeaMap
     /** The seas {@code in} lists; closes it. */
     static List<Area> readAreas(InputStream in) throws IOException
     {
-        List<Area> areas = new ArrayList<>();
+        var areas = new ArrayList<Area>();
         Pathfinder.rows(in, -1, c -> {
             // Blank lines are short rows too.
             if (c.length < 6)
@@ -70,7 +72,7 @@ public final class SeaMap
 
     public static SeaMap build(CollisionMap collision, List<Area> areas)
     {
-        SeaMap sea = new SeaMap(Collections.unmodifiableList(areas));
+        var sea = new SeaMap(Collections.unmodifiableList(areas));
         for (int region = 0; region < 1 << 15; region++)
         {
             if (!collision.hasWater(region))
@@ -80,16 +82,16 @@ public final class SeaMap
             int baseX = (region >> 8) << 6;
             int baseY = (region & 255) << 6;
             byte[] cells = null;
-            for (int cx = 0; cx < 64 / Tiles.CELL; cx++)
+            for (int cx = 0; cx < 64 / CELL; cx++)
             {
-                for (int cy = 0; cy < 64 / Tiles.CELL; cy++)
+                for (int cy = 0; cy < 64 / CELL; cy++)
                 {
                     int count = 0;
-                    for (int dx = 0; dx < Tiles.CELL; dx++)
+                    for (int dx = 0; dx < CELL; dx++)
                     {
-                        for (int dy = 0; dy < Tiles.CELL; dy++)
+                        for (int dy = 0; dy < CELL; dy++)
                         {
-                            if (collision.water(baseX + cx * Tiles.CELL + dx, baseY + cy * Tiles.CELL + dy))
+                            if (collision.water(baseX + cx * CELL + dx, baseY + cy * CELL + dy))
                             {
                                 count++;
                             }
@@ -104,7 +106,7 @@ public final class SeaMap
                         cells = new byte[256];
                         Arrays.fill(cells, NONE);
                     }
-                    Area area = sea.nearest(baseX + cx * Tiles.CELL + 2, baseY + cy * Tiles.CELL + 2);
+                    Area area = sea.nearest(baseX + cx * CELL + 2, baseY + cy * CELL + 2);
                     cells[cx << 4 | cy] = area == null ? 0 : (byte) Math.max(CLOSED, Math.min(120, area.level));
                 }
             }
@@ -143,7 +145,7 @@ public final class SeaMap
         {
             return NONE;
         }
-        byte[] cells = blocks[region];
+        var cells = blocks[region];
         return cells == null ? NONE : cells[(cellX & 15) << 4 | (cellY & 15)];
     }
 
@@ -158,16 +160,16 @@ public final class SeaMap
     {
         int best = -1;
         long bestDistance = Long.MAX_VALUE;
-        for (int cx = (x - radius) / Tiles.CELL; cx <= (x + radius) / Tiles.CELL; cx++)
+        for (int cx = (x - radius) / CELL; cx <= (x + radius) / CELL; cx++)
         {
-            for (int cy = (y - radius) / Tiles.CELL; cy <= (y + radius) / Tiles.CELL; cy++)
+            for (int cy = (y - radius) / CELL; cy <= (y + radius) / CELL; cy++)
             {
                 if (!sailable(cx, cy, sailingLevel))
                 {
                     continue;
                 }
-                long dx = cx * Tiles.CELL + Tiles.CELL / 2 - x;
-                long dy = cy * Tiles.CELL + Tiles.CELL / 2 - y;
+                long dx = cx * CELL + CELL / 2 - x;
+                long dy = cy * CELL + CELL / 2 - y;
                 long d = dx * dx + dy * dy;
                 if (d < bestDistance && d <= (long) radius * radius)
                 {

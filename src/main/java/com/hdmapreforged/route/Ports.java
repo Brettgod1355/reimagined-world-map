@@ -8,7 +8,7 @@ public final class Ports
 {
     public static final String RESOURCE = "/com/hdmapreforged/route/ports.tsv";
 
-    private Ports()
+    Ports()
     {
     }
 
@@ -20,12 +20,12 @@ public final class Ports
         {
             throw new IOException("Missing " + RESOURCE);
         }
-        Map<Integer, Integer> ports = new HashMap<>();
+        var ports = new HashMap<Integer, Integer>();
         Pathfinder.rows(in, 0, c -> {
             try
             {
                 // Short rows and blank lines fail here too.
-                String[] p = c[2].trim().split("\\s+");
+                var p = c[2].trim().split("\\s+");
                 ports.put(Integer.parseInt(c[0].trim()), Tiles.pack(Integer.parseInt(p[0]), Integer.parseInt(p[1]), 0));
             }
             catch (NumberFormatException | ArrayIndexOutOfBoundsException e)

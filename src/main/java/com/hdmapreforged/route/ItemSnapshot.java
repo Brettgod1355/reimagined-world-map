@@ -11,7 +11,7 @@ import java.util.regex.*;
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ItemSnapshot
 {
-    private static final Map<Integer, int[]> COMBINATIONS = new HashMap<>();
+    static final Map<Integer, int[]> COMBINATIONS = new HashMap<>();
     /** Compiled once: a split on a pattern compiles it on every call, and requests check hundreds of columns. */
     public static final Pattern ALL = Pattern.compile("&&");
     public static final Pattern ANY = Pattern.compile("\\|\\|");
@@ -33,8 +33,8 @@ public final class ItemSnapshot
     public static final ItemSnapshot NONE = new ItemSnapshot(Collections.emptyMap(), Collections.emptySet());
     public static final ItemSnapshot EVERYTHING = new ItemSnapshot(Collections.emptyMap(), Collections.emptySet());
 
-    private final Map<Integer, Long> carried;
-    private final Set<Integer> unlimited;
+    final Map<Integer, Long> carried;
+    final Set<Integer> unlimited;
 
     /** Whether {@code other} carries the same (an inventory that changed back and forth is no change). */
     public boolean sameAs(ItemSnapshot other)
@@ -61,7 +61,7 @@ public final class ItemSnapshot
 
     public static ItemSnapshot of(Map<Integer, Long> carried, Set<Integer> unlimited)
     {
-        Map<Integer, Long> all = new HashMap<>();
+        var all = new HashMap<Integer, Long>();
         carried.forEach((id, n) -> add(all, id, n));
         return new ItemSnapshot(Collections.unmodifiableMap(all), Collections.unmodifiableSet(new HashSet<>(unlimited)));
     }
@@ -69,15 +69,15 @@ public final class ItemSnapshot
     /** These items and {@code more} (a bank's), with the same staff's runes. */
     public ItemSnapshot plus(Map<Integer, Long> more)
     {
-        Map<Integer, Long> all = new HashMap<>(carried);
+        var all = new HashMap<Integer, Long>(carried);
         more.forEach((id, n) -> add(all, id, n));
         return new ItemSnapshot(Collections.unmodifiableMap(all), unlimited);
     }
 
-    private static void add(Map<Integer, Long> into, int id, long quantity)
+    static void add(Map<Integer, Long> into, int id, long quantity)
     {
         into.merge(id, quantity, Long::sum);
-        int[] parts = COMBINATIONS.get(id);
+        var parts = COMBINATIONS.get(id);
         if (parts != null)
         {
             for (int part : parts)
@@ -89,7 +89,7 @@ public final class ItemSnapshot
 
     public static Set<Integer> runesFromWeapon(String name)
     {
-        Set<Integer> runes = new HashSet<>();
+        var runes = new HashSet<Integer>();
         String n = name == null ? "" : name.toLowerCase(Locale.ROOT);
         if (!n.contains("staff") && !n.contains("tome of") && !n.contains("wand") || n.contains("(empty)")
             || n.contains("uncharged"))
@@ -125,7 +125,7 @@ public final class ItemSnapshot
             boolean judged = false;
             for (String alternative : ANY.split(all))
             {
-                String[] parts = alternative.trim().split("=");
+                var parts = alternative.trim().split("=");
                 String token = parts[0].trim();
                 if (token.isEmpty())
                 {

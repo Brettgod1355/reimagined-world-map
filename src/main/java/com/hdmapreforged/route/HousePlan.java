@@ -1,5 +1,7 @@
 package com.hdmapreforged.route;
 
+import static com.hdmapreforged.route.Tiles.*;
+
 import java.io.*;
 import java.util.*;
 import java.util.zip.*;
@@ -19,16 +21,16 @@ public final class HousePlan
     /** Where the world map draws it: the surface map's empty west edge. */
     public static final int DRAWN_X = 896;
     public static final int DRAWN_Y = 3000;
-    private static final int TILES = SIZE * SIZE;
+    static final int TILES = SIZE * SIZE;
 
     /** Per floor, per tile (x * SIZE + y): 1 walkable, 2 wall north, 4 wall east, 8 door north, 16 door east. */
-    private final byte[][] tiles;
+    final byte[][] tiles;
     /** What stands where (by node): the portals, jewellery box, stairs and such, by their names in the game. */
     public final Map<Integer, String> things;
     /** Where one arrives: north of the exit portal. */
     public final int arrival;
     /** Per region of the plan (2 × 2) and floor: {@link CollisionMap}'s layers. */
-    private final long[][] layers = new long[16][];
+    final long[][] layers = new long[16][];
 
     public HousePlan(byte[][] tiles, Map<Integer, String> things, int arrival)
     {
@@ -62,11 +64,11 @@ public final class HousePlan
     public static void keepReachable(byte[][] tiles, List<Integer> from)
     {
         boolean[][] reached = new boolean[4][TILES];
-        ArrayDeque<Integer> queue = new ArrayDeque<>();
+        var queue = new ArrayDeque<Integer>();
         for (int node : from)
         {
-            boolean in = contains(Tiles.x(node), Tiles.y(node));
-            reach(tiles, reached, queue, in ? (Tiles.x(node) - X) * SIZE + Tiles.y(node) - Y : -1, Tiles.z(node));
+            boolean in = contains(x(node), y(node));
+            reach(tiles, reached, queue, in ? (x(node) - X) * SIZE + y(node) - Y : -1, z(node));
         }
         while (!queue.isEmpty())
         {
@@ -85,7 +87,7 @@ public final class HousePlan
         }
     }
 
-    private static void reach(byte[][] tiles, boolean[][] reached, ArrayDeque<Integer> queue, int i, int z)
+    static void reach(byte[][] tiles, boolean[][] reached, ArrayDeque<Integer> queue, int i, int z)
     {
         if (i >= 0 && z >= 0 && z < 4 && !reached[z][i] && (tiles[z][i] & 1) != 0)
         {
@@ -100,13 +102,13 @@ public final class HousePlan
      */
     public int approach(int node)
     {
-        int z = Tiles.z(node);
-        int from = (Tiles.x(node) - X) * SIZE + Tiles.y(node) - Y;
-        List<Integer> ring = List.of(from);
-        Set<Integer> seen = new HashSet<>(ring);
-        for (int step = 0; step <= 3 && contains(Tiles.x(node), Tiles.y(node)) && z >= 0 && z < 4; step++)
+        int z = z(node);
+        int from = (x(node) - X) * SIZE + y(node) - Y;
+        var ring = List.of(from);
+        var seen = new HashSet<Integer>(ring);
+        for (int step = 0; step <= 3 && contains(x(node), y(node)) && z >= 0 && z < 4; step++)
         {
-            List<Integer> next = new ArrayList<>();
+            var next = new ArrayList<Integer>();
             int best = -1;
             for (int i : ring)
             {
@@ -125,7 +127,7 @@ public final class HousePlan
             }
             if (best >= 0)
             {
-                return Tiles.pack(X + best / SIZE, Y + best % SIZE, z);
+                return pack(X + best / SIZE, Y + best % SIZE, z);
             }
             ring = next;
         }
@@ -136,7 +138,7 @@ public final class HousePlan
      * The tiles one steps to from {@code i} (north, east, south, west), -1 where a wall is: walls stand on a tile's
      * north and east edges, and doors let one through.
      */
-    private static int[] steps(byte[] floor, int i)
+    static int[] steps(byte[] floor, int i)
     {
         int x = i / SIZE;
         int y = i % SIZE;
@@ -145,7 +147,7 @@ public final class HousePlan
     }
 
     /** Whether one can step on from {@code i}, away from {@code from} straight (north, east, south or west). */
-    private boolean beyond(int z, int from, int i)
+    boolean beyond(int z, int from, int i)
     {
         int dx = Integer.signum(i / SIZE - from / SIZE);
         int dy = Integer.signum(i % SIZE - from % SIZE);
@@ -157,7 +159,7 @@ public final class HousePlan
 
     public static int node(int sceneX, int sceneY, int plane)
     {
-        return Tiles.pack(X + sceneX, Y + sceneY, plane);
+        return pack(X + sceneX, Y + sceneY, plane);
     }
 
     public static boolean contains(int x, int y)
@@ -178,7 +180,7 @@ public final class HousePlan
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DeflaterOutputStream out = new DeflaterOutputStream(bytes))
         {
-            for (byte[] floor : tiles)
+            for (var floor : tiles)
             {
                 out.write(floor);
             }
@@ -196,12 +198,12 @@ public final class HousePlan
     /** Null when unreadable; things off the plan are left out. */
     public static HousePlan decode(String text)
     {
-        String[] lines = text.split("\n");
+        var lines = text.split("\n");
         try (InflaterInputStream in = new InflaterInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(lines[0]))))
         {
-            byte[] all = in.readNBytes(4 * TILES + 1);
+            var all = in.readNBytes(4 * TILES + 1);
             int arrival = Integer.parseInt(lines[1]);
-            if (all.length != 4 * TILES || !contains(Tiles.x(arrival), Tiles.y(arrival)))
+            if (all.length != 4 * TILES || !contains(x(arrival), y(arrival)))
             {
                 return null;
             }
@@ -210,12 +212,12 @@ public final class HousePlan
             {
                 tiles[z] = Arrays.copyOfRange(all, z * TILES, (z + 1) * TILES);
             }
-            Map<Integer, String> things = new LinkedHashMap<>();
+            var things = new LinkedHashMap<Integer, String>();
             for (int i = 2; i < lines.length; i++)
             {
-                String[] parts = lines[i].split("\t", 2);
+                var parts = lines[i].split("\t", 2);
                 int node = Integer.parseInt(parts[0]);
-                if (parts.length == 2 && contains(Tiles.x(node), Tiles.y(node)) && parts[1].length() <= 2000)
+                if (parts.length == 2 && contains(x(node), y(node)) && parts[1].length() <= 2000)
                 {
                     things.put(node, parts[1]);
                 }

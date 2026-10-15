@@ -98,7 +98,7 @@ final class MapData
         return best;
     }
 
-    private static final int TOWN_RADIUS = 120;
+    static final int TOWN_RADIUS = 120;
 
     /**
      * The nearest town. Its own loop, not {@link #nearest}: the search index names thousands of places with it, and a
@@ -144,12 +144,12 @@ final class MapData
         }
         Reading reading = new Reading(maps);
         // As listed, null where left out: an icon of ours gives its place's index in it.
-        List<Poi> listed = new ArrayList<>();
-        List<Poi> pois = new ArrayList<>();
+        var listed = new ArrayList<Poi>();
+        var pois = new ArrayList<Poi>();
         Set<Poi> hidden = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (PoiJson place : list(file.pois))
+        for (var place : list(file.pois))
         {
-            Poi poi = reading.poi(place, 0);
+            var poi = reading.poi(place, 0);
             listed.add(poi);
             if (poi != null)
             {
@@ -161,11 +161,11 @@ final class MapData
             }
         }
         Map<Integer, String> keys = file.keys == null ? Collections.emptyMap() : file.keys;
-        List<Icon> icons = new ArrayList<>();
+        var icons = new ArrayList<Icon>();
         for (IconJson icon : list(file.icons))
         {
-            WorldPoint at = point(icon.at);
-            Poi poi = icon.own == null ? reading.poi(icon.poi, 0) : item(listed, icon.own);
+            var at = point(icon.at);
+            var poi = icon.own == null ? reading.poi(icon.poi, 0) : item(listed, icon.own);
             if (at != null && poi != null)
             {
                 icons.add(new Icon(at, reading.map(icon.map), poi, icon.own != null, icon.element,
@@ -173,30 +173,30 @@ final class MapData
             }
         }
         // Labels and kinds as listed too, null where left out: a search hit gives its target's index.
-        List<Place> listedLabels = new ArrayList<>();
-        for (LabelJson label : list(file.labels))
+        var listedLabels = new ArrayList<Place>();
+        for (var label : list(file.labels))
         {
-            WorldPoint at = point(label.at);
+            var at = point(label.at);
             listedLabels.add(at == null || label.name == null ? null : new Place(at, label.name, label.kind));
         }
         // The kinds' places as numbered: the places read, each with what it stands for, then the spots.
-        List<KindIndex.Entry> places = new ArrayList<>();
-        for (Poi poi : reading.numbered)
+        var places = new ArrayList<KindIndex.Entry>();
+        for (var poi : reading.numbered)
         {
             places.add(poi == null ? null : new KindIndex.Entry(poi.name, poi.location, poi.note, poi));
         }
-        for (SpotJson spot : list(file.spots))
+        for (var spot : list(file.spots))
         {
-            WorldPoint at = point(spot.at);
+            var at = point(spot.at);
             places.add(at == null || spot.name == null ? null : new KindIndex.Entry(spot.name, at, spot.detail, null));
         }
-        List<KindIndex.Kind> listedKinds = new ArrayList<>();
-        for (KindJson written : list(file.kinds))
+        var listedKinds = new ArrayList<KindIndex.Kind>();
+        for (var written : list(file.kinds))
         {
-            KindIndex.Kind kind = new KindIndex.Kind(written.label, value(PoiType.class, written.type), written.page);
+            var kind = new KindIndex.Kind(written.label, value(PoiType.class, written.type), written.page);
             for (int i : written.places == null ? new int[0] : written.places)
             {
-                KindIndex.Entry place = item(places, i);
+                var place = item(places, i);
                 if (place != null)
                 {
                     kind.entries.add(place);
@@ -204,16 +204,16 @@ final class MapData
             }
             listedKinds.add(written.label == null || kind.entries.isEmpty() ? null : kind);
         }
-        List<SearchIndex.Hit> hits = new ArrayList<>();
-        for (HitJson hit : list(file.hits))
+        var hits = new ArrayList<SearchIndex.Hit>();
+        for (var hit : list(file.hits))
         {
-            SearchIndex.Type type = value(SearchIndex.Type.class, hit.type);
+            var type = value(SearchIndex.Type.class, hit.type);
             Object target = type == null ? null : type == SearchIndex.Type.MAP ? maps.byId(hit.target)
                 : item(type == SearchIndex.Type.PLACE ? listedLabels : type == SearchIndex.Type.KIND
                 || type == SearchIndex.Type.KIND_PLACE ? listedKinds : reading.numbered, hit.target);
             if (target != null && hit.label != null)
             {
-                SearchIndex.Hit made = new SearchIndex.Hit(type, hit.label, hit.words == null ? hit.label : hit.words,
+                var made = new SearchIndex.Hit(type, hit.label, hit.words == null ? hit.label : hit.words,
                     hit.place, target, point(hit.at), value(PoiType.class, hit.icon));
                 made.later = hit.later == null ? 0 : hit.later;
                 hits.add(made);
@@ -227,12 +227,12 @@ final class MapData
 
     /** Reading one file: its version's maps, and one Needs for equal requirements (a few hundred in thousands). */
     @RequiredArgsConstructor
-    private static final class Reading
+    static final class Reading
     {
-        private final BaseMaps maps;
-        private final Map<Needs, Needs> needs = new HashMap<>();
+        final BaseMaps maps;
+        final Map<Needs, Needs> needs = new HashMap<>();
         /** Listed places and those nearby, then the game's icons' own, in the file's order: null where left out. */
-        private final List<Poi> numbered = new ArrayList<>();
+        final List<Poi> numbered = new ArrayList<>();
 
         /** A map id the list lacks reads as none. */
         BaseMap map(Integer id)
@@ -258,16 +258,16 @@ final class MapData
         /** {@code depth}: 0 for a listed place (which may stand for places nearby), 1 nearby, 2 a stacked member. */
         Poi poi(PoiJson place, int depth)
         {
-            PoiType type = place == null ? null : value(PoiType.class, place.type);
-            WorldPoint at = type == null ? null : point(place.at);
+            var type = place == null ? null : value(PoiType.class, place.type);
+            var at = type == null ? null : point(place.at);
             Needs needs = at == null ? null : needs(place.needs);
-            Poi poi = needs == null || place.name == null ? null : new Poi(type, place.name, at, map(place.map),
+            var poi = needs == null || place.name == null ? null : new Poi(type, place.name, at, map(place.map),
                 place.group, needs, place.wiki, map(place.target), place.note);
             if (depth < 2)
             {
                 numbered.add(poi);
             }
-            WorldPoint drawn = poi == null || place.drawn == null ? null : point(place.drawn);
+            var drawn = poi == null || place.drawn == null ? null : point(place.drawn);
             if (drawn != null)
             {
                 poi.drawnAt = drawn;
@@ -278,26 +278,26 @@ final class MapData
                 numbered.addAll(Collections.nCopies(depth == 0 && place != null ? list(place.nearby).size() : 0, null));
                 return null;
             }
-            for (LinkJson link : list(place.links))
+            for (var link : list(place.links))
             {
-                WorldPoint to = point(link.at);
+                var to = point(link.at);
                 Needs linkNeeds = needs(link.needs);
                 if (to != null && linkNeeds != null && link.name != null)
                 {
                     poi.addLink(new Poi.Link(link.name, to, map(link.map), linkNeeds));
                 }
             }
-            for (PoiJson member : depth < 2 ? list(place.members) : Collections.<PoiJson>emptyList())
+            for (var member : depth < 2 ? list(place.members) : Collections.<PoiJson>emptyList())
             {
-                Poi read = poi(member, 2);
+                var read = poi(member, 2);
                 if (read != null)
                 {
                     poi.addMember(read);
                 }
             }
-            for (PoiJson near : depth == 0 ? list(place.nearby) : Collections.<PoiJson>emptyList())
+            for (var near : depth == 0 ? list(place.nearby) : Collections.<PoiJson>emptyList())
             {
-                Poi read = poi(near, 1);
+                var read = poi(near, 1);
                 if (read != null)
                 {
                     poi.addNearby(read);
@@ -307,7 +307,7 @@ final class MapData
         }
     }
 
-    private static <E extends Enum<E>> E value(Class<E> type, String name)
+    static <E extends Enum<E>> E value(Class<E> type, String name)
     {
         try
         {
@@ -319,27 +319,27 @@ final class MapData
         }
     }
 
-    private static <T> T item(List<? extends T> list, int i)
+    static <T> T item(List<? extends T> list, int i)
     {
         return i >= 0 && i < list.size() ? list.get(i) : null;
     }
 
-    private static <T> List<T> nonNull(List<T> list)
+    static <T> List<T> nonNull(List<T> list)
     {
         return list.stream().filter(Objects::nonNull).collect(Collectors.toUnmodifiableList());
     }
 
-    private static WorldPoint point(int[] at)
+    static WorldPoint point(int[] at)
     {
         return at != null && at.length == 3 ? new WorldPoint(at[0], at[1], at[2]) : null;
     }
 
-    private static String text(String raw)
+    static String text(String raw)
     {
         return raw == null ? "" : raw;
     }
 
-    private static <T> List<T> list(List<T> list)
+    static <T> List<T> list(List<T> list)
     {
         return list == null ? Collections.emptyList() : list;
     }

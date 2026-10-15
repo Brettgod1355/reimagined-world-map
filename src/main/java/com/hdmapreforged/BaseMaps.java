@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static com.hdmapreforged.BaseMap.FULL;
+
 import com.hdmapreforged.route.*;
 import com.google.gson.*;
 import java.io.*;
@@ -10,20 +12,20 @@ import net.runelite.api.coords.*;
 /** A map version's map list (our map server's maps.json); its region table decides where bounds overlap. */
 final class BaseMaps
 {
-    private final List<BaseMap> sorted;
-    private final Map<Integer, BaseMap> byId = new HashMap<>();
-    private RegionTable regions = new RegionTable();
+    final List<BaseMap> sorted;
+    final Map<Integer, BaseMap> byId = new HashMap<>();
+    RegionTable regions = new RegionTable();
     /** The map version they are of; null when not known. */
-    private String version;
+    String version;
 
     BaseMaps(List<BaseMap> maps)
     {
-        List<BaseMap> list = new ArrayList<>(maps);
+        var list = new ArrayList<BaseMap>(maps);
         // Surface first, then the combined map, then alphabetical.
-        list.sort(Comparator.comparingInt((BaseMap m) -> m.id == BaseMap.SURFACE ? 0 : m.id == BaseMap.FULL ? 1 : 2)
+        list.sort(Comparator.comparingInt((BaseMap m) -> m.id == BaseMap.SURFACE ? 0 : m.id == FULL ? 1 : 2)
             .thenComparing(m -> m.name, String.CASE_INSENSITIVE_ORDER));
         sorted = Collections.unmodifiableList(list);
-        for (BaseMap map : list)
+        for (var map : list)
         {
             byId.put(map.id, map);
             map.maps = this;
@@ -31,7 +33,7 @@ final class BaseMaps
     }
 
     static final int MAX_COORDINATE = 20_000;
-    private static final int MAX_NAME = 100;
+    static final int MAX_NAME = 100;
 
     /** Implausible entries are left out, not the whole list; an unreadable list gives no maps. */
     static BaseMaps parse(Gson gson, Reader json)
@@ -45,11 +47,11 @@ final class BaseMaps
         {
             return new BaseMaps(Collections.emptyList());
         }
-        List<BaseMap> maps = new ArrayList<>();
-        Set<Integer> ids = new HashSet<>();
-        for (JsonElement element : array == null ? new JsonArray() : array)
+        var maps = new ArrayList<BaseMap>();
+        var ids = new HashSet<Integer>();
+        for (var element : array == null ? new JsonArray() : array)
         {
-            BaseMap map = map(element);
+            var map = map(element);
             if (map != null && ids.add(map.id))
             {
                 maps.add(map);
@@ -58,15 +60,15 @@ final class BaseMaps
         return new BaseMaps(maps);
     }
 
-    private static BaseMap map(JsonElement element)
+    static BaseMap map(JsonElement element)
     {
         try
         {
             JsonObject o = element.getAsJsonObject();
-            JsonArray bounds = o.getAsJsonArray("bounds");
-            JsonArray min = bounds.get(0).getAsJsonArray();
-            JsonArray max = bounds.get(1).getAsJsonArray();
-            JsonArray center = o.has("center") ? o.getAsJsonArray("center") : null;
+            var bounds = o.getAsJsonArray("bounds");
+            var min = bounds.get(0).getAsJsonArray();
+            var max = bounds.get(1).getAsJsonArray();
+            var center = o.has("center") ? o.getAsJsonArray("center") : null;
             int minX = min.get(0).getAsInt();
             int minY = min.get(1).getAsInt();
             int maxX = max.get(0).getAsInt();
@@ -75,8 +77,8 @@ final class BaseMaps
             String name = o.get("name").getAsString();
             int tiles = o.has("tiles") ? o.get("tiles").getAsInt() : id;
             if (!inWorld(minX) || !inWorld(minY) || !inWorld(maxX) || !inWorld(maxY) || maxX <= minX || maxY <= minY
-                || id < BaseMap.FULL || name.trim().isEmpty() || name.length() > MAX_NAME
-                || tiles != id && tiles != BaseMap.FULL)
+                || id < FULL || name.trim().isEmpty() || name.length() > MAX_NAME
+                || tiles != id && tiles != FULL)
             {
                 return null;
             }
@@ -95,7 +97,7 @@ final class BaseMaps
         }
     }
 
-    private static boolean inWorld(int coordinate)
+    static boolean inWorld(int coordinate)
     {
         return coordinate >= 0 && coordinate <= MAX_COORDINATE;
     }
@@ -134,7 +136,7 @@ final class BaseMaps
 
     BaseMap surface()
     {
-        BaseMap surface = byId.get(BaseMap.SURFACE);
+        var surface = byId.get(BaseMap.SURFACE);
         return surface != null ? surface : sorted.get(0);
     }
 
@@ -145,14 +147,14 @@ final class BaseMaps
         {
             return false;
         }
-        int[] owners = drawers(x, y);
+        var owners = drawers(x, y);
         return owners != null && Arrays.stream(owners).anyMatch(id -> id == map.id) || find(x, y) == map;
     }
 
     /** The owners of the spot's 8×8 zone where known, else the region's owners; null when not known. */
-    private int[] drawers(int x, int y)
+    int[] drawers(int x, int y)
     {
-        int[] zone = regions.zoneOwners(x, y);
+        var zone = regions.zoneOwners(x, y);
         return zone != null ? zone : regions.owners(RegionTable.regionId(x, y));
     }
 
@@ -162,9 +164,9 @@ final class BaseMaps
      */
     BaseMap floorMap(WorldPoint game)
     {
-        int[] found = regions.floorOverride(game.getX(), game.getY(), game.getPlane());
-        BaseMap map = found == null ? null : byId(found[0]);
-        return map != null && (map.id == BaseMap.FULL || map.contains(game.getX(), game.getY())) ? map : null;
+        var found = regions.floorOverride(game.getX(), game.getY(), game.getPlane());
+        var map = found == null ? null : byId(found[0]);
+        return map != null && (map.id == FULL || map.contains(game.getX(), game.getY())) ? map : null;
     }
 
     /**
@@ -174,8 +176,8 @@ final class BaseMaps
      */
     int drawnFloor(BaseMap on, WorldPoint game)
     {
-        int[] found = on == null ? null : regions.floorOverride(game.getX(), game.getY(), game.getPlane());
-        BaseMap map = found == null ? null : byId(found[0]);
+        var found = on == null ? null : regions.floorOverride(game.getX(), game.getY(), game.getPlane());
+        var map = found == null ? null : byId(found[0]);
         return map != null && map.tiles == on.tiles ? found[1] : -1;
     }
 
@@ -193,7 +195,7 @@ final class BaseMaps
         {
             for (int floor : new int[]{game.getPlane() - d, game.getPlane() + d})
             {
-                WorldPoint other = floor < 0 || floor > 3 ? null : new WorldPoint(game.getX(), game.getY(), floor);
+                var other = floor < 0 || floor > 3 ? null : new WorldPoint(game.getX(), game.getY(), floor);
                 if (other != null && drawnFloor(on, other) == drawnFloor && ground.test(other))
                 {
                     return other;
@@ -211,33 +213,33 @@ final class BaseMaps
             // One's house is drawn at the surface map's edge.
             return byId(BaseMap.SURFACE);
         }
-        BaseMap floor = floorMap(game);
+        var floor = floorMap(game);
         if (floor != null)
         {
             return floor;
         }
-        WorldMapMoves.Drawn drawn = WorldMapMoves.drawn(game);
-        BaseMap moved = drawn == null ? null : byId(drawn.map);
+        var drawn = WorldMapMoves.drawn(game);
+        var moved = drawn == null ? null : byId(drawn.map);
         // Some moves put a place outside the bounds of the map they name.
         if (moved != null && moved.contains(drawn.point.getX(), drawn.point.getY()))
         {
             return moved;
         }
-        BaseMap found = find(game.getX(), game.getY());
+        var found = find(game.getX(), game.getY());
         if (found != null && WorldMapMoves.covers(found.id, game.getX(), game.getY()))
         {
             // That map shows a moved place here: the smallest other map that draws the spot.
             BaseMap other = null;
-            for (BaseMap map : sorted)
+            for (var map : sorted)
             {
-                if (map != found && map.id != BaseMap.FULL && map.contains(game.getX(), game.getY())
+                if (map != found && map.id != FULL && map.contains(game.getX(), game.getY())
                     && !WorldMapMoves.covers(map.id, game.getX(), game.getY())
                     && (other == null || map.area() < other.area()))
                 {
                     other = map;
                 }
             }
-            return other != null ? other : byId(BaseMap.FULL);
+            return other != null ? other : byId(FULL);
         }
         return found;
     }
@@ -260,15 +262,15 @@ final class BaseMaps
      */
     BaseMap find(int x, int y)
     {
-        BaseMap full = byId.get(BaseMap.FULL);
+        var full = byId.get(FULL);
         boolean fullDraws = full != null && full.contains(x, y);
-        int[] owners = drawers(x, y);
+        var owners = drawers(x, y);
         BaseMap best = null;
         if (owners != null)
         {
             for (int id : owners)
             {
-                BaseMap map = byId.get(id);
+                var map = byId.get(id);
                 if (map != null && map.contains(x, y) && (best == null || map.area() < best.area()))
                 {
                     best = map;
@@ -279,9 +281,9 @@ final class BaseMaps
                 return best != null ? best : full;
             }
         }
-        for (BaseMap map : sorted)
+        for (var map : sorted)
         {
-            if (map.id != BaseMap.FULL && map.contains(x, y) && (best == null || map.area() < best.area()))
+            if (map.id != FULL && map.contains(x, y) && (best == null || map.area() < best.area()))
             {
                 best = map;
             }

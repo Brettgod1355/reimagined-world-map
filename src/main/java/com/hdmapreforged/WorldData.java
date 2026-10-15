@@ -25,13 +25,13 @@ final class WorldData
     static final int SHOP_RADIUS = 12;
     /** The most wares of a shop. */
     static final int MAX_ITEMS = 200;
-    private static final int MAX_ID = 0xffff;
-    private static final int MAX_COORDINATE = 0x3fff;
-    private static final int MAX_COUNT = 1_000_000;
-    private static final int MAX_WORDS = 24;
-    private static final int MAX_NAME = 64;
+    static final int MAX_ID = 0xffff;
+    static final int MAX_COORDINATE = 0x3fff;
+    static final int MAX_COUNT = 1_000_000;
+    static final int MAX_WORDS = 24;
+    static final int MAX_NAME = 64;
     /** What {@link #number} gives for anything but a number in range. */
-    private static final int BAD = Integer.MIN_VALUE;
+    static final int BAD = Integer.MIN_VALUE;
     /** A shop that never runs out. */
     static final int ENDLESS = -1;
 
@@ -73,21 +73,21 @@ final class WorldData
 
     final List<Shop> shops;
     /** By {@link #key}. */
-    private final Map<String, NpcSpawns> npcs;
-    private final Map<String, ItemSources> items;
+    final Map<String, NpcSpawns> npcs;
+    final Map<String, ItemSources> items;
     /** The names the suggestions choose from, with their lower-case forms in the same order ({@link #suggestions}). */
-    private final String[][] npcChoices;
-    private final String[][] itemChoices;
+    final String[][] npcChoices;
+    final String[][] itemChoices;
     /** Lower-case names the search finds: NPCs standing somewhere or with a way in ({@link #monsterName}). */
-    private final Set<String> monsterNames = new HashSet<>();
+    final Set<String> monsterNames = new HashSet<>();
     /** The map version {@link #maps} is for; null for none. */
-    private final String mapVersion;
+    final String mapVersion;
     /** Which map draws a place where maps overlap, by map id; null for none. */
-    private final Map<WorldPoint, Integer> maps;
-    private BaseMaps drawnFor;
-    private Map<WorldPoint, BaseMap> drawn = Collections.emptyMap();
+    final Map<WorldPoint, Integer> maps;
+    BaseMaps drawnFor;
+    Map<WorldPoint, BaseMap> drawn = Collections.emptyMap();
 
-    private WorldData(Map<String, NpcSpawns> npcs, Map<String, ItemSources> items, List<Shop> shops, String[] npcNames,
+    WorldData(Map<String, NpcSpawns> npcs, Map<String, ItemSources> items, List<Shop> shops, String[] npcNames,
         String[] itemNames, String mapVersion, Map<WorldPoint, Integer> maps)
     {
         this.npcs = npcs;
@@ -107,11 +107,11 @@ final class WorldData
     static WorldData parse(byte[] file)
     {
         Object[] format = new Object[2];
-        Map<String, NpcSpawns> npcs = new HashMap<>();
-        Map<String, ItemSources> items = new HashMap<>();
-        List<Shop> shops = new ArrayList<>();
-        List<String[]> names = new ArrayList<>(Arrays.asList(new String[0], new String[0]));
-        Map<WorldPoint, Integer> maps = new HashMap<>();
+        var npcs = new HashMap<String, NpcSpawns>();
+        var items = new HashMap<String, ItemSources>();
+        var shops = new ArrayList<Shop>();
+        var names = new ArrayList<String[]>(Arrays.asList(new String[0], new String[0]));
+        var maps = new HashMap<WorldPoint, Integer>();
         try (JsonReader in = new JsonReader(MapServer.text(file)))
         {
             in.beginObject();
@@ -143,12 +143,12 @@ final class WorldData
                     case "drawn":
                         rows(in, o -> {
                             int map = number(o.get("map"), -1, MAX_ID);
-                            List<WorldPoint> points = map == BAD ? null : points(o.get("at"));
+                            var points = map == BAD ? null : points(o.get("at"));
                             (points == null ? Collections.<WorldPoint>emptyList() : points).forEach(p -> maps.put(p, map));
                         });
                         break;
                     case "undrawn":
-                        List<WorldPoint> points = points(value(in));
+                        var points = points(value(in));
                         (points == null ? Collections.<WorldPoint>emptyList() : points).forEach(p -> maps.put(p, null));
                         break;
                     default:
@@ -169,31 +169,31 @@ final class WorldData
     }
 
     /** {@code {name, npc, places: [{at, n | e}], tables: [{v, items}]}}: NPCs of a name, as {@link #spawns} finds them. */
-    private static void npc(Map<?, ?> o, Map<String, NpcSpawns> npcs)
+    static void npc(Map<?, ?> o, Map<String, NpcSpawns> npcs)
     {
         String name = text(o, "name");
         int npc = number(o.get("npc"), 0, MAX_ID);
-        List<NpcSpawns.Group> groups = new ArrayList<>();
+        var groups = new ArrayList<NpcSpawns.Group>();
         for (Object e : list(o, "places"))
         {
-            Map<?, ?> place = map(e);
-            List<WorldPoint> points = points(place.get("at"));
+            var place = map(e);
+            var points = points(place.get("at"));
             String entrance = text(place, "e");
             int seen = number(place.get("n"), 1, MAX_COUNT);
             if (points == null || entrance.length() > MAX_NAME || entrance.isEmpty() && seen == BAD)
             {
                 return;
             }
-            NpcSpawns.Group group = new NpcSpawns.Group(name, "", points);
+            var group = new NpcSpawns.Group(name, "", points);
             group.entrance = !entrance.isEmpty();
             group.seen = group.entrance ? 0 : seen;
             groups.add(group.withNote(group.entrance ? "Entrance: " + entrance : seen + " here"));
         }
-        List<Table> tables = new ArrayList<>();
+        var tables = new ArrayList<Table>();
         for (Object e : list(o, "tables"))
         {
             String table = text(map(e), "v");
-            List<Drop> drops = drops(map(e));
+            var drops = drops(map(e));
             if (drops == null || table.length() > MAX_NAME)
             {
                 return;
@@ -207,12 +207,12 @@ final class WorldData
     }
 
     /** {@code [{id, name, r, q, t, v}]}; null when any drop is malformed. */
-    private static List<Drop> drops(Map<?, ?> o)
+    static List<Drop> drops(Map<?, ?> o)
     {
-        List<Drop> drops = new ArrayList<>();
+        var drops = new ArrayList<Drop>();
         for (Object d : list(o, "items"))
         {
-            Map<?, ?> drop = map(d);
+            var drop = map(d);
             int item = number(drop.get("id"), 0, MAX_ID);
             String name = text(drop, "name");
             String rarity = text(drop, "r");
@@ -233,14 +233,14 @@ final class WorldData
      * {@code {name, id, shops: [{shop, at, n}], ground: [{at, n}], drops: [{npc, name, r, q, v, places, table}]}}: where
      * an item comes from, as {@link #item} finds it.
      */
-    private static void item(Map<?, ?> o, Map<String, ItemSources> items)
+    static void item(Map<?, ?> o, Map<String, ItemSources> items)
     {
         String name = text(o, "name");
         int item = number(o.get("id"), 0, MAX_ID);
-        List<ItemSources.Store> stores = new ArrayList<>();
+        var stores = new ArrayList<ItemSources.Store>();
         for (Object e : list(o, "shops"))
         {
-            List<WorldPoint> at = points(map(e).get("at"));
+            var at = points(map(e).get("at"));
             String shop = text(map(e), "shop");
             int stock = stock(map(e).get("n"));
             if (at == null || at.size() != 1 || !named(shop) || stock == 0)
@@ -249,10 +249,10 @@ final class WorldData
             }
             stores.add(new ItemSources.Store(shop, at.get(0), stock));
         }
-        List<ItemSources.Ground> grounds = new ArrayList<>();
+        var grounds = new ArrayList<ItemSources.Ground>();
         for (Object e : list(o, "ground"))
         {
-            List<WorldPoint> at = points(map(e).get("at"));
+            var at = points(map(e).get("at"));
             int count = number(map(e).get("n"), 1, MAX_COUNT);
             if (at == null || at.size() != 1 || count == BAD)
             {
@@ -260,10 +260,10 @@ final class WorldData
             }
             grounds.add(new ItemSources.Ground(at.get(0), count));
         }
-        List<ItemSources.Dropper> droppers = new ArrayList<>();
+        var droppers = new ArrayList<ItemSources.Dropper>();
         for (Object e : list(o, "drops"))
         {
-            Map<?, ?> d = map(e);
+            var d = map(e);
             int npc = number(d.get("npc"), 0, MAX_ID);
             String npcName = text(d, "name");
             String rarity = text(d, "r");
@@ -285,12 +285,12 @@ final class WorldData
     }
 
     /** {@code {name, at, npc, items: [{id, name, n}]}}: a shop with its wares by name. */
-    private static void shop(Map<?, ?> o, List<Shop> shops)
+    static void shop(Map<?, ?> o, List<Shop> shops)
     {
         String name = text(o, "name");
-        List<WorldPoint> at = points(o.get("at"));
-        List<?> listed = list(o, "items");
-        List<ItemSources.Ware> wares = new ArrayList<>();
+        var at = points(o.get("at"));
+        var listed = list(o, "items");
+        var wares = new ArrayList<ItemSources.Ware>();
         for (Object e : listed)
         {
             int item = number(map(e).get("id"), 0, MAX_ID);
@@ -359,7 +359,7 @@ final class WorldData
             if (baseMaps != null && mapVersion != null && mapVersion.equals(baseMaps.version()))
             {
                 maps.forEach((point, id) -> {
-                    BaseMap map = id == null ? null : baseMaps.byId(id);
+                    var map = id == null ? null : baseMaps.byId(id);
                     if (id == null || map != null)
                     {
                         drawn.put(point, map);
@@ -394,17 +394,17 @@ final class WorldData
     }
 
     /** The names as the server orders them (shortest first, then alphabetically), with their lower-case forms. */
-    private static String[][] choices(String[] names)
+    static String[][] choices(String[] names)
     {
         return new String[][]{names, Arrays.stream(names).map(n -> n.toLowerCase(Locale.ROOT)).toArray(String[]::new)};
     }
 
     /** Of {@link #choices}, those starting with {@code typed}, then those holding it: one pass, nothing sorted. */
-    private static List<String> suggestions(String[][] choices, String typed, int limit)
+    static List<String> suggestions(String[][] choices, String typed, int limit)
     {
         String t = typed.trim().toLowerCase(Locale.ROOT);
-        List<String> starts = new ArrayList<>();
-        List<String> holds = new ArrayList<>();
+        var starts = new ArrayList<String>();
+        var holds = new ArrayList<String>();
         for (int i = 0; i < choices[0].length && starts.size() < limit; i++)
         {
             if (choices[1][i].startsWith(t))
@@ -423,7 +423,7 @@ final class WorldData
     /** A name as the search compares names: letter by letter without case, as {@code equalsIgnoreCase} does. */
     static String key(String name)
     {
-        char[] letters = name.trim().toCharArray();
+        var letters = name.trim().toCharArray();
         for (int i = 0; i < letters.length; i++)
         {
             letters[i] = Character.toLowerCase(Character.toUpperCase(letters[i]));
@@ -432,7 +432,7 @@ final class WorldData
     }
 
     /** Each object of an array in turn, never the whole array at once. */
-    private static void rows(JsonReader in, Consumer<Map<?, ?>> row) throws IOException
+    static void rows(JsonReader in, Consumer<Map<?, ?>> row) throws IOException
     {
         in.beginArray();
         while (in.hasNext())
@@ -447,13 +447,13 @@ final class WorldData
     }
 
     /** A JSON value: numbers as Double, texts, arrays as lists, objects as maps; null for anything else. */
-    private static Object value(JsonReader in) throws IOException
+    static Object value(JsonReader in) throws IOException
     {
         return value(in, 0);
     }
 
     /** Nesting deeper than {@link #MAX_DEPTH} is skipped, so no answer can run the stack out. */
-    private static Object value(JsonReader in, int depth) throws IOException
+    static Object value(JsonReader in, int depth) throws IOException
     {
         switch (depth > MAX_DEPTH ? JsonToken.NULL : in.peek())
         {
@@ -462,7 +462,7 @@ final class WorldData
             case STRING:
                 return in.nextString();
             case BEGIN_ARRAY:
-                List<Object> list = new ArrayList<>();
+                var list = new ArrayList<Object>();
                 in.beginArray();
                 while (in.hasNext())
                 {
@@ -471,7 +471,7 @@ final class WorldData
                 in.endArray();
                 return list;
             case BEGIN_OBJECT:
-                Map<String, Object> map = new HashMap<>();
+                var map = new HashMap<String, Object>();
                 in.beginObject();
                 while (in.hasNext())
                 {
@@ -485,43 +485,43 @@ final class WorldData
         }
     }
 
-    private static final int MAX_DEPTH = 32;
+    static final int MAX_DEPTH = 32;
 
-    private static Map<?, ?> map(Object e)
+    static Map<?, ?> map(Object e)
     {
         return e instanceof Map ? (Map<?, ?>) e : Collections.emptyMap();
     }
 
-    private static List<?> list(Map<?, ?> o, String key)
+    static List<?> list(Map<?, ?> o, String key)
     {
         Object e = o.get(key);
         return e instanceof List ? (List<?>) e : Collections.emptyList();
     }
 
-    private static String text(Map<?, ?> o, String key)
+    static String text(Map<?, ?> o, String key)
     {
         Object e = o.get(key);
         return e instanceof String ? ((String) e).trim() : "";
     }
 
-    private static boolean named(String name)
+    static boolean named(String name)
     {
         return !name.isEmpty() && name.length() <= MAX_NAME;
     }
 
     /** Texts of a list; none when it is no list of texts. */
-    private static String[] texts(Object e)
+    static String[] texts(Object e)
     {
-        List<?> list = e instanceof List ? (List<?>) e : Collections.emptyList();
+        var list = e instanceof List ? (List<?>) e : Collections.emptyList();
         return list.stream().allMatch(t -> t instanceof String && named((String) t)) ? list.toArray(new String[0])
             : new String[0];
     }
 
     /** {@code [x, y, plane, ...]}; null when empty or malformed. */
-    private static List<WorldPoint> points(Object e)
+    static List<WorldPoint> points(Object e)
     {
-        List<?> at = e instanceof List ? (List<?>) e : Collections.emptyList();
-        List<WorldPoint> points = new ArrayList<>();
+        var at = e instanceof List ? (List<?>) e : Collections.emptyList();
+        var points = new ArrayList<WorldPoint>();
         for (int i = 0; i + 2 < at.size(); i += 3)
         {
             int x = number(at.get(i), 0, MAX_COORDINATE);
@@ -537,13 +537,13 @@ final class WorldData
     }
 
     /** A stock: {@link #ENDLESS}, or how many; 0 for anything else. */
-    private static int stock(Object e)
+    static int stock(Object e)
     {
         return Double.valueOf(ENDLESS).equals(e) ? ENDLESS : Math.max(0, number(e, 1, MAX_COUNT));
     }
 
     /** A whole number from {@code min} to {@code max}; {@link #BAD} for anything else. */
-    private static int number(Object e, int min, int max)
+    static int number(Object e, int min, int max)
     {
         double v = e instanceof Double ? (Double) e : Double.NaN;
         return v >= min && v <= max && v == Math.rint(v) ? (int) v : BAD;

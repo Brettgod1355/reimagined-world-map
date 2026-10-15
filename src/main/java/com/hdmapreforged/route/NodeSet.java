@@ -5,9 +5,9 @@ import java.util.*;
 /** A set of nodes as bits per {@link NodeTable#block}, made as blocks are touched: a flood of the world takes 1 MB. */
 final class NodeSet
 {
-    private final IntMap blocks;
-    private long[][] bits;
-    private int count;
+    final IntMap blocks;
+    long[][] bits;
+    int count;
 
     NodeSet()
     {

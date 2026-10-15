@@ -12,21 +12,21 @@ import lombok.*;
  */
 public final class RouteFiles
 {
-    private static final int MAX_FILE_BYTES = 16 * 1024 * 1024;
-    private static final int MAX_TOTAL_BYTES = 32 * 1024 * 1024;
-    private static final int MAX_FILES = 100;
-    private static volatile Map<String, byte[]> files;
+    static final int MAX_FILE_BYTES = 16 * 1024 * 1024;
+    static final int MAX_TOTAL_BYTES = 32 * 1024 * 1024;
+    static final int MAX_FILES = 100;
+    static volatile Map<String, byte[]> files;
     /** Counts the route.zips used, so tables read from them are read again. */
-    private static volatile int generation;
+    static volatile int generation;
 
-    private RouteFiles()
+    RouteFiles()
     {
     }
 
     /** Uses a map version's route.zip: its files by name ("links.tsv", "collision.zip"). */
     public static void use(byte[] zip) throws IOException
     {
-        Map<String, byte[]> read = new HashMap<>();
+        var read = new HashMap<String, byte[]>();
         long total = 0;
         try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zip)))
         {
@@ -34,7 +34,7 @@ public final class RouteFiles
             {
                 if (!entry.isDirectory())
                 {
-                    byte[] bytes = read(in, MAX_FILE_BYTES, entry.getName());
+                    var bytes = read(in, MAX_FILE_BYTES, entry.getName());
                     total += bytes.length;
                     if (total > MAX_TOTAL_BYTES || read.size() >= MAX_FILES)
                     {
@@ -51,7 +51,7 @@ public final class RouteFiles
     /** The rest of a zip entry; more than {@code max} bytes is an error, so a small zip never fills the memory. */
     static byte[] read(InputStream in, int max, String name) throws IOException
     {
-        byte[] bytes = in.readNBytes(max + 1);
+        var bytes = in.readNBytes(max + 1);
         if (bytes.length > max)
         {
             throw new IOException("Route file too large: " + name);
@@ -79,12 +79,12 @@ public final class RouteFiles
     /** A table by its resource path ("/com/hdmapreforged/route/links.tsv"); null when there is none. */
     public static InputStream open(String resource)
     {
-        Map<String, byte[]> given = files;
+        var given = files;
         if (given == null)
         {
             return RouteFiles.class.getResourceAsStream(resource);
         }
-        byte[] bytes = given.get(resource.substring(resource.lastIndexOf('/') + 1));
+        var bytes = given.get(resource.substring(resource.lastIndexOf('/') + 1));
         return bytes == null ? null : new ByteArrayInputStream(bytes);
     }
 
@@ -92,9 +92,9 @@ public final class RouteFiles
     @RequiredArgsConstructor
     public static final class Table<T>
     {
-        private final Supplier<T> read;
-        private int readAt = -1;
-        private T value;
+        final Supplier<T> read;
+        int readAt = -1;
+        T value;
 
         public synchronized T get()
         {

@@ -35,7 +35,7 @@ final class PartyMapMembers
         }
     }
 
-    private static final class Member
+    static final class Member
     {
         String name;
         WorldPoint point;
@@ -45,8 +45,8 @@ final class PartyMapMembers
         long ownUpdated = Long.MIN_VALUE / 2;
     }
 
-    private final Map<Long, Member> members = new HashMap<>();
-    private final Map<Long, Gear> gear = new HashMap<>();
+    final Map<Long, Member> members = new HashMap<>();
+    final Map<Long, Gear> gear = new HashMap<>();
 
     static final class Gear
     {
@@ -86,14 +86,14 @@ final class PartyMapMembers
 
     static final long DROP_MS = 2200;
     static final int MAX_DROPS = 16;
-    private final Map<Long, List<Drop>> drops = new HashMap<>();
+    final Map<Long, List<Drop>> drops = new HashMap<>();
 
     synchronized void gear(long id, Gear shared)
     {
         Gear before = gear.put(id, shared);
         if (before != null && before.experience != null && shared.experience != null)
         {
-            List<Drop> list = drops.computeIfAbsent(id, k -> new ArrayList<>());
+            var list = drops.computeIfAbsent(id, k -> new ArrayList<>());
             for (int k = 0; k < shared.experience.length; k++)
             {
                 int gained = shared.experience[k] - before.experience[k];
@@ -121,11 +121,11 @@ final class PartyMapMembers
     }
 
     static final long LOOT_MS = 3500;
-    private final Map<Long, List<Loot>> loot = new HashMap<>();
+    final Map<Long, List<Loot>> loot = new HashMap<>();
 
     synchronized void loot(long id, Loot drop)
     {
-        List<Loot> list = loot.computeIfAbsent(id, k -> new ArrayList<>());
+        var list = loot.computeIfAbsent(id, k -> new ArrayList<>());
         list.removeIf(l -> drop.at - l.at > LOOT_MS);
         list.add(drop);
         // A big pile shows its most valuable few.
@@ -142,7 +142,7 @@ final class PartyMapMembers
     }
 
     /** A copy without the old ones, which go. */
-    private static <T> List<T> recent(List<T> list, Predicate<T> old)
+    static <T> List<T> recent(List<T> list, Predicate<T> old)
     {
         if (list == null)
         {
@@ -233,8 +233,8 @@ final class PartyMapMembers
     /** Oldest news first so the freshest end up on top. */
     synchronized List<Marker> markers(long now)
     {
-        List<Marker> markers = new ArrayList<>();
-        for (Map.Entry<Long, Member> entry : members.entrySet())
+        var markers = new ArrayList<Marker>();
+        for (var entry : members.entrySet())
         {
             Member member = entry.getValue();
             long age = Math.max(0, now - member.updated);

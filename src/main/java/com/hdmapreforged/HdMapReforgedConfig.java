@@ -191,7 +191,7 @@ public interface HdMapReforgedConfig extends Config
         WEEKLY("Weekly", 7),
         NEVER("Never", -1);
 
-        private final String name;
+        final String name;
         final int days;
 
         @Override
@@ -284,7 +284,7 @@ public interface HdMapReforgedConfig extends Config
         OWN("Reimagined World Map"),
         SHORTEST_PATH("Shortest Path plugin");
 
-        private final String name;
+        final String name;
 
         @Override
         public String toString()
@@ -482,7 +482,7 @@ public interface HdMapReforgedConfig extends Config
         LINES("Lines"),
         ARROWS("Lines with arrows");
 
-        private final String name;
+        final String name;
 
         @Override
         public String toString()

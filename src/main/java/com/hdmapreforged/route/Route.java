@@ -1,5 +1,7 @@
 package com.hdmapreforged.route;
 
+import static com.hdmapreforged.route.Tiles.*;
+
 import java.util.*;
 import java.util.stream.*;
 import lombok.*;
@@ -70,7 +72,7 @@ public final class Route
     public final boolean limited;
     public final int nodes;
     /** Where a search that proved the target out of reach proved it out of reach from; else null. */
-    private final Reached reached;
+    final Reached reached;
     /** Through the Wilderness though the player keeps out of it: no way around it gets there. */
     public final boolean throughWilderness;
     /** The search left out a step or jump into the Wilderness (kept out of it): through it, it may get further. */
@@ -146,15 +148,15 @@ public final class Route
                 int landing = step.last();
                 int from = step.first();
                 // Nearer where it starts (a gate, a door): not crossed yet.
-                boolean before = from >= 0 && !Tiles.isSea(from) && sameLevel(player, from)
-                    && Tiles.distance(player, from) < Tiles.distance(player, landing);
+                boolean before = from >= 0 && !isSea(from) && sameLevel(player, from)
+                    && distance(player, from) < distance(player, landing);
                 if (banked && home && inHouse(landing))
                 {
                     continue;
                 }
                 // Into one's house (a teleport, its portal): anywhere in it, it was taken, wherever the game put one.
                 boolean entered = from >= 0 && !inHouse(from) && inHouse(landing) && home;
-                if (sameLevel(player, landing) && (Tiles.distance(player, landing) <= 2 || entered) && !before)
+                if (sameLevel(player, landing) && (distance(player, landing) <= 2 || entered) && !before)
                 {
                     bestStep = s + 1;
                     bestIndex = 0;
@@ -169,12 +171,12 @@ public final class Route
                 {
                     continue;
                 }
-                long dx = Tiles.x(player) - Tiles.x(point);
-                long dy = Tiles.y(player) - Tiles.y(point);
+                long dx = x(player) - x(point);
+                long dy = y(player) - y(point);
                 long d = dx * dx + dy * dy;
-                if (Tiles.isSea(point))
+                if (isSea(point))
                 {
-                    d /= (long) Tiles.CELL * Tiles.CELL;
+                    d /= (long) CELL * CELL;
                 }
                 // Ties go to the later point, so a route passing a spot twice follows the player forward.
                 if (d <= bestDistance)
@@ -189,18 +191,18 @@ public final class Route
         {
             return this;
         }
-        List<Step> left = new ArrayList<>();
+        var left = new ArrayList<Step>();
         for (int s = bestStep; s < steps.size(); s++)
         {
             Step step = steps.get(s);
             if (s == bestStep && bestIndex > 0)
             {
-                int[] rest = Arrays.copyOfRange(step.points, bestIndex, step.points.length);
+                var rest = Arrays.copyOfRange(step.points, bestIndex, step.points.length);
                 if (rest.length < 2)
                 {
                     continue;
                 }
-                List<Obstacle> obstaclesLeft = step.obstacles.stream()
+                var obstaclesLeft = step.obstacles.stream()
                     .filter(o -> Arrays.stream(rest).anyMatch(p -> p == o.at)).collect(Collectors.toList());
                 step = new Step(step.kind, rest, step.name, step.detail, step.cost * rest.length / step.points.length,
                     step.doors, obstaclesLeft, step.category);
@@ -211,14 +213,14 @@ public final class Route
             throughWilderness, keptOut);
     }
 
-    private static boolean inHouse(int node)
+    static boolean inHouse(int node)
     {
-        return HousePlan.contains(Tiles.x(node), Tiles.y(node));
+        return HousePlan.contains(x(node), y(node));
     }
 
-    private static boolean sameLevel(int a, int b)
+    static boolean sameLevel(int a, int b)
     {
-        return Tiles.isSea(a) || Tiles.isSea(b) || Tiles.z(a) == Tiles.z(b);
+        return isSea(a) || isSea(b) || z(a) == z(b);
     }
 
     /**
@@ -252,7 +254,7 @@ public final class Route
         for (Step step : steps)
         {
             sb.append("\n  ").append(step.kind).append(' ').append(step.name == null ? "" : step.name).append(' ')
-                .append(Tiles.format(step.first())).append(" -> ").append(Tiles.format(step.last()));
+                .append(format(step.first())).append(" -> ").append(format(step.last()));
         }
         return sb.toString();
     }

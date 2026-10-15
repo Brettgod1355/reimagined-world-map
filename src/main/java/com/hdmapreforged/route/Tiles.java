@@ -10,15 +10,15 @@ public final class Tiles
     public static final int CELL = 4;
 
     /** The Wilderness's safe zones and the ground south of its edge, read from wilderness.tsv when first asked. */
-    private static final class Zones
+    static final class Zones
     {
         static final int[][] SAFE;
         static final int[][] OUTSIDE;
 
         static
         {
-            List<int[]> safe = new ArrayList<>();
-            List<int[]> outside = new ArrayList<>();
+            var safe = new ArrayList<int[]>();
+            var outside = new ArrayList<int[]>();
             try
             {
                 Pathfinder.rows(Tiles.class.getResourceAsStream("wilderness.tsv"), 0,
@@ -33,7 +33,7 @@ public final class Tiles
         }
     }
 
-    private Tiles()
+    Tiles()
     {
     }
 
@@ -85,7 +85,7 @@ public final class Tiles
     /** {@code "x y plane"} packed; -1 when it is not one. */
     public static int parse(String text)
     {
-        String[] xyz = text.trim().split("\\s+");
+        var xyz = text.trim().split("\\s+");
         if (xyz.length != 3)
         {
             return -1;
@@ -129,9 +129,9 @@ public final class Tiles
         return !within(Zones.SAFE, x, y) && !within(Zones.OUTSIDE, x, y);
     }
 
-    private static boolean within(int[][] zones, int x, int y)
+    static boolean within(int[][] zones, int x, int y)
     {
-        for (int[] zone : zones)
+        for (var zone : zones)
         {
             if (x >= zone[0] && x <= zone[1] && y >= zone[2] && y <= zone[3])
             {

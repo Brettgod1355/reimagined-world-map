@@ -25,7 +25,7 @@ final class HouseSettings
             || features.contains(BOTH) && (GARDENS[1].equals(feature) || GARDENS[2].equals(feature));
     }
 
-    private HouseSettings()
+    HouseSettings()
     {
     }
 
@@ -33,7 +33,7 @@ final class HouseSettings
     static Set<String> features(String box, Set<String> mounted, int garden, boolean obelisk, String portals,
         String nexus)
     {
-        Set<String> features = new LinkedHashSet<>();
+        var features = new LinkedHashSet<String>();
         String tier = box == null ? "none" : box.toLowerCase(Locale.ROOT);
         if (!tier.equals("none") && Set.of(BOXES).contains(tier))
         {
@@ -72,7 +72,7 @@ final class HouseSettings
         return BOXES[0];
     }
 
-    private static void add(Set<String> features, String prefix, String places)
+    static void add(Set<String> features, String prefix, String places)
     {
         for (String place : places == null ? new String[0] : places.split("[,;\\n]"))
         {

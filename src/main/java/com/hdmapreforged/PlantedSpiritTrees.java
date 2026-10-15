@@ -17,7 +17,7 @@ final class PlantedSpiritTrees
     /** The patch state of a grown spirit tree one can travel by. */
     static final int GROWN = 20;
     /** As the travel table's stops are named; their regions; the patch's varbit. */
-    private static final Object[][] PATCHES = {
+    static final Object[][] PATCHES = {
         {"Port Sarim", new int[]{12082}, VarbitID.FARMING_TRANSMIT_A},
         {"Etceteria", new int[]{10300}, VarbitID.FARMING_TRANSMIT_B},
         {"Brimhaven", new int[]{11058, 11057}, VarbitID.FARMING_TRANSMIT_B},
@@ -25,7 +25,7 @@ final class PlantedSpiritTrees
         {"Farming Guild", new int[]{4922}, VarbitID.FARMING_TRANSMIT_A},
     };
 
-    private volatile Set<String> grown = Collections.emptySet();
+    volatile Set<String> grown = Collections.emptySet();
 
     /** A stop of the travel table that needs a tree planted ("Only after planting a spirit tree here"). */
     static boolean planted(Poi stop)
@@ -52,7 +52,7 @@ final class PlantedSpiritTrees
     /** In {@code region}: reads its patch, if it has one. Whether what is known changed. Client thread. */
     boolean update(int region, IntUnaryOperator varbit)
     {
-        for (Object[] patch : PATCHES)
+        for (var patch : PATCHES)
         {
             for (int id : (int[]) patch[1])
             {
@@ -64,7 +64,7 @@ final class PlantedSpiritTrees
                     {
                         return false;
                     }
-                    Set<String> next = new TreeSet<>(grown);
+                    var next = new TreeSet<String>(grown);
                     if (stands)
                     {
                         next.add(name);

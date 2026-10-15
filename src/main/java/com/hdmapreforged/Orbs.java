@@ -6,6 +6,8 @@ import java.util.function.*;
 import lombok.*;
 import net.runelite.api.gameval.*;
 import net.runelite.client.ui.*;
+import net.runelite.api.gameval.SpriteID.OrbFiller;
+import net.runelite.api.gameval.SpriteID.OrbIcon;
 
 /** The game's minimap orbs drawn from its own sprites: frame, fill to what is left, icon and coloured number. */
 final class Orbs
@@ -13,17 +15,17 @@ final class Orbs
     /** The frame: number box on the left, orb on the right. */
     static final int WIDTH = 57;
     static final int HEIGHT = 34;
-    private static final int ORB_X = 27;
-    private static final int ORB_Y = 4;
-    private static final int ORB = 26;
+    static final int ORB_X = 27;
+    static final int ORB_Y = 4;
+    static final int ORB = 26;
 
     @RequiredArgsConstructor
     enum Kind
     {
-        HITPOINTS(SpriteID.OrbFiller.HITPOINTS, SpriteID.OrbIcon.HITPOINTS, new Color(170, 40, 40)),
-        PRAYER(SpriteID.OrbFiller.PRAYER, SpriteID.OrbIcon.PRAYER, new Color(40, 140, 170)),
-        RUN(SpriteID.OrbFiller.RUN, SpriteID.OrbIcon.RUN, new Color(180, 150, 40)),
-        SPECIAL(SpriteID.OrbFiller.SPECIAL, SpriteID.OrbIcon.SPECIAL, new Color(60, 150, 70));
+        HITPOINTS(OrbFiller.HITPOINTS, OrbIcon.HITPOINTS, new Color(170, 40, 40)),
+        PRAYER(OrbFiller.PRAYER, OrbIcon.PRAYER, new Color(40, 140, 170)),
+        RUN(OrbFiller.RUN, OrbIcon.RUN, new Color(180, 150, 40)),
+        SPECIAL(OrbFiller.SPECIAL, OrbIcon.SPECIAL, new Color(60, 150, 70));
 
         final int filler;
         final int icon;
@@ -31,11 +33,11 @@ final class Orbs
         final Color plain;
     }
 
-    static final int[] SPRITES = {SpriteID.OrbFrame.FRAME, SpriteID.OrbFiller.EMPTY, SpriteID.OrbFiller.HITPOINTS,
-        SpriteID.OrbFiller.PRAYER, SpriteID.OrbFiller.RUN, SpriteID.OrbFiller.SPECIAL, SpriteID.OrbIcon.HITPOINTS,
-        SpriteID.OrbIcon.PRAYER, SpriteID.OrbIcon.RUN, SpriteID.OrbIcon.SPECIAL};
+    static final int[] SPRITES = {SpriteID.OrbFrame.FRAME, OrbFiller.EMPTY, OrbFiller.HITPOINTS,
+        OrbFiller.PRAYER, OrbFiller.RUN, OrbFiller.SPECIAL, OrbIcon.HITPOINTS,
+        OrbIcon.PRAYER, OrbIcon.RUN, OrbIcon.SPECIAL};
 
-    private Orbs()
+    Orbs()
     {
     }
 
@@ -57,7 +59,7 @@ final class Orbs
         }
         int ox = x + ORB_X;
         int oy = y + ORB_Y;
-        orb(g, sprites.apply(SpriteID.OrbFiller.EMPTY), ox, oy, new Color(20, 20, 20));
+        orb(g, sprites.apply(OrbFiller.EMPTY), ox, oy, new Color(20, 20, 20));
         int filled = (int) Math.round(ORB * left);
         Shape clip = g.getClip();
         g.clipRect(ox, oy + ORB - filled, ORB, filled);
@@ -69,7 +71,7 @@ final class Orbs
         }
         String text = value < 0 ? "–" : String.valueOf(value);
         g.setFont(FontManager.getRunescapeSmallFont());
-        FontMetrics metrics = g.getFontMetrics();
+        var metrics = g.getFontMetrics();
         int tx = x + 15 - metrics.stringWidth(text) / 2;
         int ty = y + 26;
         g.setColor(Color.BLACK);
@@ -79,7 +81,7 @@ final class Orbs
     }
 
     /** The sprite, or a plain circle while it loads. */
-    private static void orb(Graphics2D g, BufferedImage sprite, int x, int y, Color plain)
+    static void orb(Graphics2D g, BufferedImage sprite, int x, int y, Color plain)
     {
         if (sprite != null)
         {

@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static com.hdmapreforged.HdMapReforgedConfig.*;
+
 import com.hdmapreforged.route.*;
 import com.google.gson.*;
 import com.google.inject.*;
@@ -199,7 +201,7 @@ public class HdMapReforgedPlugin extends Plugin
         screen = new MapScreen(tiles, config, this::worldInUse, itemNames, this::togglePopOut);
         fullScreen = new MapScreen(tiles, config, this::worldInUse, itemNames, () -> fullMap.close());
         fullMap = new FullMapWindow(client, fullScreen, config.fullMapBounds(),
-            bounds -> configManager.setConfiguration(HdMapReforgedConfig.GROUP, "fullMapBounds", bounds),
+            bounds -> configManager.setConfiguration(GROUP, "fullMapBounds", bounds),
             key -> config.openMapKey().matches(key));
         keyManager.registerKeyListener(escape);
         keyManager.registerKeyListener(mapKey);
@@ -228,7 +230,7 @@ public class HdMapReforgedPlugin extends Plugin
         });
         for (MapScreen on : new MapScreen[]{screen, fullScreen})
         {
-            on.view().setLinesChoice(value -> configManager.setConfiguration(HdMapReforgedConfig.GROUP, "linesOff", value));
+            on.view().setLinesChoice(value -> configManager.setConfiguration(GROUP, "linesOff", value));
             on.setNpcPictures(pictures);
         }
 
@@ -545,7 +547,7 @@ public class HdMapReforgedPlugin extends Plugin
     /** The last entry is the top of the menu, which is what a left click does. */
     static MenuEntry[] moveToTop(MenuEntry[] entries, int index)
     {
-        List<MenuEntry> reordered = new ArrayList<>(Arrays.asList(entries));
+        var reordered = new ArrayList<MenuEntry>(Arrays.asList(entries));
         reordered.add(reordered.remove(index));
         return reordered.toArray(new MenuEntry[0]);
     }
@@ -806,10 +808,10 @@ public class HdMapReforgedPlugin extends Plugin
             refreshLater();
             return;
         }
-        List<CompletableFuture<byte[]>> files = new ArrayList<>();
+        var files = new ArrayList<CompletableFuture<byte[]>>();
         for (String name : MapServer.MAP_FILES)
         {
-            CompletableFuture<byte[]> file = new CompletableFuture<>();
+            var file = new CompletableFuture<byte[]>();
             serverCache.bytes("maps", version, name, fetch -> server.mapFile(version, name, fetch), file::complete);
             files.add(file);
         }

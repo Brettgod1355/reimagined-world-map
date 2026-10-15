@@ -14,27 +14,27 @@ import java.util.zip.*;
 public final class CollisionMap
 {
     public static final String RESOURCE = "/com/hdmapreforged/route/collision.zip";
-    private static final int MAGIC = 0x48444d43;
-    private static final int WALK = 0;
-    private static final int WALL_N = 64;
-    private static final int WALL_E = 128;
-    private static final int DOOR_N = 192;
-    private static final int DOOR_E = 256;
-    private static final int LAYERS = 320;
-    private static final int MAX_BIN_BYTES = 64 * 1024 * 1024;
-    private static final int MAX_TABLE_BYTES = 16 * 1024 * 1024;
+    static final int MAGIC = 0x48444d43;
+    static final int WALK = 0;
+    static final int WALL_N = 64;
+    static final int WALL_E = 128;
+    static final int DOOR_N = 192;
+    static final int DOOR_E = 256;
+    static final int LAYERS = 320;
+    static final int MAX_BIN_BYTES = 64 * 1024 * 1024;
+    static final int MAX_TABLE_BYTES = 16 * 1024 * 1024;
 
     /** By {@code region * 4 + plane}: five bitsets of 64 longs, or null. */
-    private final long[][] floors = new long[1 << 18][];
-    private final long[][] water = new long[1 << 16][];
-    private final List<Transition> transitions;
+    final long[][] floors = new long[1 << 18][];
+    final long[][] water = new long[1 << 16][];
+    final List<Transition> transitions;
     /** By packed tile: "Chop-down Vines (bring an axe)". */
-    private final Map<Integer, String> obstacles;
-    private final boolean[] obstacleRegions = new boolean[1 << 16];
+    final Map<Integer, String> obstacles;
+    final boolean[] obstacleRegions = new boolean[1 << 16];
     /** One's own house, where no map of the game lies; replaced whole. */
-    private volatile HousePlan house;
+    volatile HousePlan house;
 
-    private CollisionMap(List<Transition> transitions, Map<Integer, String> obstacles)
+    CollisionMap(List<Transition> transitions, Map<Integer, String> obstacles)
     {
         this.transitions = transitions;
         this.obstacles = obstacles;
@@ -60,9 +60,9 @@ public final class CollisionMap
     public static CollisionMap read(InputStream zipped) throws IOException
     {
         byte[] bin = null;
-        List<Transition> transitions = new ArrayList<>();
-        Map<Integer, String> obstacles = new HashMap<>();
-        ZipInputStream zip = new ZipInputStream(zipped);
+        var transitions = new ArrayList<Transition>();
+        var obstacles = new HashMap<Integer, String>();
+        var zip = new ZipInputStream(zipped);
         ZipEntry entry;
         while ((entry = zip.getNextEntry()) != null)
         {
@@ -89,12 +89,12 @@ public final class CollisionMap
         {
             throw new IOException("No collision.bin");
         }
-        CollisionMap map = new CollisionMap(Collections.unmodifiableList(transitions), obstacles);
+        var map = new CollisionMap(Collections.unmodifiableList(transitions), obstacles);
         map.decode(bin);
         return map;
     }
 
-    private static void lines(byte[] bytes, Consumer<String> each) throws IOException
+    static void lines(byte[] bytes, Consumer<String> each) throws IOException
     {
         BufferedReader reader = new BufferedReader(
             new InputStreamReader(new ByteArrayInputStream(bytes), StandardCharsets.UTF_8));
@@ -105,9 +105,9 @@ public final class CollisionMap
         }
     }
 
-    private void decode(byte[] bin) throws IOException
+    void decode(byte[] bin) throws IOException
     {
-        DataInputStream in = new DataInputStream(new ByteArrayInputStream(bin));
+        var in = new DataInputStream(new ByteArrayInputStream(bin));
         if (in.readInt() != MAGIC || in.readInt() != 1)
         {
             throw new IOException("Unknown collision data");
@@ -135,7 +135,7 @@ public final class CollisionMap
         }
     }
 
-    private static long[] longs(DataInputStream in, int count) throws IOException
+    static long[] longs(DataInputStream in, int count) throws IOException
     {
         long[] longs = new long[count];
         for (int j = 0; j < count; j++)
@@ -146,15 +146,15 @@ public final class CollisionMap
     }
 
     /** The region of a tile, or -1 off the world. */
-    private static int region(int x, int y)
+    static int region(int x, int y)
     {
         return (x | y) >>> 14 == 0 ? (x >> 6) << 8 | (y >> 6) : -1;
     }
 
     /** "x y plane <tab> name <tab> action <tab> what it takes"; bad lines are skipped. */
-    private static void obstacle(Map<Integer, String> obstacles, String line)
+    static void obstacle(Map<Integer, String> obstacles, String line)
     {
-        String[] parts = line.split("\t");
+        var parts = line.split("\t");
         if (line.startsWith("#") || parts.length < 4)
         {
             return;
@@ -184,11 +184,11 @@ public final class CollisionMap
         return region >= 0 && obstacleRegions[region] && obstacles.containsKey(node);
     }
 
-    private long[] layers(int x, int y, int z)
+    long[] layers(int x, int y, int z)
     {
         int region = region(x, y);
-        long[] found = region < 0 || z < 0 || z > 3 ? null : floors[region << 2 | z];
-        HousePlan plan = found == null && region >= 0 && z >= 0 && z <= 3 ? house : null;
+        var found = region < 0 || z < 0 || z > 3 ? null : floors[region << 2 | z];
+        var plan = found == null && region >= 0 && z >= 0 && z <= 3 ? house : null;
         return plan != null ? plan.layers(region, z) : found;
     }
 
@@ -202,7 +202,7 @@ public final class CollisionMap
         return house;
     }
 
-    private static boolean bit(long[] layers, int offset, int x, int y)
+    static boolean bit(long[] layers, int offset, int x, int y)
     {
         int i = (x & 63) << 6 | (y & 63);
         return (layers[offset + (i >> 6)] & 1L << (i & 63)) != 0;
@@ -224,9 +224,9 @@ public final class CollisionMap
         return region >= 0 && water[region] != null && bit(water[region], 0, x, y);
     }
 
-    private boolean edge(int x, int y, int z, int offset)
+    boolean edge(int x, int y, int z, int offset)
     {
-        long[] layers = layers(x, y, z);
+        var layers = layers(x, y, z);
         return layers != null && bit(layers, offset, x, y);
     }
 
@@ -247,12 +247,12 @@ public final class CollisionMap
         return straightOpen(x, y, z, dx, dy);
     }
 
-    private boolean straightOpen(int x, int y, int z, int dx, int dy)
+    boolean straightOpen(int x, int y, int z, int dx, int dy)
     {
         return !crosses(x, y, z, dx, dy, WALL_N, WALL_E);
     }
 
-    private boolean clear(int x, int y, int z, int dx, int dy)
+    boolean clear(int x, int y, int z, int dx, int dy)
     {
         return straightOpen(x, y, z, dx, dy) && !door(x, y, z, dx, dy);
     }
@@ -262,7 +262,7 @@ public final class CollisionMap
         return (dx == 1 || dx == -1 || dy == 1 || dy == -1) && crosses(x, y, z, dx, dy, DOOR_N, DOOR_E);
     }
 
-    private boolean crosses(int x, int y, int z, int dx, int dy, int north, int east)
+    boolean crosses(int x, int y, int z, int dx, int dy, int north, int east)
     {
         return dx == 1 ? edge(x, y, z, east) : dx == -1 ? edge(x - 1, y, z, east)
             : dy == 1 ? edge(x, y, z, north) : edge(x, y - 1, z, north);
@@ -292,7 +292,7 @@ public final class CollisionMap
         return open >= 0 ? open : plain;
     }
 
-    private int nearest(int x, int y, int z, int radius, int awayX, int awayY, IntPredicate avoid)
+    int nearest(int x, int y, int z, int radius, int awayX, int awayY, IntPredicate avoid)
     {
         for (int r = 0; r <= radius; r++)
         {

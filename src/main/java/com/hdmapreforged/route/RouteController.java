@@ -1,5 +1,7 @@
 package com.hdmapreforged.route;
 
+import static com.hdmapreforged.route.Tiles.*;
+
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
@@ -24,38 +26,38 @@ public final class RouteController
     /** Tiles from the route before the player counts as having left it: 10 away, as Shortest Path. */
     public static final int STRAY = 9;
 
-    private final Executor searches;
-    private final Executor callbacks;
-    private final Pathfinder pathfinder;
+    final Executor searches;
+    final Executor callbacks;
+    final Pathfinder pathfinder;
     /** Builds a search for a target, or null when there is no start. */
-    private final IntFunction<RouteRequest> requests;
-    private final Consumer<RouteController> changed;
-    private final LongSupplier clock;
+    final IntFunction<RouteRequest> requests;
+    final Consumer<RouteController> changed;
+    final LongSupplier clock;
 
-    private int target = -1;
-    private Route route;
+    int target = -1;
+    Route route;
     /** What the route's search was asked; whether it was an automatic search asked the same ways as the one before. */
-    private RouteRequest asked;
-    private boolean moved;
-    private AtomicBoolean running;
+    RouteRequest asked;
+    boolean moved;
+    AtomicBoolean running;
     /** A user search asked for while another ran; started when that one ends. */
-    private boolean pendingUser;
-    private int automatic;
-    private long backoff = FIRST_BACKOFF_MS;
-    private long nextAutomatic;
+    boolean pendingUser;
+    int automatic;
+    long backoff = FIRST_BACKOFF_MS;
+    long nextAutomatic;
     /** Where the player was when an automatic search was last thought of, and the tick before; -1 none. */
-    private int searchedAt = -1;
-    private int lastPlayer = -1;
+    int searchedAt = -1;
+    int lastPlayer = -1;
     /**
      * A search that tried everything without getting there, and what it was asked: from anywhere it reached, the
      * target stays out of reach while the same ways may be used.
      */
-    private Route unreachable;
-    private RouteRequest unreachableAsked;
-    private String status;
+    Route unreachable;
+    RouteRequest unreachableAsked;
+    String status;
     /** A search could not start for want of a position, and when to try again. */
-    private boolean noStart;
-    private long nextStartTry;
+    boolean noStart;
+    long nextStartTry;
 
     public void setTarget(int target)
     {
@@ -89,7 +91,7 @@ public final class RouteController
         changed.accept(this);
     }
 
-    private void cancelRunning()
+    void cancelRunning()
     {
         if (running != null)
         {
@@ -109,7 +111,7 @@ public final class RouteController
         }
     }
 
-    private void userAction()
+    void userAction()
     {
         unreachable = null;
         unreachableAsked = null;
@@ -120,7 +122,7 @@ public final class RouteController
     }
 
     /** Automatic searches may start at once again, and wait as for the first. */
-    private void freshWaits()
+    void freshWaits()
     {
         automatic = 0;
         backoff = FIRST_BACKOFF_MS;
@@ -170,7 +172,7 @@ public final class RouteController
         }
         searchedAt = player;
         nextAutomatic = now + backoff;
-        RouteRequest request = requests.apply(target);
+        var request = requests.apply(target);
         if (request != null && unreachableFrom(request))
         {
             // Out of reach from here with these ways (proved): looked at again after the wait, not searched.
@@ -182,7 +184,7 @@ public final class RouteController
     }
 
     /** Whether a search that tried everything reached where this one would start, with the same ways. */
-    private boolean unreachableFrom(RouteRequest request)
+    boolean unreachableFrom(RouteRequest request)
     {
         return unreachable != null && unreachableAsked.sameWays(request)
             && unreachable.reached(pathfinder.startNode(request.start));
@@ -193,14 +195,14 @@ public final class RouteController
     /** Within {@link #ARRIVED} tiles of the route's end (or the tile asked for), on the same floor. */
     public boolean arrived(int player)
     {
-        if (player < 0 || route == null || Tiles.isSea(player))
+        if (player < 0 || route == null || isSea(player))
         {
             return false;
         }
         // A route that cannot get there ends where it gets stuck: no arrival.
         int end = route.outcome != Route.Outcome.FOUND ? -1 : route.end >= 0 ? route.end : target;
-        return end >= 0 && Tiles.z(end) == Tiles.z(player) && Tiles.distance(player, end) <= ARRIVED
-            || target >= 0 && Tiles.z(target) == Tiles.z(player) && Tiles.distance(player, target) <= ARRIVED;
+        return end >= 0 && z(end) == z(player) && distance(player, end) <= ARRIVED
+            || target >= 0 && z(target) == z(player) && distance(player, target) <= ARRIVED;
     }
 
     boolean onRoute(int player)
@@ -210,7 +212,7 @@ public final class RouteController
         {
             return true;
         }
-        for (Route.Step step : route.steps)
+        for (var step : route.steps)
         {
             if (step.isJump())
             {
@@ -222,7 +224,7 @@ public final class RouteController
             }
             for (int point : step.points)
             {
-                if (near(player, point, Tiles.isSea(point) ? STRAY + Tiles.CELL : STRAY))
+                if (near(player, point, isSea(point) ? STRAY + CELL : STRAY))
                 {
                     return true;
                 }
@@ -231,13 +233,13 @@ public final class RouteController
         return false;
     }
 
-    private static boolean near(int a, int b, int radius)
+    static boolean near(int a, int b, int radius)
     {
-        boolean sea = Tiles.isSea(a) || Tiles.isSea(b);
-        return (sea || Tiles.z(a) == Tiles.z(b)) && Tiles.distance(a, b) <= radius;
+        boolean sea = isSea(a) || isSea(b);
+        return (sea || z(a) == z(b)) && distance(a, b) <= radius;
     }
 
-    private void start(boolean user)
+    void start(boolean user)
     {
         if (running != null)
         {
@@ -252,7 +254,7 @@ public final class RouteController
         start(requests.apply(target), user);
     }
 
-    private void start(RouteRequest request, boolean user)
+    void start(RouteRequest request, boolean user)
     {
         noStart = request == null;
         if (request == null)
@@ -261,7 +263,7 @@ public final class RouteController
             changed.accept(this);
             return;
         }
-        AtomicBoolean cancel = new AtomicBoolean();
+        var cancel = new AtomicBoolean();
         running = cancel;
         int searched = target;
         try
@@ -274,7 +276,7 @@ public final class RouteController
                 }
                 catch (Throwable e)
                 {
-                    log.warn("Route search to {} failed", Tiles.format(searched), e);
+                    log.warn("Route search to {} failed", format(searched), e);
                 }
                 finally
                 {
@@ -290,7 +292,7 @@ public final class RouteController
         }
     }
 
-    private void finished(AtomicBoolean search, int searched, RouteRequest request, boolean user, Route result)
+    void finished(AtomicBoolean search, int searched, RouteRequest request, boolean user, Route result)
     {
         if (running == search)
         {

@@ -1,5 +1,8 @@
 package com.hdmapreforged;
 
+import static java.util.Locale.ROOT;
+import static com.hdmapreforged.PoiType.*;
+
 import com.hdmapreforged.route.*;
 import java.io.*;
 import java.util.*;
@@ -14,12 +17,12 @@ import net.runelite.api.coords.*;
 @RequiredArgsConstructor
 final class RouteSource
 {
-    private static final int SNAP = 5;
-    private static final int DOCK_REACH = 18;
-    private static final int PORT_RADIUS = 24;
+    static final int SNAP = 5;
+    static final int DOCK_REACH = 18;
+    static final int PORT_RADIUS = 24;
     /** How far from its dock a port's boat lies, at most (Port Piscarilius: 34 tiles). */
-    private static final int BOAT_REACH = 40;
-    private static final Pattern SAILING = Pattern.compile("(\\d+)\\s+Sailing", Pattern.CASE_INSENSITIVE);
+    static final int BOAT_REACH = 40;
+    static final Pattern SAILING = Pattern.compile("(\\d+)\\s+Sailing", Pattern.CASE_INSENSITIVE);
 
     @RequiredArgsConstructor
     static final class Options
@@ -82,19 +85,19 @@ final class RouteSource
     }
 
     /** How near a dock a shipwright, or a port where one's boat may lie, must be to count as there. */
-    private static final int SHIPWRIGHT_REACH = 40;
+    static final int SHIPWRIGHT_REACH = 40;
 
-    private final CollisionMap map;
-    private final SeaMap sea;
+    final CollisionMap map;
+    final SeaMap sea;
     /** The planner's passages that are Agility shortcuts ({@link Pathfinder#shortcutPassages()}). */
-    private final List<ShortcutPassage> shortcuts;
+    final List<ShortcutPassage> shortcuts;
     /**
      * {@link Pathfinder#pocket}: a jump's end snaps to open ground, not a shut-in tile beside it, from which no route goes
      * on (Tal Teklan's quetzal, several fairy rings).
      */
-    private final IntPredicate pocket;
+    final IntPredicate pocket;
     /** The game's item names, for what a step lacks ("3200 × Coins"); null: "items you do not have". */
-    private volatile IntFunction<String> itemNames;
+    volatile IntFunction<String> itemNames;
 
     void itemNames(IntFunction<String> names)
     {
@@ -109,9 +112,9 @@ final class RouteSource
         if (options.sailing && !options.sailToLand && !Tiles.isSea(target) && !(start >= 0 && Tiles.isSea(start)))
         {
             // A place on land: walk; the boat only when walking does not get there.
-            RouteRequest walking = request(start, target, pois, unlocks, state, options.withSailing(false, false),
+            var walking = request(start, target, pois, unlocks, state, options.withSailing(false, false),
                 nodeLimit);
-            RouteRequest sailing = request(start, target, pois, unlocks, state, options.withSailing(true, true),
+            var sailing = request(start, target, pois, unlocks, state, options.withSailing(true, true),
                 nodeLimit);
             return walking == null || sailing == null ? sailing : new RouteRequest(walking.start, walking.target,
                 walking.startEdges, walking.edges, walking.sailingLevel, walking.running, walking.nodeLimit,
@@ -127,11 +130,11 @@ final class RouteSource
         {
             state = state.with(ItemSnapshot.EVERYTHING, state.sailingLevel, state.sailing);
         }
-        List<Edge> startEdges = new ArrayList<>();
-        List<Edge> edges = new ArrayList<>();
-        Map<String, Poi> teleportsByName = new HashMap<>();
-        Set<WorldPoint> notGrown = new HashSet<>();
-        for (Poi poi : Poi.flatten(pois))
+        var startEdges = new ArrayList<Edge>();
+        var edges = new ArrayList<Edge>();
+        var teleportsByName = new HashMap<String, Poi>();
+        var notGrown = new HashSet<WorldPoint>();
+        for (var poi : Poi.flatten(pois))
         {
             if (notPlanted(poi))
             {
@@ -139,20 +142,20 @@ final class RouteSource
             }
         }
         call.notGrown = notGrown;
-        for (Poi poi : Poi.flatten(pois))
+        for (var poi : Poi.flatten(pois))
         {
-            if (poi.type == PoiType.TELEPORT)
+            if (poi.type == TELEPORT)
             {
-                for (Poi member : poi.members())
+                for (var member : poi.members())
                 {
-                    teleportsByName.putIfAbsent(member.name.toLowerCase(Locale.ROOT), member);
+                    teleportsByName.putIfAbsent(member.name.toLowerCase(ROOT), member);
                     if (options.teleports)
                     {
                         teleport(call, member, unlocks, state, startEdges, edges);
                     }
                 }
             }
-            else if (poi.type == PoiType.MOORING)
+            else if (poi.type == MOORING)
             {
                 if (options.sailing)
                 {
@@ -172,7 +175,7 @@ final class RouteSource
         }
         // In an area whose way out leads back to where one came from (the Rune essence mine, the Shipyard): its exits,
         // there, when the player was seen coming in.
-        ReturnAreas.Area back = start >= 0 ? ReturnAreas.at(start) : null;
+        var back = start >= 0 ? ReturnAreas.at(start) : null;
         if (back != null && state.returnExit >= 0)
         {
             for (int exit : back.exits)
@@ -205,7 +208,7 @@ final class RouteSource
         return new RouteRequest(start, target, startEdges, edges, level, state.running, nodeLimit, options.avoidWilderness);
     }
 
-    private static final class Call
+    static final class Call
     {
         final Set<String> avoiding;
         final Saving saving;
@@ -240,7 +243,7 @@ final class RouteSource
     }
 
     @RequiredArgsConstructor
-    private static final class Gate
+    static final class Gate
     {
         final WorldPoint from;
         final WorldPoint to;
@@ -250,7 +253,7 @@ final class RouteSource
 
     /** A way between two seas that sailing alone does not join (sea_passages.tsv): a sea cave. */
     @RequiredArgsConstructor
-    private static final class SeaPassage
+    static final class SeaPassage
     {
         final int fromX;
         final int fromY;
@@ -262,16 +265,16 @@ final class RouteSource
     }
 
     /** Read once per route.zip, so the unlocks' per-requirement cache hits. */
-    private static final RouteFiles.Table<List<Gate>> GATES = new RouteFiles.Table<>(RouteSource::readGates);
-    private static final RouteFiles.Table<List<SeaPassage>> SEA_PASSAGES =
+    static final RouteFiles.Table<List<Gate>> GATES = new RouteFiles.Table<>(RouteSource::readGates);
+    static final RouteFiles.Table<List<SeaPassage>> SEA_PASSAGES =
         new RouteFiles.Table<>(RouteSource::readSeaPassages);
     /** The needs of the bundled gates and shortcuts, whose quests and varbits the requirements read must watch too. */
     static List<Needs> fixedNeeds()
     {
-        List<Needs> needs = new ArrayList<>();
+        var needs = new ArrayList<Needs>();
         GATES.get().forEach(gate -> needs.add(gate.needs));
         SEA_PASSAGES.get().forEach(passage -> needs.add(passage.needs));
-        for (String[] way : ShortcutPassage.allWays())
+        for (var way : ShortcutPassage.allWays())
         {
             needs.add(new Needs(way[0], way[1], way[2], way[3]));
         }
@@ -279,9 +282,9 @@ final class RouteSource
     }
 
     /** Where to stand at each bank (banks.tsv): by its icon's tile, the tiles beside its booths, nearest the icon first. */
-    private static final RouteFiles.Table<Map<Integer, int[]>> BANKS = new RouteFiles.Table<>(() -> {
-        Map<Integer, List<Integer>> banks = new LinkedHashMap<>();
-        for (String[] cells : Pathfinder.rows("/com/hdmapreforged/route/banks.tsv"))
+    static final RouteFiles.Table<Map<Integer, int[]>> BANKS = new RouteFiles.Table<>(() -> {
+        var banks = new LinkedHashMap<Integer, List<Integer>>();
+        for (var cells : Pathfinder.rows("/com/hdmapreforged/route/banks.tsv"))
         {
             int icon = cells.length < 2 ? -1 : Tiles.parse(cells[0]);
             int stand = icon < 0 ? -1 : Tiles.parse(cells[1]);
@@ -290,7 +293,7 @@ final class RouteSource
                 banks.computeIfAbsent(icon, k -> new ArrayList<>()).add(stand);
             }
         }
-        Map<Integer, int[]> stands = new HashMap<>();
+        var stands = new HashMap<Integer, int[]>();
         banks.forEach((icon, list) -> stands.put(icon, list.stream().mapToInt(Integer::intValue).toArray()));
         return stands;
     });
@@ -298,14 +301,14 @@ final class RouteSource
     /** Where to stand to use the bank whose icon is at {@code icon}: by each of its booths, else the icon itself. */
     static int[] bankStands(int icon)
     {
-        int[] stands = BANKS.get().get(icon);
+        var stands = BANKS.get().get(icon);
         return stands != null ? stands : new int[]{icon};
     }
 
     /** Where a boat can lie: the game's ports. */
-    private static final RouteFiles.Table<int[]> PORTS = new RouteFiles.Table<>(RouteSource::readPorts);
+    static final RouteFiles.Table<int[]> PORTS = new RouteFiles.Table<>(RouteSource::readPorts);
 
-    private static int[] readPorts()
+    static int[] readPorts()
     {
         try
         {
@@ -318,13 +321,13 @@ final class RouteSource
     }
 
     /** gates.tsv by column: Name, Origin, Destination, Skills, Items, Quests, Varbits; {@code #} lines are comments. */
-    private static List<Gate> readGates()
+    static List<Gate> readGates()
     {
-        List<Gate> gates = new ArrayList<>();
-        for (String[] cells : Pathfinder.rows("/com/hdmapreforged/route/gates.tsv"))
+        var gates = new ArrayList<Gate>();
+        for (var cells : Pathfinder.rows("/com/hdmapreforged/route/gates.tsv"))
         {
-            WorldPoint from = point(cell(cells, 1));
-            WorldPoint to = point(cell(cells, 2));
+            var from = point(cell(cells, 1));
+            var to = point(cell(cells, 2));
             if (from != null && to != null)
             {
                 gates.add(new Gate(from, to, cell(cells, 0), new Needs(cell(cells, 3), cell(cells, 4), cell(cells, 5),
@@ -335,15 +338,15 @@ final class RouteSource
     }
 
     /** sea_passages.tsv by column: from x y, to x y, Name, Quests, Note; {@code #} lines are comments. */
-    private static List<SeaPassage> readSeaPassages()
+    static List<SeaPassage> readSeaPassages()
     {
-        List<SeaPassage> passages = new ArrayList<>();
-        for (String[] cells : Pathfinder.rows("/com/hdmapreforged/route/sea_passages.tsv"))
+        var passages = new ArrayList<SeaPassage>();
+        for (var cells : Pathfinder.rows("/com/hdmapreforged/route/sea_passages.tsv"))
         {
             try
             {
-                int[] from = Pathfinder.ints(cell(cells, 0));
-                int[] to = Pathfinder.ints(cell(cells, 1));
+                var from = Pathfinder.ints(cell(cells, 0));
+                var to = Pathfinder.ints(cell(cells, 1));
                 passages.add(new SeaPassage(from[0], from[1], to[0], to[1], cell(cells, 2),
                     new Needs("", "", cell(cells, 3), ""), cell(cells, 4)));
             }
@@ -355,15 +358,15 @@ final class RouteSource
         return Collections.unmodifiableList(passages);
     }
 
-    private static String cell(String[] cells, int column)
+    static String cell(String[] cells, int column)
     {
         return column < cells.length ? cells[column].trim() : "";
     }
 
     /** {@code "x y plane"}, or null. */
-    private static WorldPoint point(String cell)
+    static WorldPoint point(String cell)
     {
-        String[] parts = cell.split("\\s+");
+        var parts = cell.split("\\s+");
         try
         {
             return parts.length != 3 ? null
@@ -375,9 +378,9 @@ final class RouteSource
         }
     }
 
-    private static final Pattern ACTION = Pattern.compile("(Open|Enter|Exit|Climb|Travel|Pass|Cross|Go|Jump|Walk|Teleport|Use|Squeeze|Board|Ride|Crawl|Descend|Teeth-grip|Mine|Dig|Grapple|Search|Push|Move|Swing)\\b");
+    static final Pattern ACTION = Pattern.compile("(Open|Enter|Exit|Climb|Travel|Pass|Cross|Go|Jump|Walk|Teleport|Use|Squeeze|Board|Ride|Crawl|Descend|Teeth-grip|Mine|Dig|Grapple|Search|Push|Move|Swing)\\b");
 
-    private void gates(Call call, Unlocks unlocks, PlayerState state, List<Edge> into)
+    void gates(Call call, Unlocks unlocks, PlayerState state, List<Edge> into)
     {
         for (Gate gate : GATES.get())
         {
@@ -398,9 +401,9 @@ final class RouteSource
     }
 
     /** The sea caves and the like (sea_passages.tsv) between blocks of sea the player's boat can sail. */
-    private void seaPassages(Call call, Unlocks unlocks, PlayerState state, List<Edge> into)
+    void seaPassages(Call call, Unlocks unlocks, PlayerState state, List<Edge> into)
     {
-        for (SeaPassage passage : SEA_PASSAGES.get())
+        for (var passage : SEA_PASSAGES.get())
         {
             int from = Tiles.seaAt(passage.fromX, passage.fromY);
             int to = Tiles.seaAt(passage.toX, passage.toY);
@@ -416,12 +419,12 @@ final class RouteSource
         }
     }
 
-    private void shortcuts(Call call, Unlocks unlocks, PlayerState state, List<Edge> into)
+    void shortcuts(Call call, Unlocks unlocks, PlayerState state, List<Edge> into)
     {
-        for (ShortcutPassage passage : shortcuts)
+        for (var passage : shortcuts)
         {
             // Any of its ways the player meets: with a grapple, or bare-handed at a higher level.
-            for (String[] way : passage.ways)
+            for (var way : passage.ways)
             {
                 Needs needs = new Needs(way[0], way[1], way[2], way[3]);
                 if (usable(unlocks, needs) && state.items.has(needs.items))
@@ -436,37 +439,37 @@ final class RouteSource
 
     // Obelisks only with the Hard Wilderness Diary, which their stops need (it lets one choose where they lead; without
     // it they lead to a random other obelisk). Not entrances (map links, in Pathfinder, not our icons).
-    private static final Set<PoiType> TRANSPORTS = EnumSet.of(PoiType.FAIRY_RING, PoiType.SPIRIT_TREE,
-        PoiType.GNOME_GLIDER, PoiType.BALLOON, PoiType.QUETZAL, PoiType.MUSHTREE, PoiType.OBELISK, PoiType.BOAT,
-        PoiType.CHARTER, PoiType.CANOE, PoiType.CARPET, PoiType.MINECART, PoiType.PORTAL, PoiType.LEVER,
-        PoiType.TRANSPORT, PoiType.AGILITY_SHORTCUT);
+    static final Set<PoiType> TRANSPORTS = EnumSet.of(FAIRY_RING, SPIRIT_TREE,
+        GNOME_GLIDER, BALLOON, QUETZAL, MUSHTREE, OBELISK, BOAT,
+        CHARTER, CANOE, CARPET, MINECART, PORTAL, LEVER,
+        TRANSPORT, AGILITY_SHORTCUT);
 
     static boolean isTransport(PoiType type)
     {
         return TRANSPORTS.contains(type);
     }
 
-    private boolean usable(Unlocks unlocks, Needs needs)
+    boolean usable(Unlocks unlocks, Needs needs)
     {
         return unlocks == null || unlocks.usable(needs);
     }
 
-    private boolean walkable(WorldPoint point)
+    boolean walkable(WorldPoint point)
     {
         return map.walkable(point.getX(), point.getY(), point.getPlane());
     }
 
-    private static int pack(WorldPoint point)
+    static int pack(WorldPoint point)
     {
         return Tiles.pack(point.getX(), point.getY(), point.getPlane());
     }
 
-    private int snap(WorldPoint point)
+    int snap(WorldPoint point)
     {
         return snap(point, point);
     }
 
-    private int snap(WorldPoint point, WorldPoint other)
+    int snap(WorldPoint point, WorldPoint other)
     {
         long key = (long) pack(point) << 32 | pack(other) & 0xffffffffL;
         // A spot one can stand on is where the game puts one, also in ground shut in but for the jump itself (the fairy
@@ -479,7 +482,7 @@ final class RouteSource
      * A teleport from anywhere ({@code into}); in a house a minigame teleport only from outside its portal
      * ({@code edges}): the game does not let one cast it in a player-owned house.
      */
-    private void teleport(Call call, Poi member, Unlocks unlocks, PlayerState state, List<Edge> into, List<Edge> edges)
+    void teleport(Call call, Poi member, Unlocks unlocks, PlayerState state, List<Edge> into, List<Edge> edges)
     {
         if (HouseTracker.isTemplate(member.location.getX(), member.location.getY())
             || !usable(unlocks, member.needs) || !state.items.has(member.needs.items)
@@ -495,7 +498,7 @@ final class RouteSource
         {
             return;
         }
-        String name = member.name.toLowerCase(Locale.ROOT);
+        String name = member.name.toLowerCase(ROOT);
         String category = member.group != null && !member.group.isEmpty() ? member.group : "Teleports";
         boolean once = onceOnly(name, member.group);
         if (call.avoiding.contains(name) || call.avoiding.contains(typeKey(category))
@@ -511,12 +514,12 @@ final class RouteSource
             return;
         }
         (outside ? edges : into).add(new Edge(from, to, Edge.Kind.TELEPORT, member.name,
-            detail(call, unlocks, PoiType.TELEPORT, member.needs), teleportTime(once), category)
+            detail(call, unlocks, TELEPORT, member.needs), teleportTime(once), category)
             .weighed(call.saving.teleport + lacking));
     }
 
     /** The planted spirit trees that stand grown for this account (see {@link PlantedSpiritTrees}). */
-    private volatile Set<String> plantedTrees = Collections.emptySet();
+    volatile Set<String> plantedTrees = Collections.emptySet();
 
     void plantedSpiritTrees(Set<String> grown)
     {
@@ -524,12 +527,12 @@ final class RouteSource
     }
 
     /** A planted spirit tree's stop the player has no grown tree at: not travelled from or to. */
-    private boolean notPlanted(Poi poi)
+    boolean notPlanted(Poi poi)
     {
         return PlantedSpiritTrees.planted(poi) && !plantedTrees.contains(poi.name);
     }
 
-    private void transport(Call call, Poi poi, Unlocks unlocks, PlayerState state, List<Edge> into)
+    void transport(Call call, Poi poi, Unlocks unlocks, PlayerState state, List<Edge> into)
     {
         if (notPlanted(poi))
         {
@@ -537,17 +540,17 @@ final class RouteSource
         }
         // Only what is carried: a route never fetches an item (a fare's coins, a fairy ring's staff) from the bank.
         // (The bank only as a way past it first: BankDetour, a setting.)
-        boolean exactEnds = poi.type == PoiType.AGILITY_SHORTCUT && walkable(poi.location);
+        boolean exactEnds = poi.type == AGILITY_SHORTCUT && walkable(poi.location);
         if (!usable(unlocks, poi.needs) || !carried(unlocks, state, poi.type, poi.needs)
             || !exactEnds && snap(poi.location) < 0)
         {
             return;
         }
-        Edge.Kind kind = kind(poi.type);
-        for (Poi.Link link : poi.links())
+        var kind = kind(poi.type);
+        for (var link : poi.links())
         {
             if (!usable(unlocks, link.needs) || !carried(unlocks, state, poi.type, link.needs)
-                || poi.type == PoiType.SPIRIT_TREE && call.notGrown.contains(link.point))
+                || poi.type == SPIRIT_TREE && call.notGrown.contains(link.point))
             {
                 continue;
             }
@@ -555,7 +558,7 @@ final class RouteSource
             boolean sameFloor = link.point.getPlane() == poi.location.getPlane();
             // A shortcut's ends are its two sides as given: kept where walkable, also inside ground shut in but for
             // shortcuts and gates (Gu'Tanoth behind its crumbling wall), which a snap would leave for open ground.
-            boolean exact = poi.type == PoiType.AGILITY_SHORTCUT;
+            boolean exact = poi.type == AGILITY_SHORTCUT;
             int from = exact && walkable(poi.location) ? pack(poi.location)
                 : sameFloor ? snap(poi.location, link.point) : snap(poi.location);
             int to = exact && walkable(link.point) ? pack(link.point)
@@ -566,13 +569,13 @@ final class RouteSource
             }
             String name = describe(poi, link);
             // A shortcut left out before 0.3.2 was saved with its other side ("… → other side").
-            if (call.avoiding.contains(name.toLowerCase(Locale.ROOT))
-                || call.avoiding.contains(typeKey(poi.type.displayName)) || poi.type == PoiType.AGILITY_SHORTCUT
-                && link.label != null && call.avoiding.contains((name + " → " + link.label).toLowerCase(Locale.ROOT)))
+            if (call.avoiding.contains(name.toLowerCase(ROOT))
+                || call.avoiding.contains(typeKey(poi.type.displayName)) || poi.type == AGILITY_SHORTCUT
+                && link.label != null && call.avoiding.contains((name + " → " + link.label).toLowerCase(ROOT)))
             {
                 continue;
             }
-            Fees.Fee fee = Fees.at(poi.location.getX(), poi.location.getY(), poi.location.getPlane());
+            var fee = Fees.at(poi.location.getX(), poi.location.getY(), poi.location.getPlane());
             String needs = detail(call, unlocks, poi.type, link.needs);
             if (fee != null)
             {
@@ -589,10 +592,10 @@ final class RouteSource
 
     static String typeKey(String category)
     {
-        return TYPE + category.toLowerCase(Locale.ROOT);
+        return TYPE + category.toLowerCase(ROOT);
     }
 
-    private static String describe(Poi poi, Poi.Link link)
+    static String describe(Poi poi, Poi.Link link)
     {
         String label = link.label == null || link.label.isEmpty() ? null : link.label;
         switch (poi.type)
@@ -612,13 +615,13 @@ final class RouteSource
      * A fairy ring by the code one dials ("BIP"), not its whole title; codes dialled one after another ("AIR-DLR-DJQ-AJS",
      * the Fairy Resistance Hideout) as "AIR, DLR, DJQ, then AJS".
      */
-    private static String code(PoiType type, String name)
+    static String code(PoiType type, String name)
     {
-        int dash = type == PoiType.FAIRY_RING ? name.indexOf(" – ") : -1;
+        int dash = type == FAIRY_RING ? name.indexOf(" – ") : -1;
         String code = dash < 0 ? name : name.substring(0, dash);
-        if (type == PoiType.FAIRY_RING && code.matches("[A-Z]{3}(-[A-Z]{3})+"))
+        if (type == FAIRY_RING && code.matches("[A-Z]{3}(-[A-Z]{3})+"))
         {
-            String[] codes = code.split("-");
+            var codes = code.split("-");
             return String.join(", ", Arrays.copyOf(codes, codes.length - 1)) + ", then " + codes[codes.length - 1];
         }
         return code;
@@ -627,7 +630,7 @@ final class RouteSource
     /** How many rings one goes through to a stop: the codes of a sequence ("AIR-DLR-DJQ-AJS"), else one. */
     static int dials(PoiType type, String name)
     {
-        if (type != PoiType.FAIRY_RING || name == null)
+        if (type != FAIRY_RING || name == null)
         {
             return 1;
         }
@@ -665,7 +668,7 @@ final class RouteSource
     static boolean onceOnly(Route.Step step)
     {
         return step.kind == Route.Step.Kind.TELEPORT && step.name != null
-            && onceOnly(step.name.toLowerCase(Locale.ROOT), step.category);
+            && onceOnly(step.name.toLowerCase(ROOT), step.category);
     }
 
     /**
@@ -716,7 +719,7 @@ final class RouteSource
      * A dock: leaving the boat needs its Sailing level; boarding needs the boat there, a shipwright to bring it, or a
      * port when no boat's port is known. {@code onBoat}: the route starts at sea on the boat, so it lies at no dock.
      */
-    private void mooring(Call call, Poi poi, Unlocks unlocks, PlayerState state, Options options, boolean onBoat, List<Edge> into)
+    void mooring(Call call, Poi poi, Unlocks unlocks, PlayerState state, Options options, boolean onBoat, List<Edge> into)
     {
         if (!state.sailing || state.sailingLevel < level(poi.needs) || !usable(unlocks, poi.needs))
         {
@@ -768,7 +771,7 @@ final class RouteSource
         into.add(new Edge(land, water, Edge.Kind.BOARD, name, lacking != null || hint == null ? lacking : hint, cost));
     }
 
-    private static String dockLevel(Poi poi)
+    static String dockLevel(Poi poi)
     {
         int level = level(poi.needs);
         return level > 1 ? " (" + level + " Sailing)" : "";
@@ -778,11 +781,11 @@ final class RouteSource
      * The boat spells (standard spellbook): Summon Boat brings a boat with a teleport focus to the dock one stands at,
      * Teleport to Boat takes one to a boat with the greater focus.
      */
-    private static final Needs SUMMON_BOAT = new Needs("56 Magic", "557=1&&555=1&&563=2", "", "4070=0");
-    private static final Needs TELEPORT_TO_BOAT = new Needs("67 Magic", "557=2&&555=2&&563=2", "", "4070=0");
+    static final Needs SUMMON_BOAT = new Needs("56 Magic", "557=1&&555=1&&563=2", "", "4070=0");
+    static final Needs TELEPORT_TO_BOAT = new Needs("67 Magic", "557=2&&555=2&&563=2", "", "4070=0");
 
     /** How the player casts a boat spell now: its tablet (item id), the spell itself, or null when neither. */
-    private String boatSpell(Unlocks unlocks, PlayerState state, Needs spell, String tablet, String tabletName)
+    String boatSpell(Unlocks unlocks, PlayerState state, Needs spell, String tablet, String tabletName)
     {
         if (state.items.has(tablet))
         {
@@ -792,7 +795,7 @@ final class RouteSource
     }
 
     /** To each boat with the greater teleport focus: by the Sailing cape, a tablet or the spell, when the player can. */
-    private void teleportToBoat(Unlocks unlocks, PlayerState state, List<Edge> into)
+    void teleportToBoat(Unlocks unlocks, PlayerState state, List<Edge> into)
     {
         String means = !state.sailing ? null : state.items.has("31288||31290") ? "Sailing cape"
             : boatSpell(unlocks, state, TELEPORT_TO_BOAT, "31443", "Teleport to boat tablet");
@@ -813,7 +816,7 @@ final class RouteSource
      */
     static boolean carried(Unlocks unlocks, PlayerState state, PoiType type, Needs needs)
     {
-        return state.items.has(needs.items) || type == PoiType.FAIRY_RING && unlocks != null && unlocks.lumbridgeElite();
+        return state.items.has(needs.items) || type == FAIRY_RING && unlocks != null && unlocks.lumbridgeElite();
     }
 
     static int level(Needs needs)
@@ -823,21 +826,21 @@ final class RouteSource
     }
 
     /** The fallback takes a teleport whose item the player lacks only as a last resort (else all of it would be red). */
-    private static int lacking(Call call, Needs needs)
+    static int lacking(Call call, Needs needs)
     {
         return call.fallback && call.missingItems != null && !needs.items.isEmpty()
             && !call.missingItems.has(needs.items) ? LACKING_ITEM : 0;
     }
 
-    private static boolean stairs(String thing)
+    static boolean stairs(String thing)
     {
         return HouseTracker.feature(thing) == null && !thing.equals("Portal") && !thing.startsWith(NEXUS);
     }
 
     /** Into one's own house, best first: the capes cost nothing. */
-    private static final String[] INTO_HOUSE = {"Construction cape: Tele to POH", "Max cape: Home", "Teleport to House",
+    static final String[] INTO_HOUSE = {"Construction cape: Tele to POH", "Max cape: Home", "Teleport to House",
         "Teleport to house tablet"};
-    private static final Needs[] INTO_HOUSE_NEEDS = {new Needs("", "9789||9790", "", ""),
+    static final Needs[] INTO_HOUSE_NEEDS = {new Needs("", "9789||9790", "", ""),
         new Needs("", "13280||13342", "", ""), new Needs("40 Magic", "563=1&&556=1&&557=1", "", "4070=0"),
         new Needs("", "8013", "", "")};
 
@@ -846,18 +849,18 @@ final class RouteSource
      * teleport in to its arrival; else, in the house, the route starts with them, and from outside a teleport in or
      * its portal leads to them at once.
      */
-    private void house(Call call, List<Poi> pois, Unlocks unlocks, PlayerState state, Map<String, Poi> teleports,
+    void house(Call call, List<Poi> pois, Unlocks unlocks, PlayerState state, Map<String, Poi> teleports,
         List<Edge> starts, List<Edge> edges)
     {
-        HousePlan plan = state.inHouse && !state.ownHouse ? null : map.house();
-        List<Edge> into = new ArrayList<>();
-        WorldPoint portal = state.houseExit < 0 ? null
+        var plan = state.inHouse && !state.ownHouse ? null : map.house();
+        var into = new ArrayList<Edge>();
+        var portal = state.houseExit < 0 ? null
             : new WorldPoint(Tiles.x(state.houseExit), Tiles.y(state.houseExit), 0);
         if (state.inHouse && portal != null && (plan == null || !plan.things.containsValue("Portal")))
         {
             addHouse(into, portal, "Leave the house by its portal", 6);
         }
-        Set<String> placed = new HashSet<>();
+        var placed = new HashSet<String>();
         if (plan != null)
         {
             plan.things.forEach((node, name) -> {
@@ -865,7 +868,7 @@ final class RouteSource
                 int y = Tiles.y(node);
                 int z = Tiles.z(node);
                 int at = plan.approach(node);
-                List<Edge> out = new ArrayList<>();
+                var out = new ArrayList<Edge>();
                 List<String> features = name.startsWith(NEXUS) ? new ArrayList<>()
                     : new ArrayList<>(Collections.singletonList(HouseTracker.feature(name)));
                 for (String place : name.startsWith(NEXUS + ": ") ? name.substring(NEXUS.length() + 2).split(", ")
@@ -931,7 +934,7 @@ final class RouteSource
             // Set to land outside, the capes do so; the spell and the tablet keep an option to land inside.
             if ((state.landsInside || i >= 2) && usable(unlocks, needs) && state.items.has(needs.items)
                 && (best < 0 || lack < lacking)
-                && !call.avoiding.contains(INTO_HOUSE[i].toLowerCase(Locale.ROOT) + (state.landsInside ? "" : " (inside)"))
+                && !call.avoiding.contains(INTO_HOUSE[i].toLowerCase(ROOT) + (state.landsInside ? "" : " (inside)"))
                 && !call.avoiding.contains(typeKey("Teleports")))
             {
                 best = i;
@@ -945,7 +948,7 @@ final class RouteSource
             if (best >= 0)
             {
                 starts.add(new Edge(Edge.ANYWHERE, plan.arrival, Edge.Kind.TELEPORT, teleport,
-                    detail(call, unlocks, PoiType.TELEPORT, INTO_HOUSE_NEEDS[best]), 10, "Teleports")
+                    detail(call, unlocks, TELEPORT, INTO_HOUSE_NEEDS[best]), 10, "Teleports")
                     .weighed(call.saving.teleport + lacking));
             }
             if (door >= 0)
@@ -959,7 +962,7 @@ final class RouteSource
             if (best >= 0)
             {
                 starts.add(new Edge(Edge.ANYWHERE, e.to, Edge.Kind.HOUSE, teleport + " → " + e.name,
-                    both(detail(call, unlocks, PoiType.TELEPORT, INTO_HOUSE_NEEDS[best]), e.detail), 10 + e.cost)
+                    both(detail(call, unlocks, TELEPORT, INTO_HOUSE_NEEDS[best]), e.detail), 10 + e.cost)
                     .weighed(call.saving.teleport + lacking));
             }
             if (door >= 0)
@@ -971,7 +974,7 @@ final class RouteSource
     }
 
     /** Two details of one step (the way into the house and what is used there): what the bank gives as one line. */
-    private static String both(String a, String b)
+    static String both(String a, String b)
     {
         String bank = BankDetour.FROM_BANK;
         if (a == null || b == null)
@@ -986,13 +989,13 @@ final class RouteSource
     static final String[] MOUNTED_NAMES = {"Mounted glory: ", "Mounted talisman: ", "Mounted pendant: "};
 
     /** Where a feature of the house ("portal:Varrock", "box:ornate", "glory", "xeric", "fairy ring") leads, from anywhere. */
-    private void ways(Call call, String feature, List<Poi> pois, Unlocks unlocks, PlayerState state,
+    void ways(Call call, String feature, List<Poi> pois, Unlocks unlocks, PlayerState state,
         Map<String, Poi> teleports, List<Edge> into)
     {
         if (feature.startsWith("portal:") || feature.startsWith("nexus:"))
         {
             String place = feature.substring(feature.indexOf(':') + 1);
-            Poi teleport = portalTeleport(place, teleports);
+            var teleport = portalTeleport(place, teleports);
             if (teleport != null)
             {
                 // Named as the portal is ("Troll Stronghold"), not as the teleport that says where it leads.
@@ -1003,11 +1006,11 @@ final class RouteSource
         else if (feature.startsWith("box:") || Arrays.asList(HouseSettings.MOUNTED).contains(feature))
         {
             int mounted = Arrays.asList(HouseSettings.MOUNTED).indexOf(feature);
-            List<String> groups = mounted >= 0 ? List.of(HouseSettings.MOUNTED_GROUPS[mounted])
+            var groups = mounted >= 0 ? List.of(HouseSettings.MOUNTED_GROUPS[mounted])
                 : new ArrayList<>(List.of("Ring of dueling", "Games necklace", "Combat bracelet", "Skills necklace",
                 "Ring of wealth", "Amulet of glory"))
                 .subList(0, feature.equals("box:basic") ? 2 : feature.equals("box:ornate") ? 6 : 4);
-            for (Poi teleport : teleports.values())
+            for (var teleport : teleports.values())
             {
                 if (teleport.group != null && groups.contains(teleport.group) && usable(unlocks, teleport.needs))
                 {
@@ -1019,25 +1022,25 @@ final class RouteSource
         if (feature.equals("obelisk"))
         {
             // As those in the Wilderness: to the obelisk one chooses, with the Hard Wilderness Diary.
-            for (Poi poi : pois)
+            for (var poi : pois)
             {
-                if (poi.type == PoiType.OBELISK && usable(unlocks, poi.needs))
+                if (poi.type == OBELISK && usable(unlocks, poi.needs))
                 {
-                    addHouse(into, poi.location, "House obelisk: " + poi.name, cost(PoiType.OBELISK));
+                    addHouse(into, poi.location, "House obelisk: " + poi.name, cost(OBELISK));
                 }
             }
         }
         if (feature.contains("fairy ring") || feature.contains("spirit tree"))
         {
-            for (Poi poi : pois)
+            for (var poi : pois)
             {
-                boolean ring = poi.type == PoiType.FAIRY_RING && feature.contains("fairy ring");
-                boolean tree = poi.type == PoiType.SPIRIT_TREE && feature.contains("spirit tree");
+                boolean ring = poi.type == FAIRY_RING && feature.contains("fairy ring");
+                boolean tree = poi.type == SPIRIT_TREE && feature.contains("spirit tree");
                 // The house's ring needs the staff as any ring does.
                 if ((ring || tree) && usable(unlocks, poi.needs) && carried(unlocks, state, poi.type, poi.needs)
                     && !notPlanted(poi))
                 {
-                    addHouse(into, poi.location, "House " + poi.type.displayName.toLowerCase(Locale.ROOT) + ": "
+                    addHouse(into, poi.location, "House " + poi.type.displayName.toLowerCase(ROOT) + ": "
                         + code(poi.type, poi.name), 10 * dials(poi.type, poi.name), bankNeeds(call, unlocks, poi.type,
                         poi.needs));
                 }
@@ -1046,22 +1049,22 @@ final class RouteSource
     }
 
     /** Portal and nexus places the spellbooks name otherwise. */
-    private static final Map<String, String> PORTAL_NAMES = Map.of("lunar isle", "moonclan", "marim",
+    static final Map<String, String> PORTAL_NAMES = Map.of("lunar isle", "moonclan", "marim",
         "ape atoll teleport (standard)", "ape atoll dungeon", "ape atoll teleport (arceuus)", "waterbirth island",
         "waterbirth", "carrallangar", "carrallanger");
 
     /** A spell starting with the place's name first, else a teleport to it by name ("Stony basalt: Troll Stronghold"). */
     static Poi portalTeleport(String place, Map<String, Poi> teleports)
     {
-        String given = place.trim().toLowerCase(Locale.ROOT);
+        String given = place.trim().toLowerCase(ROOT);
         String wanted = PORTAL_NAMES.getOrDefault(given, given);
         int bestRank = 0;
         String bestName = null;
         Poi best = null;
-        for (Map.Entry<String, Poi> entry : teleports.entrySet())
+        for (var entry : teleports.entrySet())
         {
             String name = entry.getKey();
-            Poi teleport = entry.getValue();
+            var teleport = entry.getValue();
             boolean spell = name.startsWith(wanted) && teleport.group != null && teleport.group.contains("Spellbook");
             if (!spell && !name.contains(": " + wanted))
             {
@@ -1083,12 +1086,12 @@ final class RouteSource
         return best;
     }
 
-    private void addHouse(List<Edge> into, WorldPoint point, String name, int cost)
+    void addHouse(List<Edge> into, WorldPoint point, String name, int cost)
     {
         addHouse(into, point, name, cost, null);
     }
 
-    private void addHouse(List<Edge> into, WorldPoint point, String name, int cost, String detail)
+    void addHouse(List<Edge> into, WorldPoint point, String name, int cost, String detail)
     {
         int to = snap(point);
         if (to >= 0)
@@ -1099,7 +1102,7 @@ final class RouteSource
 
     static final int LACKING_ITEM = 2000;
 
-    private static String needsText(Call call, Needs needs)
+    static String needsText(Call call, Needs needs)
     {
         if (needs.isEmpty())
         {
@@ -1109,7 +1112,7 @@ final class RouteSource
         {
             return uncheckedText(call.realUnlocks, needs);
         }
-        List<String> parts = new ArrayList<>();
+        var parts = new ArrayList<String>();
         if (call.missingLevels != null)
         {
             parts.addAll(unmetLines(call.missingLevels, needs));
@@ -1122,10 +1125,10 @@ final class RouteSource
     }
 
     /** The skill/quest lines of {@code needs} that {@code unlocks} says are not met, by their text. */
-    private static List<String> unmetLines(Unlocks unlocks, Needs needs)
+    static List<String> unmetLines(Unlocks unlocks, Needs needs)
     {
-        List<String> lines = new ArrayList<>();
-        for (Requirements.Line line : Requirements.skillsAndQuests(needs))
+        var lines = new ArrayList<String>();
+        for (var line : Requirements.skillsAndQuests(needs))
         {
             if (Boolean.FALSE.equals(unlocks.met(line)))
             {
@@ -1142,7 +1145,7 @@ final class RouteSource
         {
             return "items you do not have";
         }
-        List<String> missing = new ArrayList<>();
+        var missing = new ArrayList<String>();
         for (String all : ItemSnapshot.ALL.split(column))
         {
             if (!carried.has(all))
@@ -1150,12 +1153,12 @@ final class RouteSource
                 missing.add(all);
             }
         }
-        List<String> lines = Requirements.items(String.join("&&", missing), names);
+        var lines = Requirements.items(String.join("&&", missing), names);
         return lines.isEmpty() ? "items you do not have" : String.join(", ", lines);
     }
 
     /** A step's detail: what it needs from the bank ({@link #bankNeeds}), else {@link #needsText}. */
-    private static String detail(Call call, Unlocks unlocks, PoiType type, Needs needs)
+    static String detail(Call call, Unlocks unlocks, PoiType type, Needs needs)
     {
         String bank = bankNeeds(call, unlocks, type, needs);
         return bank != null ? bank : needsText(call, needs);
@@ -1165,10 +1168,10 @@ final class RouteSource
      * What a step needs from the bank, when the bank is counted and what is carried is not enough; else null. A fairy
      * ring needs no staff after the Lumbridge & Draynor Elite Diary.
      */
-    private static String bankNeeds(Call call, Unlocks unlocks, PoiType type, Needs needs)
+    static String bankNeeds(Call call, Unlocks unlocks, PoiType type, Needs needs)
     {
         boolean enough = call.carried == null || call.carried.has(needs.items)
-            || type == PoiType.FAIRY_RING && unlocks != null && unlocks.lumbridgeElite();
+            || type == FAIRY_RING && unlocks != null && unlocks.lumbridgeElite();
         return enough ? null : BankDetour.FROM_BANK + fromBank(call, needs.items);
     }
 
@@ -1176,14 +1179,14 @@ final class RouteSource
      * What of {@code column} only the bank has, by name: of each part not carried, the alternatives the bank holds
      * ("Dramen staff", "Law rune, Air rune ×3").
      */
-    private static String fromBank(Call call, String column)
+    static String fromBank(Call call, String column)
     {
-        List<String> parts = new ArrayList<>();
+        var parts = new ArrayList<String>();
         for (String all : ItemSnapshot.ALL.split(column))
         {
             if (!call.carried.has(all))
             {
-                List<String> held = new ArrayList<>();
+                var held = new ArrayList<String>();
                 for (String any : ItemSnapshot.ANY.split(all))
                 {
                     if (call.items.has(any))
@@ -1198,19 +1201,19 @@ final class RouteSource
         {
             return "items";
         }
-        List<String> lines = Requirements.items(String.join("&&", parts), call.itemNames);
+        var lines = Requirements.items(String.join("&&", parts), call.itemNames);
         return lines.isEmpty() ? "items" : String.join(", ", lines);
     }
 
     /** A step's requirements when not all could be checked (logged out, unknown quest or item); else null. */
-    private static String uncheckedText(Unlocks realUnlocks, Needs needs)
+    static String uncheckedText(Unlocks realUnlocks, Needs needs)
     {
-        List<Requirements.Line> lines = Requirements.skillsAndQuests(needs);
+        var lines = Requirements.skillsAndQuests(needs);
         if (lines.stream().allMatch(line -> realUnlocks != null && realUnlocks.met(line) != null))
         {
             return null;
         }
-        List<String> parts = lines.stream().map(line -> line.text).collect(Collectors.toList());
+        var parts = lines.stream().map(line -> line.text).collect(Collectors.toList());
         if (!needs.items.trim().isEmpty() && realUnlocks == null)
         {
             parts.add("items");

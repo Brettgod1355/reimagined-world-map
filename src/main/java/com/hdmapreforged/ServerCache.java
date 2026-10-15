@@ -19,14 +19,14 @@ import net.runelite.client.util.*;
 @RequiredArgsConstructor
 final class ServerCache
 {
-    private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_.-]{1,64}");
-    private static final Pattern KIND = Pattern.compile("[a-z]{1,16}");
-    private static final int MAX_BYTES = 16 * 1024 * 1024;
+    static final Pattern NAME = Pattern.compile("[A-Za-z0-9_.-]{1,64}");
+    static final Pattern KIND = Pattern.compile("[a-z]{1,16}");
+    static final int MAX_BYTES = 16 * 1024 * 1024;
 
-    private final Filepath root;
-    private final ExecutorService io;
+    final Filepath root;
+    final ExecutorService io;
     /** Each kind's version in use, whose folder alone is kept. */
-    private final Map<String, String> inUse = new ConcurrentHashMap<>();
+    final Map<String, String> inUse = new ConcurrentHashMap<>();
 
     /**
      * A file's bytes: from disk when seen before, else from {@code fetch}, which asks the server and hands the bytes
@@ -35,9 +35,9 @@ final class ServerCache
      */
     void bytes(String kind, String version, String name, Consumer<Consumer<byte[]>> fetch, Consumer<byte[]> done)
     {
-        Filepath file = file(kind, version, name);
+        var file = file(kind, version, name);
         if (file == null || !later(() -> {
-            byte[] kept = read(file);
+            var kept = read(file);
             if (kept != null)
             {
                 done.accept(kept);
@@ -58,19 +58,19 @@ final class ServerCache
     }
 
     /** Null for a name that could leave the folder. */
-    private Filepath file(String kind, String version, String name)
+    Filepath file(String kind, String version, String name)
     {
         return KIND.matcher(kind).matches() && MapServer.isSafeVersion(version) && NAME.matcher(name).matches()
             ? root.joinSegment(kind).joinSegment(version).joinSegment(name) : null;
     }
 
-    private boolean later(Runnable work)
+    boolean later(Runnable work)
     {
         return TileCache.execute(io, work);
     }
 
     /** IO thread. */
-    private static byte[] read(Filepath file)
+    static byte[] read(Filepath file)
     {
         if (!file.isFile())
         {
@@ -78,7 +78,7 @@ final class ServerCache
         }
         try (InputStream in = file.openInputStream())
         {
-            byte[] bytes = in.readNBytes(MAX_BYTES + 1);
+            var bytes = in.readNBytes(MAX_BYTES + 1);
             return bytes.length > MAX_BYTES ? null : bytes;
         }
         catch (IOException e)
@@ -89,7 +89,7 @@ final class ServerCache
     }
 
     /** IO thread. */
-    private void keep(String kind, String version, Filepath file, byte[] bytes)
+    void keep(String kind, String version, Filepath file, byte[] bytes)
     {
         prune(kind, version);
         try
@@ -103,13 +103,13 @@ final class ServerCache
     }
 
     /** IO thread: once a kind's version changes, the other versions' folders go. */
-    private void prune(String kind, String version)
+    void prune(String kind, String version)
     {
         if (version.equals(inUse.put(kind, version)))
         {
             return;
         }
-        Filepath folder = root.joinSegment(kind);
+        var folder = root.joinSegment(kind);
         if (!folder.isDirectory())
         {
             return;

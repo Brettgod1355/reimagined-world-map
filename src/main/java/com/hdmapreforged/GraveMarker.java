@@ -7,9 +7,9 @@ import net.runelite.api.coords.*;
 /** One's grave while it stands, drawn over the other icons; clicked, its card offers a route there. Swing thread. */
 final class GraveMarker implements MapView.Overlay, MapView.HitLayer
 {
-    private final MapView view;
-    private WorldPoint at;
-    private Poi grave;
+    final MapView view;
+    WorldPoint at;
+    Poi grave;
 
     GraveMarker(MapView view)
     {
@@ -35,9 +35,9 @@ final class GraveMarker implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Made once the map list knows the grave's map (it may stand before the map's data came), again for a new list. */
-    private Poi grave()
+    Poi grave()
     {
-        BaseMap on = at == null ? null : view.mapOf(at);
+        var on = at == null ? null : view.mapOf(at);
         if (grave == null || grave.map != on)
         {
             grave = on == null ? null : new Poi(PoiType.GRAVE, "Your grave", at, on, null, Needs.NONE, "Grave", null, null);
@@ -64,14 +64,14 @@ final class GraveMarker implements MapView.Overlay, MapView.HitLayer
         return center != null && center.distance(point) <= view.iconSize(p.zoom()) * 0.6 ? grave : null;
     }
 
-    private Point center(MapView.Projection p)
+    Point center(MapView.Projection p)
     {
-        Poi shown = grave();
+        var shown = grave();
         if (shown == null || !shown.isOn(p.map()))
         {
             return null;
         }
-        WorldPoint at = p.shown(shown.location);
+        var at = p.shown(shown.location);
         return new Point((int) p.screenX(at.getX() + 0.5), (int) p.screenY(at.getY() + 0.5));
     }
 }

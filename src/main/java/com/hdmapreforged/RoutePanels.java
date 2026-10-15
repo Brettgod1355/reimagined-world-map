@@ -2,6 +2,7 @@ package com.hdmapreforged;
 
 import static com.hdmapreforged.RouteFeature.*;
 import static com.hdmapreforged.SearchResults.*;
+import static net.runelite.client.ui.ColorScheme.LIGHT_GRAY_COLOR;
 
 import com.hdmapreforged.route.*;
 import com.hdmapreforged.route.Route.*;
@@ -16,7 +17,7 @@ import net.runelite.client.ui.*;
 /** The route's panels for the sidebar and the map's card: the step list, the "Now" box, and the pieces they are made of. */
 final class RoutePanels
 {
-    private RoutePanels()
+    RoutePanels()
     {
     }
 
@@ -28,13 +29,13 @@ final class RoutePanels
         JPanel box = edgeBox(walk);
         // The text's width inside the border, with room to spare as label leaves it.
         int inner = Math.max(80, width - 47);
-        box.add(text("Now", ColorScheme.LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner));
+        box.add(text("Now", LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner));
         Step now = left.steps.get(0);
         JLabel doing = text(RouteText.describe(now), color(now, walk, jump), Font.BOLD, 3, inner);
         box.add(doing);
         if (now.detail != null && !RouteText.unsure(now.detail))
         {
-            box.add(text(now.detail, ColorScheme.LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner));
+            box.add(text(now.detail, LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner));
         }
         for (int i = 1; i < Math.min(3, left.steps.size()); i++)
         {
@@ -44,9 +45,9 @@ final class RoutePanels
                 Font.PLAIN, 0, inner));
         }
         box.add(Box.createVerticalStrut(4));
-        JLabel remaining = text(RouteText.duration(left) + " left", ColorScheme.LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner);
+        JLabel remaining = text(RouteText.duration(left) + " left", LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner);
         box.add(remaining);
-        JComponent wrapped = wrapped(box);
+        var wrapped = wrapped(box);
         // What changes as the player walks (updateNow).
         wrapped.putClientProperty("doing", doing);
         wrapped.putClientProperty("left", remaining);
@@ -63,11 +64,11 @@ final class RoutePanels
         JPanel box = edgeBox(NOTE);
         int inner = Math.max(80, width - 47);
         box.add(text("Quicker if you bring", NOTE, Font.PLAIN, 0, inner));
-        for (String[] thing : bring)
+        for (var thing : bring)
         {
             box.add(Box.createVerticalStrut(4));
             box.add(text(thing[0], Color.WHITE, Font.BOLD, 0, inner));
-            box.add(text("for " + thing[1], ColorScheme.LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner));
+            box.add(text("for " + thing[1], LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner));
         }
         box.add(Box.createVerticalStrut(4));
         box.add(text(sooner, NOTE, Font.PLAIN, 0, inner));
@@ -75,7 +76,7 @@ final class RoutePanels
     }
 
     /** A box like {@link #nowBox}/{@link #tipBox}: dark background, a coloured left edge. */
-    private static JPanel edgeBox(Color edge)
+    static JPanel edgeBox(Color edge)
     {
         JPanel box = column();
         box.setOpaque(true);
@@ -86,7 +87,7 @@ final class RoutePanels
     }
 
     /** {@code box} sized to its content, with the gap the route panels put after a box like this. */
-    private static JComponent wrapped(JPanel box)
+    static JComponent wrapped(JPanel box)
     {
         box.setMaximumSize(new Dimension(Integer.MAX_VALUE, box.getPreferredSize().height));
         JPanel spaced = column();
@@ -113,7 +114,7 @@ final class RoutePanels
             Font.BOLD, Color.WHITE));
         if (route == null)
         {
-            panel.add(label(status != null ? status : "Searching…", width, Font.PLAIN, ColorScheme.LIGHT_GRAY_COLOR));
+            panel.add(label(status != null ? status : "Searching…", width, Font.PLAIN, LIGHT_GRAY_COLOR));
         }
         else
         {
@@ -127,7 +128,7 @@ final class RoutePanels
             {
                 panel.add(label(RouteText.cannotYet(route), width, Font.BOLD, CANNOT));
             }
-            List<String> blockers = actions == null || route.outcome != Outcome.NEAREST ? null
+            var blockers = actions == null || route.outcome != Outcome.NEAREST ? null
                 : actions.blockers();
             if (blockers != null)
             {
@@ -137,7 +138,7 @@ final class RoutePanels
             if (!route.steps.isEmpty())
             {
                 panel.add(label(RouteText.duration(route) + (route.outcome == Outcome.NEAREST
-                    ? " to where the route ends" : ""), width, Font.PLAIN, ColorScheme.LIGHT_GRAY_COLOR));
+                    ? " to where the route ends" : ""), width, Font.PLAIN, LIGHT_GRAY_COLOR));
             }
             String bring = RouteText.bring(route);
             if (bring != null)
@@ -186,7 +187,7 @@ final class RoutePanels
                 String name = BankDetour.plain(step.name);
                 String category = step.category;
                 more.addActionListener(a -> {
-                    JPopupMenu menu = new JPopupMenu();
+                    var menu = new JPopupMenu();
                     String running = actions.runningTour();
                     if (running != null)
                     {
@@ -229,11 +230,11 @@ final class RoutePanels
         if (actions != null && !actions.neverUsed().isEmpty())
         {
             panel.add(Box.createVerticalStrut(6));
-            panel.add(label("Never used:", width, Font.BOLD, ColorScheme.LIGHT_GRAY_COLOR));
+            panel.add(label("Never used:", width, Font.BOLD, LIGHT_GRAY_COLOR));
             for (String never : actions.neverUsed())
             {
                 JButton allow = flat("✕  " + Tour.describe(never), "Use it again", () -> actions.allow(never));
-                allow.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+                allow.setForeground(LIGHT_GRAY_COLOR);
                 panel.add(allow);
             }
         }

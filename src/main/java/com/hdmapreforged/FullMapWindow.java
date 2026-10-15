@@ -1,5 +1,8 @@
 package com.hdmapreforged;
 
+import static java.awt.Cursor.*;
+import static java.lang.Math.*;
+
 import java.awt.*;
 import java.awt.Point;
 import java.awt.event.*;
@@ -18,31 +21,31 @@ import net.runelite.api.*;
  */
 final class FullMapWindow implements MapView.WindowControls
 {
-    private static final int GRIP_HEIGHT = 10;
-    private static final Color GRIP_DOTS = new Color(255, 255, 255, 90);
-    private static final int EDGE = 8;
+    static final int GRIP_HEIGHT = 10;
+    static final Color GRIP_DOTS = new Color(255, 255, 255, 90);
+    static final int EDGE = 8;
     /** Thicker than the sides: easy to take hold of. */
-    private static final int BOTTOM = 12;
-    private static final int MIN_WIDTH = 320;
-    private static final int MIN_HEIGHT = 240;
-    private static final Color FRAME = new Color(30, 32, 37);
-    private static final Color FRAME_EDGE = new Color(255, 255, 255, 40);
+    static final int BOTTOM = 12;
+    static final int MIN_WIDTH = 320;
+    static final int MIN_HEIGHT = 240;
+    static final Color FRAME = new Color(30, 32, 37);
+    static final Color FRAME_EDGE = new Color(255, 255, 255, 40);
     /** By the edges a point is on (see edgesAt). */
-    private static final int[] CURSORS = {Cursor.DEFAULT_CURSOR, Cursor.W_RESIZE_CURSOR, Cursor.E_RESIZE_CURSOR,
-        Cursor.DEFAULT_CURSOR, Cursor.N_RESIZE_CURSOR, Cursor.NW_RESIZE_CURSOR, Cursor.NE_RESIZE_CURSOR,
-        Cursor.DEFAULT_CURSOR, Cursor.S_RESIZE_CURSOR, Cursor.SW_RESIZE_CURSOR, Cursor.SE_RESIZE_CURSOR};
+    static final int[] CURSORS = {DEFAULT_CURSOR, W_RESIZE_CURSOR, E_RESIZE_CURSOR,
+        DEFAULT_CURSOR, N_RESIZE_CURSOR, NW_RESIZE_CURSOR, NE_RESIZE_CURSOR,
+        DEFAULT_CURSOR, S_RESIZE_CURSOR, SW_RESIZE_CURSOR, SE_RESIZE_CURSOR};
 
-    private final Client client;
-    private final MapScreen screen;
-    private final Consumer<String> saveBounds;
-    private final Predicate<KeyEvent> isMapKey;
-    private JWindow window;
-    private Canvas watchedCanvas;
-    private Window watchedFrame;
+    final Client client;
+    final MapScreen screen;
+    final Consumer<String> saveBounds;
+    final Predicate<KeyEvent> isMapKey;
+    JWindow window;
+    Canvas watchedCanvas;
+    Window watchedFrame;
     /** Fractions of the game view, or null for the default. */
-    private Rectangle2D relative;
-    private boolean maximised;
-    private final ComponentListener follower = new ComponentAdapter()
+    Rectangle2D relative;
+    boolean maximised;
+    final ComponentListener follower = new ComponentAdapter()
     {
         @Override
         public void componentMoved(ComponentEvent e)
@@ -71,7 +74,7 @@ final class FullMapWindow implements MapView.WindowControls
         this.saveBounds = saveBounds;
         this.isMapKey = isMapKey;
         screen.setWindowControls(this);
-        Object[] decoded = decode(savedBounds);
+        var decoded = decode(savedBounds);
         if (decoded != null)
         {
             relative = (Rectangle2D) decoded[0];
@@ -99,24 +102,24 @@ final class FullMapWindow implements MapView.WindowControls
         return window != null && window.isVisible();
     }
 
-    private void setHostBounds(Rectangle screenBounds)
+    void setHostBounds(Rectangle screenBounds)
     {
         window.setBounds(screenBounds);
         window.validate();
     }
 
     /** Whether the map's window has the keyboard. */
-    private boolean hasKeys()
+    boolean hasKeys()
     {
         return window != null && window.getFocusOwner() != null;
     }
 
-    private static boolean menuOpen()
+    static boolean menuOpen()
     {
         return MenuSelectionManager.defaultManager().getSelectedPath().length > 0;
     }
 
-    private static Rectangle onScreen(Component c)
+    static Rectangle onScreen(Component c)
     {
         return new Rectangle(c.getLocationOnScreen(), c.getSize());
     }
@@ -194,7 +197,7 @@ final class FullMapWindow implements MapView.WindowControls
      * Escape and the map key close the map while one of its parts has the keyboard (the game sees no keys then). While
      * typing or in a menu, keys are theirs: Escape closes the menu, letters type.
      */
-    private boolean closeKey(KeyEvent e)
+    boolean closeKey(KeyEvent e)
     {
         Object owner = e.getSource();
         if (!isOpen() || menuOpen() || owner instanceof JTextComponent && (e.getKeyCode() != KeyEvent.VK_ESCAPE
@@ -229,7 +232,7 @@ final class FullMapWindow implements MapView.WindowControls
     }
 
     /** After a click on the map itself, the keyboard goes back to the game. */
-    private void giveKeysBack()
+    void giveKeysBack()
     {
         Canvas canvas = watchedCanvas;
         if (isOpen() && hasKeys() && !menuOpen() && canvas != null && canvas.isShowing())
@@ -238,7 +241,7 @@ final class FullMapWindow implements MapView.WindowControls
         }
     }
 
-    private JPanel frame()
+    JPanel frame()
     {
         JPanel root = new JPanel(new BorderLayout())
         {
@@ -252,7 +255,7 @@ final class FullMapWindow implements MapView.WindowControls
             protected void paintComponent(Graphics graphics)
             {
                 super.paintComponent(graphics);
-                Graphics2D g = (Graphics2D) graphics.create();
+                var g = (Graphics2D) graphics.create();
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g.setColor(GRIP_DOTS);
                 int right = getWidth() - 3;
@@ -272,13 +275,13 @@ final class FullMapWindow implements MapView.WindowControls
             BorderFactory.createEmptyBorder(0, EDGE - 1, BOTTOM - 1, EDGE - 1)));
         root.add(new Grip(), BorderLayout.NORTH);
         root.add(screen, BorderLayout.CENTER);
-        Resizer resizer = new Resizer(root);
+        var resizer = new Resizer(root);
         root.addMouseListener(resizer);
         root.addMouseMotionListener(resizer);
         return root;
     }
 
-    private void place()
+    void place()
     {
         Canvas canvas = watchedCanvas;
         if (window == null || canvas == null)
@@ -305,18 +308,18 @@ final class FullMapWindow implements MapView.WindowControls
         double ry = relative != null ? relative.getY() : 0.06;
         double rw = relative != null ? relative.getWidth() : 0.84;
         double rh = relative != null ? relative.getHeight() : 0.88;
-        int width = (int) Math.round(rw * view.width);
-        int height = (int) Math.round(rh * view.height);
-        width = Math.min(view.width, Math.max(Math.min(MIN_WIDTH, view.width), width));
-        height = Math.min(view.height, Math.max(Math.min(MIN_HEIGHT, view.height), height));
-        int x = view.x + (int) Math.round(rx * view.width);
-        int y = view.y + (int) Math.round(ry * view.height);
-        x = Math.max(view.x, Math.min(view.x + view.width - width, x));
-        y = Math.max(view.y, Math.min(view.y + view.height - height, y));
+        int width = (int) round(rw * view.width);
+        int height = (int) round(rh * view.height);
+        width = min(view.width, max(min(MIN_WIDTH, view.width), width));
+        height = min(view.height, max(min(MIN_HEIGHT, view.height), height));
+        int x = view.x + (int) round(rx * view.width);
+        int y = view.y + (int) round(ry * view.height);
+        x = max(view.x, min(view.x + view.width - width, x));
+        y = max(view.y, min(view.y + view.height - height, y));
         return new Rectangle(x, y, width, height);
     }
 
-    private void setFromScreen(Rectangle bounds)
+    void setFromScreen(Rectangle bounds)
     {
         Canvas canvas = watchedCanvas;
         if (canvas == null || !canvas.isShowing() || canvas.getWidth() <= 0 || canvas.getHeight() <= 0)
@@ -334,13 +337,13 @@ final class FullMapWindow implements MapView.WindowControls
     }
 
     /** Screen bounds as fractions of the game view. */
-    private static Rectangle2D fraction(Rectangle r, Rectangle view)
+    static Rectangle2D fraction(Rectangle r, Rectangle view)
     {
         return new Rectangle2D.Double((r.x - view.x) / (double) view.width, (r.y - view.y) / (double) view.height,
             r.width / (double) view.width, r.height / (double) view.height);
     }
 
-    private void save()
+    void save()
     {
         saveBounds.accept(encode(relative, maximised));
     }
@@ -362,7 +365,7 @@ final class FullMapWindow implements MapView.WindowControls
         {
             return null;
         }
-        String[] parts = saved.trim().split(",");
+        var parts = saved.trim().split(",");
         if (parts.length == 1 && "max".equals(parts[0]))
         {
             return new Object[]{null, true};
@@ -389,7 +392,7 @@ final class FullMapWindow implements MapView.WindowControls
         }
     }
 
-    private void watch(Canvas canvas)
+    void watch(Canvas canvas)
     {
         if (canvas == watchedCanvas)
         {
@@ -405,7 +408,7 @@ final class FullMapWindow implements MapView.WindowControls
         }
     }
 
-    private void unwatch()
+    void unwatch()
     {
         if (watchedCanvas != null)
         {
@@ -453,12 +456,12 @@ final class FullMapWindow implements MapView.WindowControls
         }
     }
 
-    private final class Grip extends JComponent
+    final class Grip extends JComponent
     {
         Grip()
         {
             setPreferredSize(new Dimension(100, GRIP_HEIGHT));
-            setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+            setCursor(Cursor.getPredefinedCursor(MOVE_CURSOR));
             setToolTipText("Drag to move; double-click to fill the game view");
             Drag mouse = new Drag()
             {
@@ -487,7 +490,7 @@ final class FullMapWindow implements MapView.WindowControls
                         }
                         // Dragging a maximised window restores it under the mouse.
                         Rectangle restored = fit(relative, onScreen(canvas));
-                        double along = (grab.x - start.x) / (double) Math.max(1, start.width);
+                        double along = (grab.x - start.x) / (double) max(1, start.width);
                         start = new Rectangle(grab.x - (int) (restored.width * along), start.y, restored.width, restored.height);
                         maximised = false;
                     }
@@ -511,7 +514,7 @@ final class FullMapWindow implements MapView.WindowControls
         @Override
         protected void paintComponent(Graphics graphics)
         {
-            Graphics2D g = (Graphics2D) graphics.create();
+            var g = (Graphics2D) graphics.create();
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.setColor(FRAME);
             g.fillRect(0, 0, getWidth(), getHeight());
@@ -527,13 +530,13 @@ final class FullMapWindow implements MapView.WindowControls
     }
 
     @RequiredArgsConstructor
-    private final class Resizer extends Drag
+    final class Resizer extends Drag
     {
-        private final JComponent root;
-        private int edges;
+        final JComponent root;
+        int edges;
 
         /** Bits: 1 left, 2 right, 4 top, 8 bottom. */
-        private int edgesAt(Point p)
+        int edgesAt(Point p)
         {
             int corner = EDGE * 4;
             int w = root.getWidth();
@@ -548,7 +551,7 @@ final class FullMapWindow implements MapView.WindowControls
         public void mouseMoved(MouseEvent e)
         {
             int at = edgesAt(e.getPoint());
-            root.setCursor(Cursor.getPredefinedCursor(at < CURSORS.length ? CURSORS[at] : Cursor.DEFAULT_CURSOR));
+            root.setCursor(Cursor.getPredefinedCursor(at < CURSORS.length ? CURSORS[at] : DEFAULT_CURSOR));
         }
 
         @Override
@@ -583,23 +586,23 @@ final class FullMapWindow implements MapView.WindowControls
             Rectangle r = new Rectangle(start);
             if ((edges & 1) != 0)
             {
-                int width = Math.max(MIN_WIDTH, start.width - dx);
+                int width = max(MIN_WIDTH, start.width - dx);
                 r.x = start.x + start.width - width;
                 r.width = width;
             }
             if ((edges & 2) != 0)
             {
-                r.width = Math.max(MIN_WIDTH, start.width + dx);
+                r.width = max(MIN_WIDTH, start.width + dx);
             }
             if ((edges & 4) != 0)
             {
-                int height = Math.max(MIN_HEIGHT, start.height - dy);
+                int height = max(MIN_HEIGHT, start.height - dy);
                 r.y = start.y + start.height - height;
                 r.height = height;
             }
             if ((edges & 8) != 0)
             {
-                r.height = Math.max(MIN_HEIGHT, start.height + dy);
+                r.height = max(MIN_HEIGHT, start.height + dy);
             }
             setFromScreen(r);
         }

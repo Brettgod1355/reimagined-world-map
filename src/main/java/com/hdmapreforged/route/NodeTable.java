@@ -10,15 +10,15 @@ final class NodeTable
 {
     /** How the start was reached. A step from the neighbour in direction d is {@code -1 - d}, a jump its edge index. */
     static final int START = -9;
-    private static final int SIZE = 64 * 64;
-    private final IntMap blocks = new IntMap(1 << 11);
-    private int[][] costs = new int[64][];
-    private int[][] vias = new int[64][];
-    private int count;
-    private int size;
+    static final int SIZE = 64 * 64;
+    final IntMap blocks = new IntMap(1 << 11);
+    int[][] costs = new int[64][];
+    int[][] vias = new int[64][];
+    int count;
+    int size;
     /** The block last looked up (most lookups are its neighbours'). */
-    private int lastKey = -1;
-    private int last;
+    int lastKey = -1;
+    int last;
 
     int size()
     {
@@ -38,7 +38,7 @@ final class NodeTable
     }
 
     /** The node's block, made when {@code make}; else -1 when there is none. */
-    private int at(int node, boolean make)
+    int at(int node, boolean make)
     {
         int key = block(node);
         if (key == lastKey)

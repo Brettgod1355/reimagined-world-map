@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static com.hdmapreforged.PoiType.*;
+
 import java.awt.image.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -10,27 +12,27 @@ import net.runelite.api.worldmap.*;
 final class GameIconSprites
 {
     /** The game map elements whose icons stand for our types. */
-    private static final Map<PoiType, Integer> ELEMENTS = new EnumMap<>(PoiType.class);
+    static final Map<PoiType, Integer> ELEMENTS = new EnumMap<>(PoiType.class);
 
     static
     {
-        ELEMENTS.put(PoiType.BANK, 5);
-        ELEMENTS.put(PoiType.ANVIL, 10);
-        ELEMENTS.put(PoiType.DUNGEON_ENTRANCE, 12);
-        ELEMENTS.put(PoiType.MAP_EXIT, 13);
-        ELEMENTS.put(PoiType.MAP_LINK, 13);
-        ELEMENTS.put(PoiType.ALTAR, 21);
-        ELEMENTS.put(PoiType.MINIGAME, 40);
-        ELEMENTS.put(PoiType.AGILITY_COURSE, 51);
-        ELEMENTS.put(PoiType.FARMING_PATCH, 55);
-        ELEMENTS.put(PoiType.AGILITY_SHORTCUT, 71);
-        ELEMENTS.put(PoiType.FAIRY_RING, 965);
-        ELEMENTS.put(PoiType.SALVAGE, 1050);
-        ELEMENTS.put(PoiType.MOORING, 1055);
+        ELEMENTS.put(BANK, 5);
+        ELEMENTS.put(ANVIL, 10);
+        ELEMENTS.put(DUNGEON_ENTRANCE, 12);
+        ELEMENTS.put(MAP_EXIT, 13);
+        ELEMENTS.put(MAP_LINK, 13);
+        ELEMENTS.put(ALTAR, 21);
+        ELEMENTS.put(MINIGAME, 40);
+        ELEMENTS.put(AGILITY_COURSE, 51);
+        ELEMENTS.put(FARMING_PATCH, 55);
+        ELEMENTS.put(AGILITY_SHORTCUT, 71);
+        ELEMENTS.put(FAIRY_RING, 965);
+        ELEMENTS.put(SALVAGE, 1050);
+        ELEMENTS.put(MOORING, 1055);
     }
 
-    private static final Map<PoiType, BufferedImage> SPRITES = new ConcurrentHashMap<>();
-    private static final Map<Integer, BufferedImage> ELEMENT_SPRITES = new ConcurrentHashMap<>();
+    static final Map<PoiType, BufferedImage> SPRITES = new ConcurrentHashMap<>();
+    static final Map<Integer, BufferedImage> ELEMENT_SPRITES = new ConcurrentHashMap<>();
 
     static boolean hasElements()
     {
@@ -51,13 +53,13 @@ final class GameIconSprites
      */
     static boolean loadElements(Client client, Collection<Integer> ids)
     {
-        Iterator<Integer> left = ids.iterator();
+        var left = ids.iterator();
         for (int n = 0; n < SLICE && left.hasNext(); n++)
         {
             int id = left.next();
             if (!ELEMENT_SPRITES.containsKey(id))
             {
-                MapElementConfig config = config(client, id);
+                var config = config(client, id);
                 if (config == null && waiting(client))
                 {
                     return false;
@@ -74,7 +76,7 @@ final class GameIconSprites
     }
 
     /** Null for an id the game does not know (or not yet). */
-    private static MapElementConfig config(Client client, int id)
+    static MapElementConfig config(Client client, int id)
     {
         try
         {
@@ -87,19 +89,19 @@ final class GameIconSprites
     }
 
     /** Still null once logged in: an id gone after a game update, not worth retrying every tick. */
-    private static boolean waiting(Client client)
+    static boolean waiting(Client client)
     {
         return client.getGameState() != GameState.LOGGED_IN;
     }
 
-    private static BufferedImage icon(MapElementConfig config)
+    static BufferedImage icon(MapElementConfig config)
     {
-        SpritePixels pixels = config.getMapIcon(false);
+        var pixels = config.getMapIcon(false);
         BufferedImage image = pixels == null ? null : pixels.toBufferedImage();
         return image != null && image.getWidth() > 0 && image.getHeight() > 0 ? image : null;
     }
 
-    private GameIconSprites()
+    GameIconSprites()
     {
     }
 
@@ -118,9 +120,9 @@ final class GameIconSprites
     /** Client thread only; false while the game has not loaded its data yet. */
     static boolean load(Client client)
     {
-        for (Map.Entry<PoiType, Integer> entry : ELEMENTS.entrySet())
+        for (var entry : ELEMENTS.entrySet())
         {
-            MapElementConfig config = config(client, entry.getValue());
+            var config = config(client, entry.getValue());
             if (config == null)
             {
                 if (waiting(client))

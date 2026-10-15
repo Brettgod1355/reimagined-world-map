@@ -50,13 +50,13 @@ public final class ShortcutPassage
                 && (near(e.from, destination) || near(e.to, destination))) && e.name.toLowerCase(Locale.ROOT).contains(object);
         }
 
-        private static boolean near(int a, int b)
+        static boolean near(int a, int b)
         {
             return Tiles.z(a) == Tiles.z(b) && Tiles.distance(a, b) <= RADIUS;
         }
     }
 
-    private static final RouteFiles.Table<List<Shortcut>> ALL = new RouteFiles.Table<>(ShortcutPassage::shortcuts);
+    static final RouteFiles.Table<List<Shortcut>> ALL = new RouteFiles.Table<>(ShortcutPassage::shortcuts);
 
     /**
      * The Agility shortcut a passage crosses (one of the cache's, say), with what the shortcut needs; null when it
@@ -64,7 +64,7 @@ public final class ShortcutPassage
      */
     public static ShortcutPassage of(Edge edge)
     {
-        List<Shortcut> standing = known().stream().filter(s -> s.stands(edge)).collect(Collectors.toList());
+        var standing = known().stream().filter(s -> s.stands(edge)).collect(Collectors.toList());
         return standing.isEmpty() ? null : new ShortcutPassage(edge, standing);
     }
 
@@ -74,7 +74,7 @@ public final class ShortcutPassage
         return known().stream().map(s -> s.way).collect(Collectors.toList());
     }
 
-    private static List<Shortcut> known()
+    static List<Shortcut> known()
     {
         return ALL.get();
     }
@@ -93,7 +93,7 @@ public final class ShortcutPassage
         {
             return Collections.emptyList();
         }
-        List<Shortcut> list = new ArrayList<>();
+        var list = new ArrayList<Shortcut>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8)))
         {
             String[] header = null;
@@ -109,7 +109,7 @@ public final class ShortcutPassage
                 {
                     continue;
                 }
-                String[] cells = line.split("\t", -1);
+                var cells = line.split("\t", -1);
                 String name = cell(header, cells, "Name");
                 int origin = Tiles.parse(cell(header, cells, "Origin"));
                 // An empty object name would match every edge nearby.
@@ -129,7 +129,7 @@ public final class ShortcutPassage
         return list;
     }
 
-    private static String cell(String[] header, String[] cells, String column)
+    static String cell(String[] header, String[] cells, String column)
     {
         for (int i = 0; i < header.length; i++)
         {

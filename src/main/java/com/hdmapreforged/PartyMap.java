@@ -1,5 +1,8 @@
 package com.hdmapreforged;
 
+import static com.hdmapreforged.HdMapReforgedConfig.*;
+import static com.hdmapreforged.HdMapPartyGear.*;
+
 import java.awt.*;
 import java.awt.Point;
 import java.awt.event.*;
@@ -38,25 +41,25 @@ import net.runelite.client.util.*;
 public final class PartyMap
 {
     static final String LAST_KEY = "partyLast";
-    private static final List<Class<? extends WebsocketMessage>> MESSAGES =
+    static final List<Class<? extends WebsocketMessage>> MESSAGES =
         List.of(HdMapPartyLocation.class, HdMapPartyGear.class, HdMapPartyDrop.class);
 
     // The constructor takes these in this order.
-    private final Client client;
-    private final PartyService party;
-    private final WSClient wsClient;
-    private final EventBus eventBus;
-    private final ConfigManager configManager;
-    private final HdMapReforgedConfig config;
-    private final ItemManager itemManager;
-    private final SkillIconManager skillIcons;
-    private final ClientThread clientThread;
-    private final SpriteManager spriteManager;
+    final Client client;
+    final PartyService party;
+    final WSClient wsClient;
+    final EventBus eventBus;
+    final ConfigManager configManager;
+    final HdMapReforgedConfig config;
+    final ItemManager itemManager;
+    final SkillIconManager skillIcons;
+    final ClientThread clientThread;
+    final SpriteManager spriteManager;
 
-    private final PartyMapMembers members = new PartyMapMembers();
-    private final PartyMapRules.Throttle throttle = new PartyMapRules.Throttle();
+    final PartyMapMembers members = new PartyMapMembers();
+    final PartyMapRules.Throttle throttle = new PartyMapRules.Throttle();
     // Initializers may read later or constructor-set fields only through "this" or "PartyMap.this".
-    private final PartyMapOverlay overlay = new PartyMapOverlay(this::markers, () -> this.favourites,
+    final PartyMapOverlay overlay = new PartyMapOverlay(this::markers, () -> this.favourites,
         () -> PartyMap.this.config.partyOnlyFavourites(), () -> this.myWorld);
 
     {
@@ -65,22 +68,22 @@ public final class PartyMap
     }
 
     /** Swing thread only; each view's value undoes what {@link #start} added to it. */
-    private final Map<MapView, Runnable> views = new LinkedHashMap<>();
-    private final Map<MapView, FriendsWidget> widgets = new LinkedHashMap<>();
-    private volatile int myWorld;
-    private volatile Set<String> favourites = Collections.emptySet();
+    final Map<MapView, Runnable> views = new LinkedHashMap<>();
+    final Map<MapView, FriendsWidget> widgets = new LinkedHashMap<>();
+    volatile int myWorld;
+    volatile Set<String> favourites = Collections.emptySet();
     /** The party this plugin joined for the user, or null. */
-    private volatile String joinedCode;
-    private volatile long lastChange = Long.MIN_VALUE / 2;
-    private Timer idleCheck;
-    private volatile boolean sentOnline;
-    private volatile Long loggedOutSince;
+    volatile String joinedCode;
+    volatile long lastChange = Long.MIN_VALUE / 2;
+    Timer idleCheck;
+    volatile boolean sentOnline;
+    volatile Long loggedOutSince;
 
-    private volatile boolean gearChanged = true;
-    private int gearSentTick = Integer.MIN_VALUE / 2;
+    volatile boolean gearChanged = true;
+    int gearSentTick = Integer.MIN_VALUE / 2;
     /** The members as last read without a clash with the websocket thread. */
-    private volatile List<FriendsWidget.Member> lastGroup = Collections.emptyList();
-    private final Map<Long, BufferedImage> itemImages = new ConcurrentHashMap<>();
+    volatile List<FriendsWidget.Member> lastGroup = Collections.emptyList();
+    final Map<Long, BufferedImage> itemImages = new ConcurrentHashMap<>();
 
     void start(MapView... maps)
     {
@@ -183,9 +186,9 @@ public final class PartyMap
         myWorld = client.getWorld();
     }
 
-    private volatile long hoveredMember = -1;
+    volatile long hoveredMember = -1;
 
-    private boolean clickedMember(FriendsWidget widget, Point at, MapView.Projection projection)
+    boolean clickedMember(FriendsWidget widget, Point at, MapView.Projection projection)
     {
         long best = memberAt(at, projection);
         if (best < 0)
@@ -197,7 +200,7 @@ public final class PartyMap
         return true;
     }
 
-    private long memberAt(Point at, MapView.Projection projection)
+    long memberAt(Point at, MapView.Projection projection)
     {
         long best = -1;
         double bestDistance = 14;
@@ -219,8 +222,8 @@ public final class PartyMap
         return best;
     }
 
-    private final Map<Integer, BufferedImage> sprites = new ConcurrentHashMap<>();
-    private final FriendsWidget.Images sidebarImages = new FriendsWidget.Images()
+    final Map<Integer, BufferedImage> sprites = new ConcurrentHashMap<>();
+    final FriendsWidget.Images sidebarImages = new FriendsWidget.Images()
     {
         @Override
         public BufferedImage item(int id, int quantity)
@@ -232,7 +235,7 @@ public final class PartyMap
         public BufferedImage skill(int ordinal)
         {
             Skill[] skills = Skill.values();
-            return ordinal < 0 || ordinal >= Math.min(HdMapPartyGear.SKILLS, skills.length) ? null
+            return ordinal < 0 || ordinal >= Math.min(SKILLS, skills.length) ? null
                 : skillIcons.getSkillImage(skills[ordinal], true);
         }
 
@@ -293,7 +296,7 @@ public final class PartyMap
 
     List<FriendsWidget.Member> groupMembers()
     {
-        List<FriendsWidget.Member> list = new ArrayList<>();
+        var list = new ArrayList<FriendsWidget.Member>();
         if (!party.isInParty())
         {
             return list;
@@ -349,7 +352,7 @@ public final class PartyMap
         }
     }
 
-    private String localName()
+    String localName()
     {
         Player player = client.getLocalPlayer();
         return player == null || player.getName() == null ? null : Text.removeTags(player.getName());
@@ -380,7 +383,7 @@ public final class PartyMap
         }
     }
 
-    private void sendOffline()
+    void sendOffline()
     {
         if (sentOnline && party.isInParty())
         {
@@ -407,7 +410,7 @@ public final class PartyMap
         repaint();
     }
 
-    private void readFavourites()
+    void readFavourites()
     {
         favourites = Collections.unmodifiableSet(Text.fromCSV(config.partyFavourites()).stream()
             .map(PartyMapOverlay::nameKey).filter(key -> !key.isEmpty()).collect(Collectors.toSet()));
@@ -494,18 +497,18 @@ public final class PartyMap
         shareDrops(event.getItems());
     }
 
-    private void shareDrops(Collection<ItemStack> items)
+    void shareDrops(Collection<ItemStack> items)
     {
         if (!party.isInParty() || !config.partyShareDrops())
         {
             return;
         }
-        List<HdMapPartyDrop> valuable = new ArrayList<>();
+        var valuable = new ArrayList<HdMapPartyDrop>();
         for (ItemStack stack : items)
         {
             long value = itemManager.getItemPriceWithSource(stack.getId(), false) * stack.getQuantity();
             // A lower value saved before the setting had its minimum still reads back as it was.
-            if (value >= Math.max(HdMapReforgedConfig.MIN_DROP_VALUE, config.partyDropValue()))
+            if (value >= Math.max(MIN_DROP_VALUE, config.partyDropValue()))
             {
                 valuable.add(new HdMapPartyDrop(stack.getId(), stack.getQuantity(), value));
             }
@@ -538,14 +541,14 @@ public final class PartyMap
         });
     }
 
-    private HdMapPartyGear gear()
+    HdMapPartyGear gear()
     {
-        int[] quantities = new int[HdMapPartyGear.INVENTORY];
+        int[] quantities = new int[INVENTORY];
         int[] inventory = items(InventoryID.INV, quantities);
-        int[] equipment = items(InventoryID.WORN, new int[HdMapPartyGear.EQUIPMENT]);
-        int[] levels = new int[HdMapPartyGear.SKILLS];
-        int[] boosted = new int[HdMapPartyGear.SKILLS];
-        int[] experience = new int[HdMapPartyGear.SKILLS];
+        int[] equipment = items(InventoryID.WORN, new int[EQUIPMENT]);
+        int[] levels = new int[SKILLS];
+        int[] boosted = new int[SKILLS];
+        int[] experience = new int[SKILLS];
         Skill[] skills = Skill.values();
         for (int k = 0; k < Math.min(skills.length, levels.length); k++)
         {
@@ -558,7 +561,7 @@ public final class PartyMap
     }
 
     /** Item ids (-1 where empty) and quantities of a container, as many as {@code quantities} holds. */
-    private int[] items(int container, int[] quantities)
+    int[] items(int container, int[] quantities)
     {
         int[] ids = new int[quantities.length];
         Arrays.fill(ids, -1);
@@ -572,7 +575,7 @@ public final class PartyMap
         return ids;
     }
 
-    private BufferedImage itemImage(int id, int quantity)
+    BufferedImage itemImage(int id, int quantity)
     {
         long key = (long) id << 32 | quantity;
         if (itemImages.size() > 512 && !itemImages.containsKey(key))
@@ -605,7 +608,7 @@ public final class PartyMap
         if (event.getPartyId() != null && event.getPassphrase() != null && !event.getPassphrase().isEmpty())
         {
             // Whoever joined it (this plugin or RuneLite's Party panel).
-            configManager.setConfiguration(HdMapReforgedConfig.GROUP, LAST_KEY, event.getPassphrase());
+            configManager.setConfiguration(GROUP, LAST_KEY, event.getPassphrase());
         }
         String ours = joinedCode;
         if (ours != null && !ours.equals(event.getPassphrase()))
@@ -626,13 +629,13 @@ public final class PartyMap
         repaint();
     }
 
-    private boolean isLocal(long memberId)
+    boolean isLocal(long memberId)
     {
         PartyMember local = party.getLocalMember();
         return local != null && local.getMemberId() == memberId;
     }
 
-    private void memberDetails(long memberId)
+    void memberDetails(long memberId)
     {
         try
         {
@@ -653,7 +656,7 @@ public final class PartyMap
         }
     }
 
-    private void repaint()
+    void repaint()
     {
         SwingUtilities.invokeLater(() -> {
             for (MapView view : views.keySet())
@@ -663,7 +666,7 @@ public final class PartyMap
         });
     }
 
-    private void contribute(JPopupMenu popup, MapView view)
+    void contribute(JPopupMenu popup, MapView view)
     {
         JMenu friends = new JMenu("Friends");
         String current = party.getPartyPassphrase();
@@ -695,7 +698,7 @@ public final class PartyMap
 
     String lastParty()
     {
-        String last = configManager.getConfiguration(HdMapReforgedConfig.GROUP, LAST_KEY);
+        String last = configManager.getConfiguration(GROUP, LAST_KEY);
         return last == null || last.trim().isEmpty() ? null : last.trim();
     }
 
@@ -734,12 +737,12 @@ public final class PartyMap
         party.changeParty(code);
     }
 
-    private static void tell(Component to, String message)
+    static void tell(Component to, String message)
     {
         JOptionPane.showMessageDialog(to, message, "Reimagined World Map", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    private void leave()
+    void leave()
     {
         lastChange = System.currentTimeMillis();
         joinedCode = null;
@@ -747,7 +750,7 @@ public final class PartyMap
     }
 
     /** Leaves a party we rejoined after long logged out, as RuneLite's Party plugin does. */
-    private void checkIdle()
+    void checkIdle()
     {
         if (PartyMapRules.leaveIdle(joinedCode, party.getPartyPassphrase(), loggedOutSince, System.currentTimeMillis()))
         {

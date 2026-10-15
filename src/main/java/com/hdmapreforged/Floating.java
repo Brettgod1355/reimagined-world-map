@@ -9,10 +9,10 @@ final class Floating extends JPanel
 {
     static final int BAR = 24;
 
-    private final JPanel bar = new JPanel(new BorderLayout(4, 0));
-    private final JButton fold = small("–", "Fold up");
-    private JComponent content;
-    private boolean folded;
+    final JPanel bar = new JPanel(new BorderLayout(4, 0));
+    final JButton fold = small("–", "Fold up");
+    JComponent content;
+    boolean folded;
 
     Floating(String title, Runnable close)
     {
@@ -70,7 +70,7 @@ final class Floating extends JPanel
         return BAR + 2 + (folded ? 0 : contentHeight);
     }
 
-    private static JButton small(String text, String tip)
+    static JButton small(String text, String tip)
     {
         JButton button = new JButton(text);
         button.setFocusable(false);

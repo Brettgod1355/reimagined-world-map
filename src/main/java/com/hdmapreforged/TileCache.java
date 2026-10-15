@@ -29,13 +29,13 @@ final class TileCache
     static final int MIN_ZOOM = -3;
     static final int MAX_ZOOM = 3;
     /** OkHttp itself still caps requests at 5 per host, shared with the rest of RuneLite. */
-    private static final int MAX_IN_FLIGHT = 10;
+    static final int MAX_IN_FLIGHT = 10;
     /** A tile is well under 200 KB. */
     static final int MAX_TILE_BYTES = 2 * 1024 * 1024;
     /** Older half-written files were left by a crash; newer ones may still be being written. */
-    private static final long PART_STALE_MS = 10 * 60 * 1000L;
-    private static final long RETRY_AFTER_MS = 30_000;
-    private static final long MB = 1024 * 1024;
+    static final long PART_STALE_MS = 10 * 60 * 1000L;
+    static final long RETRY_AFTER_MS = 30_000;
+    static final long MB = 1024 * 1024;
     /**
      * 128 MB: past it the views draw a coarser level, a quarter of the tiles (a 4K window's upper floor would need 2,000
      * tiles, 500 MB, just above a whole zoom). A higher memory setting raises it.
@@ -60,41 +60,41 @@ final class TileCache
         }
     }
 
-    private final OkHttpClient http;
-    private final ExecutorService io;
-    private final Filepath cacheRoot;
-    private final Runnable onLoaded;
+    final OkHttpClient http;
+    final ExecutorService io;
+    final Filepath cacheRoot;
+    final Runnable onLoaded;
 
-    private final LinkedHashMap<Key, BufferedImage> memory = new LinkedHashMap<>(256, 0.75f, true);
-    private final Set<Key> missing = new HashSet<>();
-    private final Map<Key, Long> failed = new HashMap<>();
+    final LinkedHashMap<Key, BufferedImage> memory = new LinkedHashMap<>(256, 0.75f, true);
+    final Set<Key> missing = new HashSet<>();
+    final Map<Key, Long> failed = new HashMap<>();
     /** Previous-version tiles shown while this version's are fetched. */
-    private final Set<Key> stale = new HashSet<>();
-    private final Deque<Key> queue = new ArrayDeque<>();
-    private final Set<Key> queued = new HashSet<>();
-    private final Set<Key> loading = new HashSet<>();
+    final Set<Key> stale = new HashSet<>();
+    final Deque<Key> queue = new ArrayDeque<>();
+    final Set<Key> queued = new HashSet<>();
+    final Set<Key> loading = new HashSet<>();
     /** Downloads under way: cancelled when the cache is cleared (the plugin stops). */
-    private final Set<Call> calls = ConcurrentHashMap.newKeySet();
+    final Set<Call> calls = ConcurrentHashMap.newKeySet();
     /** Requests still running, of any generation: {@link #clear} empties {@code loading} but not the network. */
-    private int inFlight;
+    int inFlight;
     /** Bytes on disk as last counted, plus writes since; a trim runs once it passes the limit. */
-    private final AtomicLong diskBytes = new AtomicLong();
-    private final AtomicBoolean trimQueued = new AtomicBoolean();
-    private boolean configured;
-    private volatile String version;
-    private volatile boolean diskCache;
-    private volatile int memoryLimit = 256;
-    private volatile int diskLimitMb = 1000;
+    final AtomicLong diskBytes = new AtomicLong();
+    final AtomicBoolean trimQueued = new AtomicBoolean();
+    boolean configured;
+    volatile String version;
+    volatile boolean diskCache;
+    volatile int memoryLimit = 256;
+    volatile int diskLimitMb = 1000;
     /** What each open view needs; the memory cache never shrinks below their sum, or tiles in view would reload. */
-    private final Map<Object, Integer> needs = new HashMap<>();
-    private int frameNeed;
-    private int generation;
+    final Map<Object, Integer> needs = new HashMap<>();
+    int frameNeed;
+    int generation;
     /** Old versions are removed once a tile of an official version downloads, so a mistyped version never wipes the cache. */
-    private boolean cleanupPending;
+    boolean cleanupPending;
     /** Previous version on disk, shown while the new one downloads; each old tile is removed once replaced. */
     volatile String fallbackVersion;
     /** Only then are the fallback's tiles removed: a manual version or the start-up stand-in must not wear it down. */
-    private volatile boolean official;
+    volatile boolean official;
 
     static int tileIndex(double world, int zoom)
     {
@@ -144,13 +144,13 @@ final class TileCache
      */
     boolean upgrade(String from, String to, Set<String> changed, Set<String> removed)
     {
-        Filepath old = versionFolder(from);
-        Filepath fresh = versionFolder(to);
+        var old = versionFolder(from);
+        var fresh = versionFolder(to);
         if (!diskCache || !old.isDirectory() || fresh.exists())
         {
             return false;
         }
-        Set<String> gone = new HashSet<>(changed);
+        var gone = new HashSet<String>(changed);
         gone.addAll(removed);
         synchronized (missingFile)
         {
@@ -158,15 +158,15 @@ final class TileCache
             {
                 for (String path : gone)
                 {
-                    String[] p = path.split("/");
-                    Filepath tile = p.length == 3 ? old.join(p[0], p[1], p[2]) : null;
+                    var p = path.split("/");
+                    var tile = p.length == 3 ? old.join(p[0], p[1], p[2]) : null;
                     if (tile != null && tile.isFile())
                     {
                         diskBytes.addAndGet(-tile.size());
                         tile.delete();
                     }
                 }
-                Filepath missingList = old.joinSegment(MISSING);
+                var missingList = old.joinSegment(MISSING);
                 if (missingList.isFile())
                 {
                     StringBuilder kept = new StringBuilder();
@@ -175,7 +175,7 @@ final class TileCache
                         String line;
                         while ((line = in.readLine()) != null)
                         {
-                            String[] p = line.trim().split(" ");
+                            var p = line.trim().split(" ");
                             String path = p.length == 5 ? p[0] + "/" + p[1] + "/" + p[2] + "_" + p[3] + "_" + p[4] + ".png" : "";
                             if (!path.isEmpty() && !changed.contains(path))
                             {
@@ -227,10 +227,10 @@ final class TileCache
     }
 
     /** Per version, the tiles the map server has not got (open sea, the world's edge), so they aren't asked again. */
-    private static final String MISSING = "missing.txt";
-    private final Object missingFile = new Object();
+    static final String MISSING = "missing.txt";
+    final Object missingFile = new Object();
 
-    private void rememberMissing(String tileVersion, Key key)
+    void rememberMissing(String tileVersion, Key key)
     {
         if (!diskCache)
         {
@@ -240,7 +240,7 @@ final class TileCache
         {
             try
             {
-                Filepath folder = versionFolder(tileVersion);
+                var folder = versionFolder(tileVersion);
                 folder.createDirectories();
                 folder.joinSegment(MISSING).write(key.map + " " + key.zoom + " " + key.plane + " " + key.x + " " + key.y
                     + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -253,20 +253,20 @@ final class TileCache
     }
 
     /** Background thread. */
-    private void loadMissing(String tileVersion)
+    void loadMissing(String tileVersion)
     {
-        Filepath file = versionFolder(tileVersion).joinSegment(MISSING);
+        var file = versionFolder(tileVersion).joinSegment(MISSING);
         if (!diskCache || !file.isFile())
         {
             return;
         }
-        Set<Key> keys = new HashSet<>();
+        var keys = new HashSet<Key>();
         try (BufferedReader in = file.openBufferedReader())
         {
             String line;
             while ((line = in.readLine()) != null)
             {
-                String[] p = line.trim().split(" ");
+                var p = line.trim().split(" ");
                 try
                 {
                     if (p.length == 5)
@@ -295,10 +295,10 @@ final class TileCache
         }
     }
 
-    private String previousOnDisk(String current)
+    String previousOnDisk(String current)
     {
         Filepath best = null;
-        for (Filepath dir : versionDirs())
+        for (var dir : versionDirs())
         {
             if (!dir.getFileName().equals(current) && MapServer.isSafeVersion(dir.getFileName())
                 && (best == null || modified(dir) > modified(best)))
@@ -343,7 +343,7 @@ final class TileCache
         }
     }
 
-    private void setNeed(Object view, int need)
+    void setNeed(Object view, int need)
     {
         Integer old = need > 0 ? needs.put(view, need) : needs.remove(view);
         frameNeed += need - (old == null ? 0 : old);
@@ -374,7 +374,7 @@ final class TileCache
     }
 
     /** Decoded ({@link #decode}), and on disk when that is on. */
-    private BufferedImage keep(Filepath file, byte[] bytes, Color under) throws IOException
+    BufferedImage keep(Filepath file, byte[] bytes, Color under) throws IOException
     {
         BufferedImage image = decode(bytes, under);
         if (image != null && diskCache)
@@ -384,13 +384,13 @@ final class TileCache
         return image;
     }
 
-    private Call call(String tileVersion, Key key)
+    Call call(String tileVersion, Key key)
     {
         return http.newCall(new Request.Builder().url(MapServer.tile(tileVersion, key)).build());
     }
 
     /** Null on 404. */
-    private static byte[] bytes(Response response, ResponseBody body) throws IOException
+    static byte[] bytes(Response response, ResponseBody body) throws IOException
     {
         if (response.code() == 404)
         {
@@ -417,7 +417,7 @@ final class TileCache
         calls.clear();
     }
 
-    private void pump()
+    void pump()
     {
         while (inFlight < MAX_IN_FLIGHT && !queue.isEmpty())
         {
@@ -436,7 +436,7 @@ final class TileCache
         }
     }
 
-    private boolean execute(Runnable task)
+    boolean execute(Runnable task)
     {
         return execute(io, task);
     }
@@ -455,12 +455,12 @@ final class TileCache
         }
     }
 
-    private Filepath file(String tileVersion, Key key)
+    Filepath file(String tileVersion, Key key)
     {
         return versionFolder(tileVersion).join(key.path());
     }
 
-    private static final String PART_SUFFIX = ".part";
+    static final String PART_SUFFIX = ".part";
 
     /** Refused over {@code max} bytes whether or not the server declared the length. */
     static byte[] readBody(ResponseBody body, int max) throws IOException
@@ -472,7 +472,7 @@ final class TileCache
         }
         try (InputStream in = body.byteStream())
         {
-            byte[] bytes = in.readNBytes(max + 1);
+            var bytes = in.readNBytes(max + 1);
             if (bytes.length > max)
             {
                 throw new IOException("Too large: over " + max + " bytes");
@@ -510,7 +510,7 @@ final class TileCache
     }
 
     /** Files that are no tile are removed so they download again; a failed read leaves the file. */
-    private BufferedImage readCached(Filepath file, Color under)
+    BufferedImage readCached(Filepath file, Color under)
     {
         if (!diskCache || !file.isFile())
         {
@@ -542,7 +542,7 @@ final class TileCache
         return null;
     }
 
-    private void load(Key key, String tileVersion, int started)
+    void load(Key key, String tileVersion, int started)
     {
         try
         {
@@ -553,7 +553,7 @@ final class TileCache
                 return;
             }
             String previous = fallbackVersion;
-            Filepath old = previous == null ? null : file(previous, key);
+            var old = previous == null ? null : file(previous, key);
             BufferedImage stale = old == null ? null : readCached(old, under(key));
             if (stale != null)
             {
@@ -602,7 +602,7 @@ final class TileCache
     }
 
     /** A downloaded tile kept on disk; {@code bytes} null: the map server has none in this version. */
-    private void store(Key key, String tileVersion, int started, Filepath old, byte[] bytes)
+    void store(Key key, String tileVersion, int started, Filepath old, byte[] bytes)
     {
         BufferedImage image = null;
         try
@@ -632,7 +632,7 @@ final class TileCache
     }
 
     /** The key stays loading. */
-    private void showStale(Key key, int started, BufferedImage image)
+    void showStale(Key key, int started, BufferedImage image)
     {
         synchronized (this)
         {
@@ -647,7 +647,7 @@ final class TileCache
         onLoaded.run();
     }
 
-    private synchronized void forget(Key key, int started)
+    synchronized void forget(Key key, int started)
     {
         if (started == generation)
         {
@@ -656,7 +656,7 @@ final class TileCache
         }
     }
 
-    private void finish(Key key, int started, BufferedImage image, boolean notFound, boolean downloaded)
+    void finish(Key key, int started, BufferedImage image, boolean notFound, boolean downloaded)
     {
         boolean cleanup = false;
         synchronized (this)
@@ -702,7 +702,7 @@ final class TileCache
         }
     }
 
-    private void trim()
+    void trim()
     {
         int limit = needs.isEmpty() ? Math.min(memoryLimit, CLOSED_TILES) : Math.max(memoryLimit, frameNeed);
         while (memory.size() > limit)
@@ -729,12 +729,12 @@ final class TileCache
         // In memory: ImageIO's default stream would cache to a temporary file.
         try (ImageInputStream in = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)))
         {
-            Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
+            var readers = ImageIO.getImageReaders(in);
             if (!readers.hasNext())
             {
                 return null;
             }
-            ImageReader reader = readers.next();
+            var reader = readers.next();
             try
             {
                 reader.setInput(in, true, true);
@@ -767,7 +767,7 @@ final class TileCache
         boolean alpha = source.getColorModel().hasAlpha();
         BufferedImage image = new BufferedImage(source.getWidth(), source.getHeight(), alpha && under == null
             ? BufferedImage.TYPE_INT_ARGB_PRE : BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = image.createGraphics();
+        var g = image.createGraphics();
         if (alpha && under != null)
         {
             g.setColor(under);
@@ -778,7 +778,7 @@ final class TileCache
         return image;
     }
 
-    private void write(Filepath file, byte[] bytes)
+    void write(Filepath file, byte[] bytes)
     {
         try
         {
@@ -801,9 +801,9 @@ final class TileCache
      */
     static void writeAtomically(Filepath target, byte[] bytes) throws IOException
     {
-        Filepath folder = target.getParent();
+        var folder = target.getParent();
         folder.createDirectories();
-        Filepath temp = folder.createTempFile(target.getFileName() + ".", PART_SUFFIX);
+        var temp = folder.createTempFile(target.getFileName() + ".", PART_SUFFIX);
         try
         {
             temp.write(bytes);
@@ -831,7 +831,7 @@ final class TileCache
     }
 
     /** One trim at a time: the flag stays set until it ends, so writes meanwhile queue no second one. */
-    private void requestTrim()
+    void requestTrim()
     {
         if (trimQueued.compareAndSet(false, true) && !execute(this::limitDiskUse))
         {
@@ -840,24 +840,24 @@ final class TileCache
     }
 
     /** Moves tiles of other versions that {@code fallback} lacks into it, then removes those versions. */
-    private void mergeOlder(String current, String fallback)
+    void mergeOlder(String current, String fallback)
     {
-        Filepath into = versionFolder(fallback);
-        for (Filepath dir : versionDirs())
+        var into = versionFolder(fallback);
+        for (var dir : versionDirs())
         {
             String name = dir.getFileName();
             if (name.equals(current) || name.equals(fallback) || !MapServer.isSafeVersion(name))
             {
                 continue;
             }
-            for (Filepath file : files(dir))
+            for (var file : files(dir))
             {
                 try
                 {
                     // Tiles lie in version/map/zoom.
-                    Filepath zoom = file.getParent();
-                    Filepath map = zoom.getParent();
-                    Filepath target = into.join(map.getFileName(), zoom.getFileName(), file.getFileName());
+                    var zoom = file.getParent();
+                    var map = zoom.getParent();
+                    var target = into.join(map.getFileName(), zoom.getFileName(), file.getFileName());
                     if (dir.equals(map.getParent()) && !target.exists())
                     {
                         target.getParent().createDirectories();
@@ -873,9 +873,9 @@ final class TileCache
         }
     }
 
-    private void removeOtherVersions(String keep, String fallback)
+    void removeOtherVersions(String keep, String fallback)
     {
-        for (Filepath dir : versionDirs())
+        for (var dir : versionDirs())
         {
             if (!dir.getFileName().equals(keep) && !dir.getFileName().equals(fallback))
             {
@@ -912,7 +912,7 @@ final class TileCache
         }
     }
 
-    private void trimDisk()
+    void trimDisk()
     {
         if (!diskCache)
         {
@@ -920,9 +920,9 @@ final class TileCache
         }
         long counted = diskBytes.get();
         long now = System.currentTimeMillis();
-        List<Entry> entries = new ArrayList<>();
+        var entries = new ArrayList<Entry>();
         long total = 0;
-        for (Filepath file : files(cacheRoot))
+        for (var file : files(cacheRoot))
         {
             String name = file.getFileName();
             try
@@ -969,13 +969,13 @@ final class TileCache
     }
 
     /** Background thread: the disk cache was switched off, so its tiles go. */
-    private void deleteCachedTiles()
+    void deleteCachedTiles()
     {
         if (diskCache)
         {
             return;
         }
-        for (Filepath dir : versionDirs())
+        for (var dir : versionDirs())
         {
             if (MapServer.isSafeVersion(dir.getFileName()))
             {
@@ -985,7 +985,7 @@ final class TileCache
         diskBytes.set(0);
     }
 
-    private List<Filepath> versionDirs()
+    List<Filepath> versionDirs()
     {
         return walk(cacheRoot, 1, dir -> !dir.equals(cacheRoot) && dir.isDirectory());
     }
@@ -996,7 +996,7 @@ final class TileCache
         return walk(dir, Integer.MAX_VALUE, Filepath::isFile);
     }
 
-    private static List<Filepath> walk(Filepath dir, int depth, Predicate<Filepath> filter)
+    static List<Filepath> walk(Filepath dir, int depth, Predicate<Filepath> filter)
     {
         try (Stream<Filepath> found = dir.walk(depth))
         {

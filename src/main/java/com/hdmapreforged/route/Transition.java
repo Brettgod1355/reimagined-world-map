@@ -25,26 +25,26 @@ public final class Transition
         {
             return null;
         }
-        String[] cols = line.split("\t");
+        var cols = line.split("\t");
         if (cols.length < 5)
         {
             return null;
         }
         try
         {
-            int[] from = Pathfinder.ints(cols[0]);
-            int[] to = Pathfinder.ints(cols[1]);
+            var from = Pathfinder.ints(cols[0]);
+            var to = Pathfinder.ints(cols[1]);
             int z = from[2];
             if (from.length != 5 || to.length != 3 || !valid(from[0], from[1], z) || !valid(to[0], to[1], to[2])
                 || from[3] < 1 || from[4] < 1 || from[3] > 16 || from[4] > 16)
             {
                 return null;
             }
-            String[] tiles = cols[4].trim().split(";");
+            var tiles = cols[4].trim().split(";");
             int[] origins = new int[tiles.length];
             for (int i = 0; i < tiles.length; i++)
             {
-                int[] xy = Pathfinder.ints(tiles[i]);
+                var xy = Pathfinder.ints(tiles[i]);
                 if (xy.length != 2 || !valid(xy[0], xy[1], z))
                 {
                     return null;
@@ -60,7 +60,7 @@ public final class Transition
         }
     }
 
-    private static boolean valid(int x, int y, int z)
+    static boolean valid(int x, int y, int z)
     {
         return x >= 0 && y >= 0 && x < 1 << 14 && y < 1 << 14 && z >= 0 && z < 4;
     }

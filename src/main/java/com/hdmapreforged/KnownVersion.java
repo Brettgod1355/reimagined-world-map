@@ -12,7 +12,7 @@ import net.runelite.client.util.*;
 final class KnownVersion
 {
     static final String FILE = "server-map-version.txt";
-    private static final long DAY_MS = 24L * 60 * 60 * 1000;
+    static final long DAY_MS = 24L * 60 * 60 * 1000;
 
     final String version;
     final long checkedAt;

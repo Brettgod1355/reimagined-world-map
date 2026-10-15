@@ -8,19 +8,19 @@ import lombok.*;
 public final class OneWay
 {
     @RequiredArgsConstructor
-    private static final class Rule
+    static final class Rule
     {
         final int from;
         final int to;
         final int radius;
     }
 
-    private final List<Rule> rules;
+    final List<Rule> rules;
 
     public static OneWay load()
     {
-        List<Rule> rules = new ArrayList<>();
-        for (String[] parts : Pathfinder.rows("/com/hdmapreforged/route/one_way.tsv"))
+        var rules = new ArrayList<Rule>();
+        for (var parts : Pathfinder.rows("/com/hdmapreforged/route/one_way.tsv"))
         {
             Rule rule = parse(parts);
             if (rule != null)
@@ -62,7 +62,7 @@ public final class OneWay
         return false;
     }
 
-    private static boolean near(int a, int b, int radius)
+    static boolean near(int a, int b, int radius)
     {
         return !Tiles.isSea(a) && !Tiles.isSea(b) && Tiles.z(a) == Tiles.z(b) && Tiles.distance(a, b) <= radius;
     }

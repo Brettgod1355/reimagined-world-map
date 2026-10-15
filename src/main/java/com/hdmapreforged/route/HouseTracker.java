@@ -10,7 +10,7 @@ import java.util.*;
 public final class HouseTracker
 {
     /** By varbit 2187 (POH_HOUSE_LOCATION). */
-    private static final int[][] PORTALS = {
+    static final int[][] PORTALS = {
         null,
         {2953, 3224}, // Rimmington
         {2893, 3465}, // Taverley
@@ -22,24 +22,24 @@ public final class HouseTracker
         {1743, 3517}, // Hosidius
         {1422, 2963}, // Aldarin
     };
-    private static final int PORTAL_RADIUS = 12;
+    static final int PORTAL_RADIUS = 12;
     /** How long a choice at a house portal is kept: the walk to the portal, not a later visit. */
-    private static final int CHOICE_TICKS = 30;
+    static final int CHOICE_TICKS = 30;
 
-    private boolean inside;
-    private int lastOutside = -1;
-    private int exit = -1;
-    private boolean own;
+    boolean inside;
+    int lastOutside = -1;
+    int exit = -1;
+    boolean own;
     /** Varbit 2187: the town of one's own house. */
-    private int location;
+    int location;
     /** The scene is to be looked through: the house's objects load before the tick that finds the player inside. */
-    private boolean scan;
+    boolean scan;
     /** Building mode shows empty hotspots (door and stair spaces): not looked through then. */
-    private boolean building;
+    boolean building;
     /** Chosen at a house portal: above 0 one's own house, below 0 a friend's; counts down to 0 every tick. */
-    private int chosen;
-    private final Set<String> features = new LinkedHashSet<>();
-    private boolean featuresChanged;
+    int chosen;
+    final Set<String> features = new LinkedHashSet<>();
+    boolean featuresChanged;
 
     public static boolean isTemplate(int x, int y)
     {

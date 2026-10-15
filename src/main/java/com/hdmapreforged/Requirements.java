@@ -10,10 +10,10 @@ import lombok.*;
 /** Turns requirement columns ({@link Needs}) into readable lines. */
 final class Requirements
 {
-    private static final int MAX_ALTERNATIVES = 3;
-    private static final Pattern SPACES = Pattern.compile("\\s+");
+    static final int MAX_ALTERNATIVES = 3;
+    static final Pattern SPACES = Pattern.compile("\\s+");
     /** {@link #skillsAndQuests} per requirement: a route request asks for thousands, of a few hundred kinds. */
-    private static final Map<Needs, List<Line>> CHECKABLE = new ConcurrentHashMap<>();
+    static final Map<Needs, List<Line>> CHECKABLE = new ConcurrentHashMap<>();
 
     @RequiredArgsConstructor
     static final class Line
@@ -24,17 +24,17 @@ final class Requirements
         final String quest;
     }
 
-    private Requirements()
+    Requirements()
     {
     }
 
     /** Lines such as {@code "25 Magic"}, {@code "3 × Air rune"} and {@code "Quest: Sea Slug"}. */
     static List<Line> describe(Needs needs, IntFunction<String> itemNames)
     {
-        List<Line> lines = new ArrayList<>();
+        var lines = new ArrayList<Line>();
         for (String skill : needs.skills.split(";"))
         {
-            String[] parts = SPACES.split(skill.trim(), 2);
+            var parts = SPACES.split(skill.trim(), 2);
             if (parts.length == 2 && isNumber(parts[0]))
             {
                 String name = parts[1].trim();
@@ -64,7 +64,7 @@ final class Requirements
     /** The lines {@link Unlocks} can tick off: skill levels and quests. */
     static List<Line> skillsAndQuests(Needs needs)
     {
-        List<Line> lines = CHECKABLE.get(needs);
+        var lines = CHECKABLE.get(needs);
         if (lines == null)
         {
             lines = Collections.unmodifiableList(describe(new Needs(needs.skills, "", needs.quests, ""), id -> null));
@@ -79,18 +79,18 @@ final class Requirements
     /** {@code "556=3&&554=1"}: all needed; {@code "1706=1||1708=1"}: alternatives. {@code itemNames} may return null. */
     static List<String> items(String column, IntFunction<String> itemNames)
     {
-        List<String> lines = new ArrayList<>();
+        var lines = new ArrayList<String>();
         if (column.trim().isEmpty())
         {
             return lines;
         }
         for (String all : ItemSnapshot.ALL.split(column))
         {
-            Set<String> alternatives = new LinkedHashSet<>();
+            var alternatives = new LinkedHashSet<String>();
             int quantity = 1;
             for (String alternative : ItemSnapshot.ANY.split(all))
             {
-                String[] parts = alternative.trim().split("=");
+                var parts = alternative.trim().split("=");
                 if (parts[0].isEmpty())
                 {
                     continue;
@@ -111,7 +111,7 @@ final class Requirements
             {
                 continue;
             }
-            List<String> names = new ArrayList<>(alternatives);
+            var names = new ArrayList<String>(alternatives);
             String text = String.join(" or ", names.subList(0, Math.min(MAX_ALTERNATIVES, names.size())));
             if (names.size() > MAX_ALTERNATIVES)
             {
@@ -122,7 +122,7 @@ final class Requirements
         return lines;
     }
 
-    private static String itemName(String token, IntFunction<String> itemNames)
+    static String itemName(String token, IntFunction<String> itemNames)
     {
         String name = isNumber(token) ? itemNames.apply(Integer.parseInt(token)) : null;
         // Charged variants such as "Amulet of glory(4)" collapse into one entry.
@@ -131,7 +131,7 @@ final class Requirements
 
     static List<Integer> itemIds(String column)
     {
-        List<Integer> ids = new ArrayList<>();
+        var ids = new ArrayList<Integer>();
         for (String token : column.split("&&|\\|\\|"))
         {
             String id = token.split("=")[0].trim();
@@ -143,7 +143,7 @@ final class Requirements
         return ids;
     }
 
-    private static boolean isNumber(String text)
+    static boolean isNumber(String text)
     {
         return !text.isEmpty() && text.length() <= 9 && text.chars().allMatch(Character::isDigit);
     }

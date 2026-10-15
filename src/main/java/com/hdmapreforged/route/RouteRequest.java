@@ -76,7 +76,7 @@ public final class RouteRequest
             && same(startEdges, other.startEdges);
     }
 
-    private static boolean same(List<Edge> a, List<Edge> b)
+    static boolean same(List<Edge> a, List<Edge> b)
     {
         for (int i = 0; i < a.size() && a.size() == b.size(); i++)
         {

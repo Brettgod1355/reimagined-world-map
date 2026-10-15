@@ -1,5 +1,8 @@
 package com.hdmapreforged;
 
+import static java.awt.RenderingHints.*;
+import static java.lang.Math.*;
+
 import java.awt.*;
 import java.awt.geom.*;
 import java.awt.image.*;
@@ -13,31 +16,31 @@ import java.util.function.*;
 /** Vector map icons, so they stay sharp at every zoom level and interface scale. */
 final class PoiIcons
 {
-    private static final Color OUTLINE = new Color(20, 18, 16);
-    private static final Color GLYPH = new Color(255, 255, 255, 240);
+    static final Color OUTLINE = new Color(20, 18, 16);
+    static final Color GLYPH = new Color(255, 255, 255, 240);
 
-    private PoiIcons()
+    PoiIcons()
     {
     }
 
     /** Rendered badges by type, size and screen scale. */
-    private static final Map<Long, BufferedImage> SPRITES = new ConcurrentHashMap<>();
-    private static final int MAX_SPRITES = 4000;
+    static final Map<Long, BufferedImage> SPRITES = new ConcurrentHashMap<>();
+    static final int MAX_SPRITES = 4000;
     /** The pixels they hold together: zooming makes a size per quarter pixel, and 4000 large ones were tens of MB. */
-    private static final AtomicLong SPRITE_PIXELS = new AtomicLong();
-    private static final long MAX_SPRITE_PIXELS = 4_000_000;
+    static final AtomicLong SPRITE_PIXELS = new AtomicLong();
+    static final long MAX_SPRITE_PIXELS = 4_000_000;
 
     /** {@link #paint} from a cached image: painting hundreds of badges shape by shape was most of a frame's cost. */
     static void paintCached(Graphics2D g, PoiType type, double cx, double cy, double size, boolean emphasised)
     {
-        AffineTransform transform = g.getTransform();
+        var transform = g.getTransform();
         double device = device(transform);
         // Quarter pixels of badge size, so zooming changes the image in small steps.
-        int quarter = (int) Math.round(size * 4);
-        long key = (long) type.ordinal() << 40 | (long) quarter << 16 | Math.round(device * 10) << 1 | (emphasised ? 1 : 0);
+        int quarter = (int) round(size * 4);
+        long key = (long) type.ordinal() << 40 | (long) quarter << 16 | round(device * 10) << 1 | (emphasised ? 1 : 0);
         double drawnSize = quarter / 4.0;
         // Room around the badge for the shadow and the emphasis ring.
-        double extent = drawnSize + (Math.ceil(drawnSize * 0.35) + 2) * 2;
+        double extent = drawnSize + (ceil(drawnSize * 0.35) + 2) * 2;
         BufferedImage sprite = SPRITES.get(key);
         if (sprite == null)
         {
@@ -47,7 +50,7 @@ final class PoiIcons
                 SPRITE_PIXELS.set(0);
             }
             sprite = sprite(extent, extent, device, sg -> {
-                sg.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+                sg.setRenderingHint(KEY_STROKE_CONTROL, VALUE_STROKE_PURE);
                 paint(sg, type, extent / 2, extent / 2, drawnSize, emphasised);
             });
             SPRITES.put(key, sprite);
@@ -67,24 +70,24 @@ final class PoiIcons
     {
         double tx = transform.getTranslateX();
         double ty = transform.getTranslateY();
-        if (transform.getType() <= AffineTransform.TYPE_TRANSLATION && tx == Math.rint(tx) && ty == Math.rint(ty))
+        if (transform.getType() <= AffineTransform.TYPE_TRANSLATION && tx == rint(tx) && ty == rint(ty))
         {
             // Screen scale 1 on whole pixels: drawn in place, without swapping the transform (costly).
-            g.drawImage(sprite, (int) Math.round(x), (int) Math.round(y), null);
+            g.drawImage(sprite, (int) round(x), (int) round(y), null);
             return;
         }
         if ((transform.getType() & (AffineTransform.TYPE_GENERAL_ROTATION | AffineTransform.TYPE_QUADRANT_ROTATION
             | AffineTransform.TYPE_GENERAL_TRANSFORM | AffineTransform.TYPE_FLIP)) != 0)
         {
             double device = device(transform);
-            AffineTransform place = new AffineTransform(transform);
+            var place = new AffineTransform(transform);
             place.translate(x, y);
             place.scale(1 / device, 1 / device);
             g.drawImage(sprite, place, null);
             return;
         }
-        long sx = Math.round(transform.getScaleX() * x + tx);
-        long sy = Math.round(transform.getScaleY() * y + ty);
+        long sx = round(transform.getScaleX() * x + tx);
+        long sy = round(transform.getScaleY() * y + ty);
         g.setTransform(AffineTransform.getTranslateInstance(sx, sy));
         g.drawImage(sprite, 0, 0, null);
         g.setTransform(transform);
@@ -94,7 +97,7 @@ final class PoiIcons
     static void paintDot(Graphics2D g, double cx, double cy, Color rim)
     {
         double device = device(g.getTransform());
-        long key = (1L << 62) | ((long) (rim.getRGB() & 0xffffffffL) << 8) | (int) Math.round(device * 10);
+        long key = (1L << 62) | ((long) (rim.getRGB() & 0xffffffffL) << 8) | (int) round(device * 10);
         double extent = 13;
         blit(g, SPRITES.computeIfAbsent(key, k -> sprite(extent, extent, device, sg -> {
             Ellipse2D dot = new Ellipse2D.Double(extent / 2 - 4.5, extent / 2 - 4.5, 9, 9);
@@ -109,16 +112,16 @@ final class PoiIcons
     /** Screen pixels per unit, clamped to a sane range; shared with {@link TextSprites}. */
     static double device(AffineTransform transform)
     {
-        return Math.max(1, Math.min(4, Math.abs(transform.getScaleX())));
+        return max(1, min(4, abs(transform.getScaleX())));
     }
 
     /** A picture of {@code width} by {@code height} units, {@code device} pixels a unit (rounded up), drawn antialiased. */
     static BufferedImage sprite(double width, double height, double device, Consumer<Graphics2D> draw)
     {
-        BufferedImage sprite = new BufferedImage((int) Math.ceil(width * device), (int) Math.ceil(height * device),
+        BufferedImage sprite = new BufferedImage((int) ceil(width * device), (int) ceil(height * device),
             BufferedImage.TYPE_INT_ARGB);
-        Graphics2D sg = sprite.createGraphics();
-        sg.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        var sg = sprite.createGraphics();
+        sg.setRenderingHint(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON);
         sg.scale(device, device);
         draw.accept(sg);
         sg.dispose();
@@ -152,37 +155,37 @@ final class PoiIcons
         g.setColor(type.color);
         g.fill(badge);
         g.setColor(OUTLINE);
-        g.setStroke(new BasicStroke((float) Math.max(1, size * 0.08)));
+        g.setStroke(new BasicStroke((float) max(1, size * 0.08)));
         g.draw(badge);
         g.setColor(GLYPH);
-        g.setStroke(new BasicStroke((float) Math.max(1, size * 0.09), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setStroke(new BasicStroke((float) max(1, size * 0.09), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         draw(g, GLYPHS.getOrDefault(type.name(), "O -0.4 -0.4 0.8 0.8"), cx, cy, r * 0.62);
     }
 
-    private static void paintGameIcon(Graphics2D g, BufferedImage icon, double cx, double cy, double size, boolean emphasised)
+    static void paintGameIcon(Graphics2D g, BufferedImage icon, double cx, double cy, double size, boolean emphasised)
     {
         // Pixel art in whole pixels: enlarged by whole times (the nearest, at least once), made smaller smoothly.
-        double fit = size / Math.max(icon.getWidth(), icon.getHeight());
-        double scale = fit >= 1 ? Math.max(1, Math.round(fit)) : fit;
+        double fit = size / max(icon.getWidth(), icon.getHeight());
+        double scale = fit >= 1 ? max(1, round(fit)) : fit;
         double w = icon.getWidth() * scale;
         double h = icon.getHeight() * scale;
         if (emphasised)
         {
-            double r = Math.max(w, h) / 2 + size * 0.18;
+            double r = max(w, h) / 2 + size * 0.18;
             g.setColor(new Color(255, 255, 255, 210));
-            g.setStroke(new BasicStroke((float) Math.max(1.5, size * 0.12)));
+            g.setStroke(new BasicStroke((float) max(1.5, size * 0.12)));
             g.draw(new Ellipse2D.Double(cx - r, cy - r, r * 2, r * 2));
         }
-        Graphics2D copy = (Graphics2D) g.create();
-        copy.setRenderingHint(RenderingHints.KEY_INTERPOLATION, scale >= 1
-            ? RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR : RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        copy.drawImage(icon, new AffineTransform(scale, 0, 0, scale, Math.round(cx - w / 2), Math.round(cy - h / 2)),
+        var copy = (Graphics2D) g.create();
+        copy.setRenderingHint(KEY_INTERPOLATION, scale >= 1
+            ? VALUE_INTERPOLATION_NEAREST_NEIGHBOR : VALUE_INTERPOLATION_BILINEAR);
+        copy.drawImage(icon, new AffineTransform(scale, 0, 0, scale, round(cx - w / 2), round(cy - h / 2)),
             null);
         copy.dispose();
     }
 
     /** Draws a glyph from {@code poi_glyphs.txt} in units of {@code s} around {@code (x, y)}; the file lists the ops. */
-    private static void draw(Graphics2D g, String ops, double x0, double y0, double s0)
+    static void draw(Graphics2D g, String ops, double x0, double y0, double s0)
     {
         // The origin and unit; U moves them until the path is painted.
         double x = x0;
@@ -191,7 +194,7 @@ final class PoiIcons
         Path2D pen = new Path2D.Double();
         for (String op : ops.split(";"))
         {
-            String[] t = op.trim().split(" ");
+            var t = op.trim().split(" ");
             double[] a = new double[8];
             for (int i = 1; i < t.length; i++)
             {
@@ -272,7 +275,7 @@ final class PoiIcons
     }
 
     /** Upper-case ops fill, lower-case ones outline. */
-    private static void shape(Graphics2D g, Shape shape, boolean fill)
+    static void shape(Graphics2D g, Shape shape, boolean fill)
     {
         if (fill)
         {
@@ -284,7 +287,7 @@ final class PoiIcons
         }
     }
 
-    private static final Map<String, String> GLYPHS = new HashMap<>();
+    static final Map<String, String> GLYPHS = new HashMap<>();
 
     static
     {
@@ -306,12 +309,12 @@ final class PoiIcons
     static BufferedImage image(PoiType type, int size)
     {
         return sprite(size + 2, size + 2, 1, g -> {
-            g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            g.setRenderingHint(KEY_STROKE_CONTROL, VALUE_STROKE_PURE);
             paint(g, type, (size + 2) / 2.0 - 0.5, (size + 2) / 2.0 - 1, size - 1, false);
         });
     }
 
-    private static BufferedImage icon(int size, String name)
+    static BufferedImage icon(int size, String name)
     {
         return sprite(size, size, 1, g -> draw(g, GLYPHS.get(name), 0, 0, 1));
     }

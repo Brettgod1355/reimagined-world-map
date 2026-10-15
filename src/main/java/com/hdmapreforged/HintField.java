@@ -12,9 +12,9 @@ import lombok.*;
 @RequiredArgsConstructor
 final class HintField extends JTextField
 {
-    private static final Color HINT = new Color(150, 150, 150);
+    static final Color HINT = new Color(150, 150, 150);
 
-    private final Supplier<String> hint;
+    final Supplier<String> hint;
 
     @Override
     protected void paintComponent(Graphics g)
@@ -22,10 +22,10 @@ final class HintField extends JTextField
         super.paintComponent(g);
         if (getText().isEmpty() && !isFocusOwner())
         {
-            Graphics2D g2 = (Graphics2D) g.create();
+            var g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g2.setColor(HINT);
-            FontMetrics m = g2.getFontMetrics();
+            var m = g2.getFontMetrics();
             g2.drawString(hint.get(), getInsets().left + 2, (getHeight() + m.getAscent() - m.getDescent()) / 2);
             g2.dispose();
         }

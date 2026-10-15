@@ -5,8 +5,8 @@ import java.util.*;
 /** A binary min-heap of longs (priority in the high bits, node in the low bits). */
 final class LongHeap
 {
-    private long[] items = new long[1024];
-    private int size;
+    long[] items = new long[1024];
+    int size;
 
     boolean isEmpty()
     {

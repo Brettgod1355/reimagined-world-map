@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static com.hdmapreforged.PoiType.TELEPORT;
+
 import java.awt.*;
 import java.util.*;
 import java.util.List;
@@ -14,24 +16,24 @@ import net.runelite.client.util.*;
 /** Details of the selected icon (requirements, destinations, links), or the teleports nearest a chosen point. */
 final class InfoCard extends Fitted
 {
-    private static final int MAX_LINKS = 60;
-    private static final Color MET = new Color(110, 200, 110);
-    private static final Color MISSING = new Color(230, 110, 100);
-    private static final Color LINK = ColorScheme.GRAND_EXCHANGE_LIMIT;
+    static final int MAX_LINKS = 60;
+    static final Color MET = new Color(110, 200, 110);
+    static final Color MISSING = new Color(230, 110, 100);
+    static final Color LINK = ColorScheme.GRAND_EXCHANGE_LIMIT;
 
-    private final MapView map;
-    private final Supplier<WorldData> world;
-    private final ItemNames itemNames;
-    private final HdMapReforgedConfig config;
-    private Poi poi;
-    private WorldPoint nearestTo;
-    private List<Poi> nearest = new ArrayList<>();
-    private int textWidth = 160;
-    private IntFunction<JComponent> route;
+    final MapView map;
+    final Supplier<WorldData> world;
+    final ItemNames itemNames;
+    final HdMapReforgedConfig config;
+    Poi poi;
+    WorldPoint nearestTo;
+    List<Poi> nearest = new ArrayList<>();
+    int textWidth = 160;
+    IntFunction<JComponent> route;
     /** The route's steps take milliseconds to build: while the card is hidden they wait, built once it shows. */
-    private boolean routeStale;
+    boolean routeStale;
     @Setter
-    private Runnable onRebuilt = () -> { };
+    Runnable onRebuilt = () -> { };
 
     InfoCard(MapView map, Supplier<WorldData> world, ItemNames itemNames, HdMapReforgedConfig config)
     {
@@ -61,15 +63,15 @@ final class InfoCard extends Fitted
         refresh();
     }
 
-    private List<ItemSources.Ware> wares;
+    List<ItemSources.Ware> wares;
     /** The shop a shop icon stands for, for its shopkeeper's picture. */
-    private WorldData.Shop shop;
+    WorldData.Shop shop;
     @Setter
-    private Consumer<String> itemSearch;
+    Consumer<String> itemSearch;
     @Setter
-    private NpcPictures npcPictures = new NpcPictures((id, done) -> done.accept(null));
+    NpcPictures npcPictures = new NpcPictures((id, done) -> done.accept(null));
 
-    private Consumer<Tour.Stop> stopAdder;
+    Consumer<Tour.Stop> stopAdder;
 
     void setStopAdder(Consumer<Tour.Stop> stopAdder)
     {
@@ -77,7 +79,7 @@ final class InfoCard extends Fitted
         refresh();
     }
 
-    private Consumer<WorldPoint> router;
+    Consumer<WorldPoint> router;
 
     void setRouter(Consumer<WorldPoint> router)
     {
@@ -93,7 +95,7 @@ final class InfoCard extends Fitted
         wares = shop == null ? null : world.get().wares(poi.location);
         if (poi != null)
         {
-            List<Integer> ids = new ArrayList<>();
+            var ids = new ArrayList<Integer>();
             poi.members().forEach(member -> ids.addAll(Requirements.itemIds(member.needs.items)));
             poi.links().forEach(link -> ids.addAll(Requirements.itemIds(link.needs.items)));
             // The wares' prices.
@@ -189,13 +191,13 @@ final class InfoCard extends Fitted
         return extra != null;
     }
 
-    private IntFunction<JComponent> extra;
+    IntFunction<JComponent> extra;
     /** The extra and the route shown each in a holder of its own, so one can change without the other. */
-    private final JPanel extraHolder = SearchResults.column();
-    private final JPanel routeHolder = SearchResults.column();
+    final JPanel extraHolder = SearchResults.column();
+    final JPanel routeHolder = SearchResults.column();
 
     /** {@code holder} holding {@code section} alone, at the card's text width. */
-    private JPanel fill(JPanel holder, IntFunction<JComponent> section)
+    JPanel fill(JPanel holder, IntFunction<JComponent> section)
     {
         holder.removeAll();
         holder.add(section.apply(textWidth));
@@ -203,7 +205,7 @@ final class InfoCard extends Fitted
     }
 
     /** Only {@code holder} built again, while the card shows it; false when the card must be built whole. */
-    private boolean refill(JPanel holder, IntFunction<JComponent> section)
+    boolean refill(JPanel holder, IntFunction<JComponent> section)
     {
         if (holder.getParent() != this || waiting != null)
         {
@@ -263,9 +265,9 @@ final class InfoCard extends Fitted
         }
     }
 
-    private Timer waiting;
+    Timer waiting;
 
-    private void rebuildNow()
+    void rebuildNow()
     {
         removeAll();
         if (nearestTo != null)
@@ -281,7 +283,7 @@ final class InfoCard extends Fitted
             if (extra != null && route != null)
             {
                 add(Box.createVerticalStrut(8));
-                JSeparator line = new JSeparator();
+                var line = new JSeparator();
                 line.setAlignmentX(Component.LEFT_ALIGNMENT);
                 add(line);
                 add(Box.createVerticalStrut(4));
@@ -306,7 +308,7 @@ final class InfoCard extends Fitted
         onRebuilt.run();
     }
 
-    private void buildNearest()
+    void buildNearest()
     {
         add(text("Nearest teleports to this spot", Color.WHITE, true));
         add(grey("As the crow flies, from where each one lands. Walking routes may differ."));
@@ -314,7 +316,7 @@ final class InfoCard extends Fitted
         {
             add(grey("None on this map."));
         }
-        for (Poi found : nearest)
+        for (var found : nearest)
         {
             JLabel entry = link(found.name + "  (" + found.location.distanceTo2D(nearestTo) + " tiles)", () -> map.focus(found));
             entry.setIcon(new ImageIcon(PoiIcons.image(found.type, 12)));
@@ -322,7 +324,7 @@ final class InfoCard extends Fitted
         }
     }
 
-    private void buildDetails()
+    void buildDetails()
     {
         JLabel title = text(poi.name, Color.WHITE, true);
         title.setIcon(new ImageIcon(PoiIcons.image(poi.type, 16)));
@@ -332,13 +334,13 @@ final class InfoCard extends Fitted
             + (poi.location.getPlane() > 0 ? " · floor " + poi.location.getPlane() : "");
         add(grey(where));
 
-        List<JButton> buttons = new ArrayList<>();
-        Poi.Link inside = MapView.mapBelow(poi);
+        var buttons = new ArrayList<JButton>();
+        var inside = MapView.mapBelow(poi);
         if (inside != null)
         {
             buttons.add(SearchResults.button(MapView.goInText(inside), () -> map.goIn(inside)));
         }
-        Poi target = poi;
+        var target = poi;
         if (router != null)
         {
             buttons.add(SearchResults.tip(SearchResults.button("Route", () -> router.accept(target.location)),
@@ -369,13 +371,13 @@ final class InfoCard extends Fitted
 
         if (!poi.nearby().isEmpty())
         {
-            boolean teleports = poi.nearby().stream().allMatch(p -> p.type == PoiType.TELEPORT);
+            boolean teleports = poi.nearby().stream().allMatch(p -> p.type == TELEPORT);
             heading(teleports ? "Teleports that land here" : "Also here");
-            for (Poi other : poi.nearby())
+            for (var other : poi.nearby())
             {
-                for (Poi member : other.members())
+                for (var member : other.members())
                 {
-                    addMember(member, member.type == PoiType.TELEPORT || teleports ? ""
+                    addMember(member, member.type == TELEPORT || teleports ? ""
                         : "  (" + member.type.displayName + ")");
                 }
             }
@@ -386,30 +388,30 @@ final class InfoCard extends Fitted
             buildWares();
         }
 
-        List<Poi> members = poi.members();
+        var members = poi.members();
         if (members.size() > 1)
         {
             heading("Ways to get here (" + members.size() + ")");
-            for (Poi member : members)
+            for (var member : members)
             {
                 addMember(member, "");
             }
         }
-        List<Requirements.Line> own = Requirements.describe(poi.needs, itemNames);
+        var own = Requirements.describe(poi.needs, itemNames);
         if (members.size() <= 1 && !own.isEmpty())
         {
             heading("Requirements");
             addRequirements(own, "");
         }
 
-        List<Poi.Link> links = poi.links();
-        Set<String> ownLines = new HashSet<>();
+        var links = poi.links();
+        var ownLines = new HashSet<String>();
         own.forEach(line -> ownLines.add(line.text));
         if (!links.isEmpty())
         {
             heading(poi.type.isRandomDestination() ? "Can send you to (" + links.size() + ")"
                 : poi.type.isNetwork() ? "Travel to (" + links.size() + ")" : "Leads to");
-            JCheckBox lines = new JCheckBox("Show lines on the map", map.linesShown(poi.type));
+            var lines = new JCheckBox("Show lines on the map", map.linesShown(poi.type));
             lines.setOpaque(false);
             lines.setFocusable(false);
             lines.setFont(FontManager.getRunescapeSmallFont());
@@ -421,7 +423,7 @@ final class InfoCard extends Fitted
             add(lines);
             for (int i = 0; i < links.size() && i < MAX_LINKS; i++)
             {
-                Poi.Link link = links.get(i);
+                var link = links.get(i);
                 boolean usable = usable(link.needs);
                 if (!usable && config.onlyUsable())
                 {
@@ -436,7 +438,7 @@ final class InfoCard extends Fitted
                 }
                 add(entry);
                 // Only what this trip needs beyond the stop's own requirements, listed above.
-                List<Requirements.Line> tripNeeds = Requirements.describe(link.needs, itemNames);
+                var tripNeeds = Requirements.describe(link.needs, itemNames);
                 tripNeeds.removeIf(line -> ownLines.contains(line.text));
                 if (!tripNeeds.isEmpty())
                 {
@@ -445,25 +447,25 @@ final class InfoCard extends Fitted
             }
         }
 
-        List<Poi> group = groupOf(poi);
+        var group = groupOf(poi);
         if (!group.isEmpty())
         {
             String kind = poi.group.toLowerCase(Locale.ROOT).endsWith("teleports") ? poi.group : poi.group + " teleports";
             heading("Other " + kind + " (" + group.size() + ")");
             for (int i = 0; i < group.size() && i < MAX_LINKS; i++)
             {
-                Poi other = group.get(i);
+                var other = group.get(i);
                 add(link(shortName(other), () -> map.focus(other)));
             }
         }
     }
 
-    private boolean usable(Needs needs)
+    boolean usable(Needs needs)
     {
         return map.unlocks() == null || map.unlocks().usable(needs);
     }
 
-    private void addMember(Poi member, String kind)
+    void addMember(Poi member, String kind)
     {
         boolean usable = usable(member.needs);
         if (!usable && config.onlyUsable())
@@ -471,14 +473,14 @@ final class InfoCard extends Fitted
             return;
         }
         add(text((usable ? "" : "✗ ") + member.name + kind, usable ? Color.WHITE : MISSING, false));
-        List<Requirements.Line> needs = Requirements.describe(member.needs, itemNames);
+        var needs = Requirements.describe(member.needs, itemNames);
         if (!needs.isEmpty())
         {
             addRequirements(needs, "    ");
         }
     }
 
-    private void buildWares()
+    void buildWares()
     {
         if (wares == null || wares.isEmpty())
         {
@@ -496,7 +498,7 @@ final class InfoCard extends Fitted
                 wareSort = sort;
                 refresh();
             }, textWidth));
-        List<ItemSources.Ware> sorted = new ArrayList<>(wares);
+        var sorted = new ArrayList<ItemSources.Ware>(wares);
         sorted.sort(ItemSources.wareOrder(wareSort, itemNames::price));
         for (ItemSources.Ware ware : sorted)
         {
@@ -520,12 +522,12 @@ final class InfoCard extends Fitted
     }
 
     /** How a shop's wares are ordered; kept from one shop to the next. */
-    private String wareSort = "shop";
+    String wareSort = "shop";
 
-    private void addRequirements(List<Requirements.Line> lines, String indent)
+    void addRequirements(List<Requirements.Line> lines, String indent)
     {
-        Unlocks unlocks = map.unlocks();
-        for (Requirements.Line line : lines)
+        var unlocks = map.unlocks();
+        for (var line : lines)
         {
             Boolean met = unlocks == null ? null : unlocks.met(line);
             String mark = met == null ? "• " : met ? "✓ " : "✗ ";
@@ -534,17 +536,17 @@ final class InfoCard extends Fitted
         }
     }
 
-    private List<Poi> groupOf(Poi poi)
+    List<Poi> groupOf(Poi poi)
     {
-        List<Poi> group = new ArrayList<>();
-        if (poi.type != PoiType.TELEPORT || poi.group == null)
+        var group = new ArrayList<Poi>();
+        if (poi.type != TELEPORT || poi.group == null)
         {
             return group;
         }
-        for (Poi other : map.pois())
+        for (var other : map.pois())
         {
-            Poi member = other.memberOf(poi.group);
-            if (other != poi && other.type == PoiType.TELEPORT && member != null && map.usable(member.needs))
+            var member = other.memberOf(poi.group);
+            if (other != poi && other.type == TELEPORT && member != null && map.usable(member.needs))
             {
                 group.add(other);
             }
@@ -552,17 +554,17 @@ final class InfoCard extends Fitted
         return group;
     }
 
-    private String shortName(Poi poi)
+    String shortName(Poi poi)
     {
-        Poi member = poi.memberOf(this.poi.group);
+        var member = poi.memberOf(this.poi.group);
         String name = member != null ? member.name : poi.name;
         int colon = name.indexOf(':');
         return colon > 0 ? name.substring(colon + 1).trim() : name;
     }
 
-    private void goTo(Poi.Link link)
+    void goTo(Poi.Link link)
     {
-        for (Poi other : map.pois())
+        for (var other : map.pois())
         {
             if (other != poi && other.type == poi.type && other.location.getPlane() == link.point.getPlane()
                 && other.location.distanceTo2D(link.point) <= 12)
@@ -575,7 +577,7 @@ final class InfoCard extends Fitted
     }
 
     /** A heading as the search panel's. */
-    private void heading(String text)
+    void heading(String text)
     {
         add(Box.createVerticalStrut(8));
         add(SearchResults.heading(text, textWidth));
@@ -591,18 +593,18 @@ final class InfoCard extends Fitted
         return label;
     }
 
-    private JLabel grey(String text)
+    JLabel grey(String text)
     {
         return text(text, SearchResults.SOFT, false);
     }
 
     /** As the search panel's, without the space between lines of a list. */
-    private JLabel text(String text, Color color, boolean bold)
+    JLabel text(String text, Color color, boolean bold)
     {
         return SearchResults.text(text, color, bold ? Font.BOLD : Font.PLAIN, bold ? 1 : 0, textWidth);
     }
 
-    private JLabel link(String text, Runnable action)
+    JLabel link(String text, Runnable action)
     {
         return SearchResults.clickable(text(text, LINK, false), action, true);
     }

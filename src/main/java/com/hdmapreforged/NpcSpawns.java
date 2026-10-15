@@ -46,7 +46,7 @@ final class NpcSpawns
             return copy(place, note);
         }
 
-        private Group copy(String place, String text)
+        Group copy(String place, String text)
         {
             Group group = new Group(name, place, points, category, text, color);
             group.poi = poi;

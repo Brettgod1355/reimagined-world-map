@@ -24,16 +24,16 @@ final class MapServer
     /** The live map server; its website shows the same map. */
     static final String HOST = "https://osrsmapreforged.online";
     static final int MAX_BODY_BYTES = 8 * 1024 * 1024;
-    private static final Pattern SAFE_VERSION = Pattern.compile("[A-Za-z0-9]([A-Za-z0-9_.-]{0,38}[A-Za-z0-9_-])?");
-    private static volatile HttpUrl base = HttpUrl.get(HOST);
+    static final Pattern SAFE_VERSION = Pattern.compile("[A-Za-z0-9]([A-Za-z0-9_.-]{0,38}[A-Za-z0-9_-])?");
+    static volatile HttpUrl base = HttpUrl.get(HOST);
 
-    private final OkHttpClient http;
-    private final Gson gson;
+    final OkHttpClient http;
+    final Gson gson;
 
     /** In developer mode {@code -Dhdmap.server=<url>} when given, else the fixed host. */
     static void use(boolean developerMode)
     {
-        HttpUrl other = developerMode ? HttpUrl.parse(System.getProperty("hdmap.server", "")) : null;
+        var other = developerMode ? HttpUrl.parse(System.getProperty("hdmap.server", "")) : null;
         base = other != null ? other : HttpUrl.get(HOST);
     }
 
@@ -44,7 +44,7 @@ final class MapServer
 
     static HttpUrl url(String... segments)
     {
-        HttpUrl.Builder url = base.newBuilder().addPathSegment("v1");
+        var url = base.newBuilder().addPathSegment("v1");
         for (String segment : segments)
         {
             url.addPathSegment(segment);
@@ -85,8 +85,8 @@ final class MapServer
         final Set<String> removed;
     }
 
-    private static final Pattern TILE_PATH = Pattern.compile("-?\\d{1,6}/-?\\d/[0-3]_\\d{1,6}_\\d{1,6}\\.png");
-    private static final int MAX_CHANGES = 200_000;
+    static final Pattern TILE_PATH = Pattern.compile("-?\\d{1,6}/-?\\d/[0-3]_\\d{1,6}_\\d{1,6}\\.png");
+    static final int MAX_CHANGES = 200_000;
 
     /** The changes of {@code version}; null when the server has none (its first version, or not reachable). */
     void changes(String version, Consumer<Changes> callback)
@@ -103,11 +103,11 @@ final class MapServer
         }, callback, null, MAX_BODY_BYTES);
     }
 
-    private static Set<String> paths(JsonObject o, String key)
+    static Set<String> paths(JsonObject o, String key)
     {
-        Set<String> paths = new HashSet<>();
-        JsonElement list = o.get(key);
-        for (JsonElement e : list != null && list.isJsonArray() ? list.getAsJsonArray() : new JsonArray())
+        var paths = new HashSet<String>();
+        var list = o.get(key);
+        for (var e : list != null && list.isJsonArray() ? list.getAsJsonArray() : new JsonArray())
         {
             String path = e.isJsonPrimitive() ? e.getAsString() : "";
             if (TILE_PATH.matcher(path).matches() && paths.size() < MAX_CHANGES)
@@ -144,10 +144,10 @@ final class MapServer
         get(url("npcs", version, id + ".png"), body -> body, callback, null, MAX_PICTURE_BYTES);
     }
 
-    private static final int MAX_PICTURE_BYTES = 256 * 1024;
-    private static final int MAX_PICTURE_SIDE = 1024;
+    static final int MAX_PICTURE_BYTES = 256 * 1024;
+    static final int MAX_PICTURE_SIDE = 1024;
 
-    private static String safeVersion(JsonObject versions, String which)
+    static String safeVersion(JsonObject versions, String which)
     {
         String version = versions != null && versions.has(which) ? versions.get(which).getAsString() : null;
         return isSafeVersion(version) ? version : null;
@@ -187,7 +187,7 @@ final class MapServer
      * Calls back once: with the parsed answer, or with {@code fallback} when there is none; an answer over {@code max}
      * bytes is none.
      */
-    private <T> void get(HttpUrl url, Function<byte[], T> parse, Consumer<T> callback, T fallback, int max)
+    <T> void get(HttpUrl url, Function<byte[], T> parse, Consumer<T> callback, T fallback, int max)
     {
         http.newCall(new Request.Builder().url(url).build()).enqueue(new Callback()
         {

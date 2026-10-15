@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static java.awt.RenderingHints.*;
+
 import java.awt.*;
 import java.awt.geom.*;
 import java.awt.image.*;
@@ -15,12 +17,12 @@ import lombok.*;
 final class ScaledTiles
 {
     /** Larger tiles would take a lot of memory and scale cheaply anyway. */
-    private static final int MAX_PIXELS = 512 * 512;
+    static final int MAX_PIXELS = 512 * 512;
     static final long MAX_BYTES = 64L * 1024 * 1024;
     /** Copies made per frame, in pixels (about 3 ms of smooth scaling): after a zoom, all at once took 16-30 ms. */
     static final int FRAME_PIXELS = 1 << 19;
 
-    private static final class Entry
+    static final class Entry
     {
         /** Weak, so a tile the cache dropped is not kept alive here. */
         final WeakReference<BufferedImage> source;
@@ -43,7 +45,7 @@ final class ScaledTiles
     }
 
     @RequiredArgsConstructor
-    private static final class Wanted
+    static final class Wanted
     {
         final TileCache.Key key;
         final BufferedImage source;
@@ -52,12 +54,12 @@ final class ScaledTiles
         final boolean smooth;
     }
 
-    private final LinkedHashMap<TileCache.Key, Entry> cache = new LinkedHashMap<>(64, 0.75f, true);
-    private int limit = 64;
-    private long bytes;
-    private int frame;
+    final LinkedHashMap<TileCache.Key, Entry> cache = new LinkedHashMap<>(64, 0.75f, true);
+    int limit = 64;
+    long bytes;
+    int frame;
     /** Tiles this frame drew the fast way for want of a copy, farthest from the middle first. */
-    private final List<Wanted> wanted = new ArrayList<>();
+    final List<Wanted> wanted = new ArrayList<>();
 
     /** Before a frame's tiles: keeps at most {@code tiles} copies. */
     void beginFrame(int tiles)
@@ -95,7 +97,7 @@ final class ScaledTiles
     }
 
     /** No room for {@code more} bytes without dropping a copy this frame drew. */
-    private boolean full(long more)
+    boolean full(long more)
     {
         return (cache.size() >= limit || bytes + more > MAX_BYTES) && !cache.isEmpty()
             && cache.values().iterator().next().frame == frame;
@@ -111,7 +113,7 @@ final class ScaledTiles
     void draw(Graphics2D g, TileCache.Key key, BufferedImage source, int x, int y, int width, int height,
         boolean settled, boolean smooth)
     {
-        AffineTransform transform = g.getTransform();
+        var transform = g.getTransform();
         double device = Math.abs(transform.getScaleX());
         int dw = (int) Math.round(width * device);
         int dh = (int) Math.round(height * device);
@@ -134,12 +136,12 @@ final class ScaledTiles
                 wanted.add(new Wanted(key, source, dw, dh, smooth));
             }
             // Meanwhile scaled the fast way, as while moving.
-            Object hint = g.getRenderingHint(RenderingHints.KEY_INTERPOLATION);
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            Object hint = g.getRenderingHint(KEY_INTERPOLATION);
+            g.setRenderingHint(KEY_INTERPOLATION, VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
             g.drawImage(source, x, y, width, height, null);
             if (hint != null)
             {
-                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, hint);
+                g.setRenderingHint(KEY_INTERPOLATION, hint);
             }
             return;
         }
@@ -150,10 +152,10 @@ final class ScaledTiles
         }
         else
         {
-            AffineTransform place = new AffineTransform(transform);
+            var place = new AffineTransform(transform);
             place.translate(x, y);
             place.scale(width / (double) dw, height / (double) dh);
-            Graphics2D copy = (Graphics2D) g.create();
+            var copy = (Graphics2D) g.create();
             try
             {
                 copy.setTransform(place);
@@ -170,18 +172,18 @@ final class ScaledTiles
     {
         BufferedImage scaled = new BufferedImage(width, height, source.getColorModel().hasAlpha()
             ? BufferedImage.TYPE_INT_ARGB_PRE : BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = scaled.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, smooth ? RenderingHints.VALUE_INTERPOLATION_BILINEAR
-            : RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        var g = scaled.createGraphics();
+        g.setRenderingHint(KEY_INTERPOLATION, smooth ? VALUE_INTERPOLATION_BILINEAR
+            : VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        g.setRenderingHint(KEY_RENDERING, VALUE_RENDER_QUALITY);
         g.drawImage(source, 0, 0, width, height, null);
         g.dispose();
         return scaled;
     }
 
-    private void trim()
+    void trim()
     {
-        Iterator<Entry> it = cache.values().iterator();
+        var it = cache.values().iterator();
         while ((cache.size() > limit || bytes > MAX_BYTES) && it.hasNext())
         {
             Entry eldest = it.next();

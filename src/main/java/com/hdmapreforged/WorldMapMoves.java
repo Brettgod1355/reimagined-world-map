@@ -16,7 +16,7 @@ import net.runelite.api.coords.*;
 final class WorldMapMoves
 {
     @RequiredArgsConstructor
-    private static final class Move
+    static final class Move
     {
         final int map;
         final int x;
@@ -30,9 +30,9 @@ final class WorldMapMoves
     }
 
     /** The parts drawn elsewhere, in the file's order. */
-    private static final List<Move> MOVES = new ArrayList<>();
+    static final List<Move> MOVES = new ArrayList<>();
     /** Every part listed, the ones drawn where they are with floors drawn flat too: for {@link #floorsDrawnFlat}. */
-    private static final List<Move> ALL = load();
+    static final List<Move> ALL = load();
 
     static
     {
@@ -45,17 +45,17 @@ final class WorldMapMoves
         }
     }
 
-    private WorldMapMoves()
+    WorldMapMoves()
     {
     }
 
     /** The last move that fits: whole map squares are listed before zones, so a zone's (finer) wins, as in the game. */
-    private static Move last(Predicate<Move> fits)
+    static Move last(Predicate<Move> fits)
     {
         return last(MOVES, fits);
     }
 
-    private static Move last(List<Move> moves, Predicate<Move> fits)
+    static Move last(List<Move> moves, Predicate<Move> fits)
     {
         for (int i = moves.size() - 1; i >= 0; i--)
         {
@@ -111,18 +111,18 @@ final class WorldMapMoves
         return found == null ? null : new Drawn(found.map, drawnBy(found, game));
     }
 
-    private static boolean moves(Move move, WorldPoint game)
+    static boolean moves(Move move, WorldPoint game)
     {
         int floor = game.getPlane() - move.plane;
         return inside(move, game.getX() - move.dx, game.getY() - move.dy) && floor >= 0 && floor < move.planes;
     }
 
-    private static boolean inside(Move move, int x, int y)
+    static boolean inside(Move move, int x, int y)
     {
         return x >= move.x && x < move.x + move.width && y >= move.y && y < move.y + move.height;
     }
 
-    private static WorldPoint drawnBy(Move move, WorldPoint game)
+    static WorldPoint drawnBy(Move move, WorldPoint game)
     {
         return new WorldPoint(game.getX() - move.dx, game.getY() - move.dy, game.getPlane() - move.plane);
     }
@@ -138,9 +138,9 @@ final class WorldMapMoves
         return found == null ? 1 : found.planes;
     }
 
-    private static List<Move> load()
+    static List<Move> load()
     {
-        List<Move> moves = new ArrayList<>();
+        var moves = new ArrayList<Move>();
         InputStream in = WorldMapMoves.class.getResourceAsStream("data/world_map_moves.tsv");
         if (in == null)
         {
@@ -159,7 +159,7 @@ final class WorldMapMoves
                 try
                 {
                     // Map id, x y width height, dx dy floor [floors].
-                    int[] v = Arrays.stream(line.trim().split("\\s+")).mapToInt(Integer::parseInt).toArray();
+                    var v = Arrays.stream(line.trim().split("\\s+")).mapToInt(Integer::parseInt).toArray();
                     moves.add(new Move(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v.length > 8 ? v[8] : 1));
                 }
                 catch (RuntimeException e)

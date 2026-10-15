@@ -18,20 +18,20 @@ import net.runelite.client.util.*;
 @RequiredArgsConstructor
 final class ItemNames implements IntFunction<String>, SearchResults.Prices
 {
-    private final ClientThread clientThread;
-    private final ItemManager itemManager;
-    private final Map<Integer, String> names = new ConcurrentHashMap<>();
+    final ClientThread clientThread;
+    final ItemManager itemManager;
+    final Map<Integer, String> names = new ConcurrentHashMap<>();
     /** Id to last lookup time; retried later, as the game's item data may not have been ready. */
-    private final Map<Integer, Long> unnamed = new ConcurrentHashMap<>();
-    private static final long RETRY_MS = 30_000;
-    private final Map<Integer, Integer> prices = new ConcurrentHashMap<>();
+    final Map<Integer, Long> unnamed = new ConcurrentHashMap<>();
+    static final long RETRY_MS = 30_000;
+    final Map<Integer, Integer> prices = new ConcurrentHashMap<>();
     /** Id to when its price was looked up; prices move, so they are looked up again after a while. */
-    private final Map<Integer, Long> priced = new ConcurrentHashMap<>();
-    private static final long PRICE_MS = 10 * 60_000;
+    final Map<Integer, Long> priced = new ConcurrentHashMap<>();
+    static final long PRICE_MS = 10 * 60_000;
     /** More than a big shop sells; the game's own image cache keeps only 128 for every plugin. */
     static final int IMAGES = 512;
     /** The pictures of the items shown last, so a list built again never asks the game again. Swing thread. */
-    private final Map<Integer, AsyncBufferedImage> images = new LruMap<>(16, IMAGES);
+    final Map<Integer, AsyncBufferedImage> images = new LruMap<>(16, IMAGES);
 
     @Override
     public int price(int id)
@@ -54,11 +54,11 @@ final class ItemNames implements IntFunction<String>, SearchResults.Prices
     }
 
     /** Client thread. */
-    private String lookUp(int id)
+    String lookUp(int id)
     {
         try
         {
-            ItemComposition item = itemManager.getItemComposition(id);
+            var item = itemManager.getItemComposition(id);
             String name = item == null ? null : item.getName();
             return name == null || name.isEmpty() || "null".equals(name) ? null : name;
         }
@@ -68,7 +68,7 @@ final class ItemNames implements IntFunction<String>, SearchResults.Prices
         }
     }
 
-    private boolean wanted(int id, long now)
+    boolean wanted(int id, long now)
     {
         if (!names.containsKey(id))
         {
@@ -83,7 +83,7 @@ final class ItemNames implements IntFunction<String>, SearchResults.Prices
     }
 
     /** Client thread. */
-    private int lookUpPrice(int id)
+    int lookUpPrice(int id)
     {
         try
         {

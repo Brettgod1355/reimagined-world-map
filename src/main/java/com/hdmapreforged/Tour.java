@@ -45,7 +45,7 @@ final class Tour
     static final int MAX_STOPS = 12;
     static final int MAX_TOURS = 50;
     static final int MAX_AVOIDED = 30;
-    private static final String HEADER = "# route";
+    static final String HEADER = "# route";
     /** Between the cells of a shared route's lines, where a tab would be lost in a chat. */
     static final String SHARED = " | ";
 
@@ -146,13 +146,13 @@ final class Tour
         {
             return null;
         }
-        WorldPoint best = kind.entries.get(0).point;
+        var best = kind.entries.get(0).point;
         if (near == null)
         {
             return best;
         }
         long bestDistance = Long.MAX_VALUE;
-        for (KindIndex.Entry entry : kind.entries)
+        for (var entry : kind.entries)
         {
             long dx = entry.point.getX() - near.getX();
             long dy = entry.point.getY() - near.getY();
@@ -181,7 +181,7 @@ final class Tour
         return encode(tours, SHARED);
     }
 
-    private static String encode(List<Tour> tours, String cell)
+    static String encode(List<Tour> tours, String cell)
     {
         StringBuilder text = new StringBuilder();
         for (Tour tour : tours)
@@ -195,7 +195,7 @@ final class Tour
                 }
                 else
                 {
-                    WorldPoint p = stop.point;
+                    var p = stop.point;
                     text.append(p.getX()).append(' ').append(p.getY()).append(' ').append(p.getPlane()).append(cell)
                         .append(clean(stop.name));
                 }
@@ -212,18 +212,18 @@ final class Tour
     /** Bad lines are skipped, never an error; a line's cells may be parted by tabs or by {@link #SHARED}. */
     static List<Tour> decode(String text)
     {
-        List<Tour> tours = new ArrayList<>();
+        var tours = new ArrayList<Tour>();
         if (text == null)
         {
             return tours;
         }
         String name = null;
         boolean loop = false;
-        List<Stop> stops = new ArrayList<>();
-        Set<String> avoid = new LinkedHashSet<>();
+        var stops = new ArrayList<Stop>();
+        var avoid = new LinkedHashSet<String>();
         for (String line : text.split("\r?\n"))
         {
-            String[] cells = cells(line);
+            var cells = cells(line);
             if (cells[0].equals(HEADER) && cells.length > 1)
             {
                 if (name != null)
@@ -274,9 +274,9 @@ final class Tour
     }
 
     /** A line's cells, trimmed: parted by tabs, or without any by {@link #SHARED} (a bare "|" counts too). */
-    private static String[] cells(String line)
+    static String[] cells(String line)
     {
-        String[] cells = line.indexOf('\t') >= 0 ? line.split("\t", -1) : line.split("\\s*\\|\\s*", -1);
+        var cells = line.indexOf('\t') >= 0 ? line.split("\t", -1) : line.split("\\s*\\|\\s*", -1);
         for (int i = 0; i < cells.length; i++)
         {
             cells[i] = cells[i].trim();
@@ -285,7 +285,7 @@ final class Tour
     }
 
     /** Without what would part a line's cells or end it. */
-    private static String clean(String text)
+    static String clean(String text)
     {
         return text.replaceAll("\\s*[\\t\\r\\n|]+\\s*", " ").trim();
     }
@@ -319,9 +319,9 @@ final class Tour
         // Per set of places visited, last place and whether the once-only teleport was taken (0 or 1).
         long[][][] best = new long[full][n][2];
         int[][][] from = new int[full][n][2];
-        for (long[][] row : best)
+        for (var row : best)
         {
-            for (long[] used : row)
+            for (var used : row)
             {
                 Arrays.fill(used, unreachable);
             }
@@ -386,7 +386,7 @@ final class Tour
                 }
             }
         }
-        List<Integer> order = new ArrayList<>();
+        var order = new ArrayList<Integer>();
         int set = full - 1;
         for (int at = end, used = endUsed; at >= 0; )
         {
@@ -401,7 +401,7 @@ final class Tour
     }
 
     /** Impossible trips weigh a lot but the order still visits everything. */
-    private static long weight(long cost, long unreachable)
+    static long weight(long cost, long unreachable)
     {
         return cost < 0 ? unreachable / (MAX_STOPS + 2) : cost;
     }

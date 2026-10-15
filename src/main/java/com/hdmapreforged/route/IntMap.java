@@ -7,17 +7,17 @@ final class IntMap
 {
     /** Returned for a missing key; never a key itself. */
     static final int MISSING = Integer.MIN_VALUE;
-    private int[] keys;
-    private int[] values;
-    private int size;
-    private int mask;
+    int[] keys;
+    int[] values;
+    int size;
+    int mask;
 
     IntMap(int capacity)
     {
         allocate(Integer.highestOneBit(Math.max(16, capacity) - 1) << 1);
     }
 
-    private void allocate(int n)
+    void allocate(int n)
     {
         keys = new int[n];
         Arrays.fill(keys, MISSING);
@@ -26,7 +26,7 @@ final class IntMap
         size = 0;
     }
 
-    private int slot(int key)
+    int slot(int key)
     {
         int h = key * 0x9E3779B9;
         int i = (h ^ h >>> 16) & mask;
@@ -59,10 +59,10 @@ final class IntMap
         values[i] = value;
     }
 
-    private void grow()
+    void grow()
     {
-        int[] oldKeys = keys;
-        int[] oldValues = values;
+        var oldKeys = keys;
+        var oldValues = values;
         allocate(oldKeys.length * 2);
         for (int i = 0; i < oldKeys.length; i++)
         {

@@ -11,8 +11,8 @@ import lombok.*;
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 final class Reached
 {
-    private final NodeSet nodes;
-    private final boolean complement;
+    final NodeSet nodes;
+    final boolean complement;
 
     boolean contains(int node)
     {

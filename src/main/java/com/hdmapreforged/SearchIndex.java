@@ -66,7 +66,7 @@ final class SearchIndex
         switch (hit.type)
         {
             case PLACE:
-                MapData.Place place = (MapData.Place) hit.target;
+                var place = (MapData.Place) hit.target;
                 return "place".equals(place.kind) && world.monsterName(place.name);
             case MAP:
                 return world.monsterName(((BaseMap) hit.target).name);
@@ -77,14 +77,14 @@ final class SearchIndex
 
     List<Hit> find(String query, int limit, Predicate<Hit> allowed)
     {
-        String[] typed = words(query);
+        var typed = words(query);
         if (typed.length == 0)
         {
             return Collections.emptyList();
         }
         String whole = String.join(" ", typed);
-        Map<Hit, Double> scores = new HashMap<>();
-        List<Hit> found = new ArrayList<>();
+        var scores = new HashMap<Hit, Double>();
+        var found = new ArrayList<Hit>();
         for (Hit hit : hits)
         {
             double score = score(hit, typed, whole);
@@ -96,8 +96,8 @@ final class SearchIndex
         }
         // Stable: equally good hits keep the index's order.
         found.sort(Comparator.comparingDouble(scores::get));
-        List<Hit> best = new ArrayList<>();
-        Set<String> labels = new HashSet<>();
+        var best = new ArrayList<Hit>();
+        var labels = new HashSet<String>();
         for (Hit hit : found)
         {
             if (labels.add(hit.type == Type.MAP ? hit.label : hit.label.toLowerCase(Locale.ROOT)) && best.size() < limit)
@@ -203,7 +203,7 @@ final class SearchIndex
             : length == t - 1 && word.regionMatches(i, typed, i + 1, length - i);
     }
 
-    private static final Pattern NOT_WORD = Pattern.compile("[^a-z0-9]+");
+    static final Pattern NOT_WORD = Pattern.compile("[^a-z0-9]+");
 
     /** Lower-case words without punctuation: "Phosani's Nightmare" is "phosanis nightmare". */
     static String[] words(String text)

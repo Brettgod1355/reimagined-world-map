@@ -32,9 +32,9 @@ public final class ReturnAreas
         }
     }
 
-    private static final RouteFiles.Table<List<Area>> AREAS = new RouteFiles.Table<>(ReturnAreas::read);
+    static final RouteFiles.Table<List<Area>> AREAS = new RouteFiles.Table<>(ReturnAreas::read);
 
-    private ReturnAreas()
+    ReturnAreas()
     {
     }
 
@@ -51,15 +51,15 @@ public final class ReturnAreas
         return null;
     }
 
-    private static List<Area> read()
+    static List<Area> read()
     {
-        List<Area> areas = new ArrayList<>();
-        for (String[] cells : Pathfinder.rows(RESOURCE))
+        var areas = new ArrayList<Area>();
+        for (var cells : Pathfinder.rows(RESOURCE))
         {
             try
             {
-                int[] box = Pathfinder.ints(cells[1]);
-                String[] tiles = cells[2].trim().split(";");
+                var box = Pathfinder.ints(cells[1]);
+                var tiles = cells[2].trim().split(";");
                 int[] exits = new int[tiles.length];
                 for (int i = 0; i < tiles.length; i++)
                 {

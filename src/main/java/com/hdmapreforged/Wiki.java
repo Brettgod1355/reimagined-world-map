@@ -7,7 +7,7 @@ final class Wiki
 {
     static final String WIKI = "https://oldschool.runescape.wiki";
 
-    private Wiki()
+    Wiki()
     {
     }
 

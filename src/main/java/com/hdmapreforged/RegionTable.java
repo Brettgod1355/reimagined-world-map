@@ -58,7 +58,7 @@ class RegionTable
     {
         int region = regionId(x, y);
         String text = zones.get(region);
-        int[] ids = owners.get(region);
+        var ids = owners.get(region);
         if (text == null || ids == null)
         {
             return null;
@@ -110,7 +110,7 @@ class RegionTable
         {
             return new int[]{(tile >> 2) - 2, tile & 3};
         }
-        int[] packed = floors.get(regionId(x, y));
+        var packed = floors.get(regionId(x, y));
         int v = packed == null ? 0 : packed[((x & 63) / ZONE * ZONES + (y & 63) / ZONE) * 4 + floor];
         return v == 0 ? null : new int[]{(v >> 2) - 2, v & 3};
     }
@@ -171,11 +171,11 @@ class RegionTable
 
     private void readLine(String line)
     {
-        String[] cells = line.split("\t", -1);
-        int[] ids = NONE;
+        var cells = line.split("\t", -1);
+        var ids = NONE;
         if (cells.length > 1 && !cells[1].trim().isEmpty())
         {
-            String[] parts = cells[1].split(",");
+            var parts = cells[1].split(",");
             ids = new int[parts.length];
             for (int i = 0; i < parts.length; i++)
             {
@@ -241,7 +241,7 @@ class RegionTable
      */
     private void readEntries(String line, int fields, BiConsumer<Integer, int[]> use)
     {
-        String[] cells = line.split("\t");
+        var cells = line.split("\t");
         int region = Integer.parseInt(cells[1].trim());
         if (region < 0 || region > 0xFFFF || cells.length < 3)
         {
@@ -249,7 +249,7 @@ class RegionTable
         }
         for (String entry : cells[2].split(","))
         {
-            String[] parts = entry.trim().split("[.=/]");
+            var parts = entry.trim().split("[.=/]");
             if (parts.length != fields)
             {
                 continue;

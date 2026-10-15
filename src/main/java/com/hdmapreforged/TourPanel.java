@@ -57,7 +57,7 @@ final class TourPanel
         {
             try
             {
-                Transferable held = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
+                var held = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
                 return held != null && held.isDataFlavorSupported(DataFlavor.stringFlavor)
                     ? (String) held.getTransferData(DataFlavor.stringFlavor) : null;
             }
@@ -76,17 +76,17 @@ final class TourPanel
         void stop();
     }
 
-    private static final Color LINK = ColorScheme.GRAND_EXCHANGE_LIMIT;
+    static final Color LINK = ColorScheme.GRAND_EXCHANGE_LIMIT;
 
-    private final Actions actions;
-    private final Consumer<IntFunction<JComponent>> show;
-    private final Consumer<WorldPoint> focus;
-    private boolean open;
+    final Actions actions;
+    final Consumer<IntFunction<JComponent>> show;
+    final Consumer<WorldPoint> focus;
+    boolean open;
     /** While the fastest order is worked out; {@link #orderings} counts runs, so a cancelled one ends nothing. */
-    private boolean ordering;
-    private int orderings;
+    boolean ordering;
+    int orderings;
 
-    private final String back;
+    final String back;
 
     TourPanel(Actions actions, Consumer<IntFunction<JComponent>> show, Consumer<WorldPoint> focus)
     {
@@ -124,7 +124,7 @@ final class TourPanel
         open = false;
     }
 
-    private void cancelOrder()
+    void cancelOrder()
     {
         if (ordering)
         {
@@ -142,10 +142,10 @@ final class TourPanel
         }
     }
 
-    private JComponent section(int width)
+    JComponent section(int width)
     {
         JPanel panel = column();
-        List<Tour> tours = new ArrayList<>(actions.tours());
+        var tours = new ArrayList<Tour>(actions.tours());
         Tour current = Tour.named(tours, actions.editing());
 
         if (back != null)
@@ -155,7 +155,7 @@ final class TourPanel
         }
 
         JPanel pick = row();
-        JComboBox<String> which = new JComboBox<>();
+        var which = new JComboBox<String>();
         for (Tour t : tours)
         {
             which.addItem(t.name);
@@ -190,7 +190,7 @@ final class TourPanel
             String typed = name.getText().trim();
             if (!typed.isEmpty() && !typed.equals(current.name))
             {
-                List<Tour> others = new ArrayList<>(tours);
+                var others = new ArrayList<Tour>(tours);
                 others.remove(current);
                 String unique = Tour.unique(others, typed);
                 tours.set(tours.indexOf(current), current.renamed(unique));
@@ -220,7 +220,7 @@ final class TourPanel
         for (int i = 0; i < current.stops.size(); i++)
         {
             int at = i;
-            Tour.Stop stop = current.stops.get(i);
+            var stop = current.stops.get(i);
             JPanel line = panel(new BorderLayout(4, 0));
             String label = (i + 1) + ". " + stop.name;
             line.add(current.repeats(i) ? tip(text(label, ColorScheme.MEDIUM_GRAY_COLOR, width - 90),
@@ -260,7 +260,7 @@ final class TourPanel
         if (current.stops.size() > 1)
         {
             go.add(Box.createHorizontalStrut(4));
-            JCheckBox loop = new JCheckBox("Loop", current.loop);
+            var loop = new JCheckBox("Loop", current.loop);
             loop.setOpaque(false);
             loop.setToolTipText("After the last stop, start again at the first");
             loop.addActionListener(e -> {
@@ -321,7 +321,7 @@ final class TourPanel
         return panel;
     }
 
-    private void order(Tour current, boolean everything)
+    void order(Tour current, boolean everything)
     {
         ordering = true;
         int run = ++orderings;
@@ -335,15 +335,15 @@ final class TourPanel
         });
     }
 
-    private void copy(String text, String what)
+    void copy(String text, String what)
     {
         actions.say(actions.copy(text) ? what + " copied to the clipboard" : "Could not copy: the clipboard is in use");
     }
 
     /** Adds the routes with stops on the clipboard, each under a name not taken; the last added is the one edited. */
-    private void importRoutes(List<Tour> tours)
+    void importRoutes(List<Tour> tours)
     {
-        List<Tour> found = Tour.decode(actions.paste());
+        var found = Tour.decode(actions.paste());
         found.removeIf(t -> t.stops.isEmpty());
         if (found.isEmpty())
         {
@@ -371,14 +371,14 @@ final class TourPanel
     }
 
     /** The menu last opened under a button; a test reads it, as a menu shows only under a shown button. */
-    private JPopupMenu lastMenu;
+    JPopupMenu lastMenu;
 
     /** A button that opens a menu of choices under itself, filled by {@code choices} when clicked. */
-    private JButton choice(String text, Consumer<JPopupMenu> choices)
+    JButton choice(String text, Consumer<JPopupMenu> choices)
     {
         JButton[] made = new JButton[1];
         made[0] = button(text, () -> {
-            JPopupMenu menu = new JPopupMenu();
+            var menu = new JPopupMenu();
             choices.accept(menu);
             lastMenu = menu;
             if (made[0].isShowing())
@@ -390,7 +390,7 @@ final class TourPanel
     }
 
 
-    private void move(List<Tour> tours, Tour tour, int at, int by)
+    void move(List<Tour> tours, Tour tour, int at, int by)
     {
         int to = at + by;
         if (to < 0 || to >= tour.stops.size())
@@ -401,13 +401,13 @@ final class TourPanel
         save(tours, tour.name);
     }
 
-    private void save(List<Tour> tours, String editing)
+    void save(List<Tour> tours, String editing)
     {
         actions.save(tours, editing);
         refresh();
     }
 
-    private static JPanel row()
+    static JPanel row()
     {
         JPanel row = panel(null);
         row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
@@ -415,7 +415,7 @@ final class TourPanel
     }
 
     /** Enabled when {@code usable} and not while the fastest order is worked out. */
-    private JButton small(String text, Runnable action, String tip, boolean usable)
+    JButton small(String text, Runnable action, String tip, boolean usable)
     {
         JButton button = tip(button(text, action), tip);
         button.setMargin(new Insets(0, 4, 0, 4));
@@ -423,12 +423,12 @@ final class TourPanel
         return button;
     }
 
-    private static JLabel text(String text, Color color, int width)
+    static JLabel text(String text, Color color, int width)
     {
         return SearchResults.text(text, color, false, Math.max(60, width));
     }
 
-    private static JLabel link(String text, Runnable action, int width)
+    static JLabel link(String text, Runnable action, int width)
     {
         return clickable(tip(text(text, LINK, width), "Show on the map"), action, false);
     }
