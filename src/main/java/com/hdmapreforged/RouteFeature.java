@@ -703,9 +703,13 @@ public final class RouteFeature
     volatile List<int[]> spWalks = List.of();
     final AtomicInteger spAsked = new AtomicInteger();
 
+    /** Where our planner filled in what Shortest Path's route could not be walked, shown in the game; null none. */
+    volatile Route spFilled;
+
     /**
      * From the player to its first transport, between its transports, from the last to its target: walking only (no
-     * shortcut or transport of ours), as its own path walks between the transports it takes.
+     * shortcut or transport of ours), as its own path walks between the transports it takes; planned by ours across
+     * transports it gives off the map (setting).
      */
     void walkShortestPath(List<ShortestPathBridge.Jump> jumps, WorldPoint target)
     {
@@ -713,27 +717,39 @@ public final class RouteFeature
         var from = lastLocation;
         Pathfinder pf = walker;
         var work = background;
-        if (from == null || pf == null || work == null)
+        var map = source;
+        if (from == null || pf == null || work == null || map == null)
         {
             return;
         }
-        var ends = new ArrayList<WorldPoint>(List.of(from));
-        jumps.forEach(j -> ends.addAll(List.of(j.from, j.to)));
-        ends.add(target);
+        // From where our planner has the player: in one's house, on its plan.
+        var legs = legs(start >= 0 ? start : pack(from), jumps, pack(target), map, config.routeFillGaps());
         work.execute(() -> {
             var walks = new ArrayList<int[]>();
-            for (int i = 0; i + 1 < ends.size() && asked == spAsked.get(); i += 2)
+            var filled = new ArrayList<Step>();
+            for (var leg : legs)
             {
-                var request = new RouteRequest(pack(ends.get(i)), pack(ends.get(i + 1)), List.of(), List.of(),
-                    1, true, RouteRequest.DEFAULT_NODE_LIMIT);
+                if (asked != spAsked.get())
+                {
+                    break;
+                }
+                // Walking only; across a transport left out, planned by ours (null while its data loads).
+                var request = leg.planned ? request(leg.from, leg.to, false) : new RouteRequest(leg.from, leg.to,
+                    List.of(), List.of(), 1, true, RouteRequest.DEFAULT_NODE_LIMIT);
+                if (request == null)
+                {
+                    continue;
+                }
                 try
                 {
-                    // Only a walk that gets there: an end off the map (its route from inside a house starts on the
-                    // house's instance tiles) gave a walk toward it that stopped somewhere else.
-                    var walk = pf.find(request, () -> asked != spAsked.get());
-                    if (walk.outcome == FOUND)
+                    var way = pf.find(request, () -> asked != spAsked.get());
+                    if (way.outcome == FOUND)
                     {
-                        walk.steps.stream().filter(s -> s.kind == Kind.WALK).forEach(s -> walks.add(s.points));
+                        way.steps.stream().filter(s -> s.kind == Kind.WALK).forEach(s -> walks.add(s.points));
+                        if (leg.planned)
+                        {
+                            filled.addAll(offItsMap(way.steps));
+                        }
                     }
                 }
                 catch (RuntimeException e)
@@ -744,9 +760,116 @@ public final class RouteFeature
             if (asked == spAsked.get())
             {
                 spWalks = walks;
+                int end = filled.isEmpty() ? -1 : filled.get(filled.size() - 1).last();
+                spFilled = end < 0 ? null : new Route(FOUND, filled, 0, end, end, false, false, 0);
                 invokeLater(this::repaint);
             }
         });
+    }
+
+    /** A stretch of Shortest Path's route: walked, or planned by ours where it left a transport out. */
+    @RequiredArgsConstructor
+    static final class Leg
+    {
+        final int from;
+        final int to;
+        final boolean planned;
+    }
+
+    /**
+     * Its route's stretches between its transports. A transport with an end off the map (its stand-in for one's house,
+     * a tile of an instance) is left out, and the stretch across it planned by ours, which knows one's house; with
+     * {@code fill} off, that stretch is left out too.
+     */
+    static List<Leg> legs(int from, List<ShortestPathBridge.Jump> jumps, int target, RouteSource map, boolean fill)
+    {
+        var legs = new ArrayList<Leg>();
+        boolean leftOut = false;
+        for (var j : jumps)
+        {
+            int origin = place(map, j.from);
+            int landing = place(map, j.to);
+            if (origin < 0 || landing < 0)
+            {
+                leftOut = true;
+                continue;
+            }
+            if (fill || !leftOut)
+            {
+                legs.add(new Leg(from, origin, leftOut));
+            }
+            from = landing;
+            leftOut = false;
+        }
+        if (fill || !leftOut)
+        {
+            legs.add(new Leg(from, target, leftOut));
+        }
+        return legs;
+    }
+
+    /**
+     * Of a stretch planned by ours, the steps up to leaving ground it has no map for (one's house plan): the rest it
+     * draws in the game itself.
+     */
+    static List<Step> offItsMap(List<Step> steps)
+    {
+        int last = -1;
+        for (int i = 0; i < steps.size(); i++)
+        {
+            for (int point : steps.get(i).points)
+            {
+                if (!Tiles.isSea(point) && HousePlan.contains(Tiles.x(point), Tiles.y(point)))
+                {
+                    last = i;
+                    break;
+                }
+            }
+        }
+        return steps.subList(0, last + 1);
+    }
+
+    /**
+     * Where a point of its route is on the map's own ground, as our planner places it (a spot on an object or a wall
+     * moves to the nearest open tile); -1 for a house plan or a tile of an instance, which the map has no ground for.
+     */
+    static int place(RouteSource map, WorldPoint point)
+    {
+        return HousePlan.contains(point.getX(), point.getY()) ? -1 : map.snap(point);
+    }
+
+    /** The filled-in route's cut last shown, and the route it was cut from. Swing. */
+    Route filledOf;
+    Route filledAhead;
+
+    /** Swing: what the game shows: our route, or with Shortest Path's what our planner filled in of it, still ahead. */
+    Route inGame(Route ours)
+    {
+        if (!config.routeInGame())
+        {
+            return null;
+        }
+        var filled = spFilled;
+        if (ours != null || filled == null)
+        {
+            return ours;
+        }
+        var now = filled.ahead(start);
+        // The same cut as last tick: kept, so HD World Markers is not sent the tiles again.
+        if (filled == filledOf && sameCut(now, filledAhead))
+        {
+            now = filledAhead;
+        }
+        filledOf = filled;
+        filledAhead = now;
+        return now;
+    }
+
+    /** As many steps left, and as many points left of the first: the same cut of a route as before. */
+    static boolean sameCut(Route a, Route b)
+    {
+        return a != null && b != null && a.steps.size() == b.steps.size()
+            && (a.steps.isEmpty() || a.steps.get(0).points.length == b.steps.get(0).points.length);
     }
 
     void paintHandedOver(Graphics2D g, Projection p)
@@ -876,6 +999,7 @@ public final class RouteFeature
         handedOver = null;
         spJumps = List.of();
         spWalks = List.of();
+        spFilled = null;
         spAsked.incrementAndGet();
     }
 
@@ -1322,8 +1446,7 @@ public final class RouteFeature
         Route route = effective(c);
         Route now = route == null ? null : route.ahead(player);
         Route before = ahead;
-        if (route != null && route == aheadOf && before != null && now != null && now.steps.size() == before.steps.size()
-            && (now.steps.isEmpty() || now.steps.get(0).points.length == before.steps.get(0).points.length))
+        if (route != null && route == aheadOf && sameCut(now, before))
         {
             now = before; // the same cut as last tick
         }
@@ -1347,7 +1470,7 @@ public final class RouteFeature
         aheadWalkedOf = now;
         // Not wrapped again: on Java 11 the wrappers would nest every tick until the stack overflows.
         aheadWalked = walkedNow == walkedBefore ? walkedBefore : Collections.unmodifiableSet(walkedNow);
-        shown = config.routeInGame() ? now : null;
+        shown = inGame(now);
         int steps = now == null ? -1 : now.steps.size();
         int points = now == null || now.steps.isEmpty() ? -1 : now.steps.get(0).points.length;
         if (steps != lastAheadSteps && lastAheadSteps >= 0 && steps >= 0)
@@ -1586,6 +1709,10 @@ public final class RouteFeature
         if ("routeFollowPlugins".equals(key))
         {
             invokeLater(this::followAgain);
+        }
+        if ("routeFillGaps".equals(key) && handedOver != null)
+        {
+            walkShortestPath(spJumps, handedOver);
         }
         if (LOOK_KEYS.contains(key))
         {
@@ -2859,7 +2986,7 @@ public final class RouteFeature
                 fadeInTiles(minus(now, was));
             }
         }
-        shown = config.routeInGame() ? ahead : null;
+        shown = inGame(ahead);
         boolean up = bringUp;
         bringUp = false;
         showSteps(c, up);

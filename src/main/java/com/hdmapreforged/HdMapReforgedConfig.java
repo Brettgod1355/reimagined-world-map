@@ -301,6 +301,14 @@ public interface HdMapReforgedConfig extends Config
         return RoutePlanner.OWN;
     }
 
+    @ConfigItem(keyName = "routeFillGaps", name = "Shortest Path: Fill in gaps", position = -1, section = route,
+        description = "With Shortest Path as planner, this plugin plans the parts of its route it cannot show (such as "
+            + "the way through your house) and draws them too. Off: less to plan and draw")
+    default boolean routeFillGaps()
+    {
+        return true;
+    }
+
     @ConfigItem(keyName = "routeFollowPlugins", name = "Follow other plugins' directions", section = route,
         description = "With this plugin as planner, also plan a route to directions other plugins (such as Quest "
             + "Helper) send to Shortest Path")
