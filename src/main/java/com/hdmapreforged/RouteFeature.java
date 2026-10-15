@@ -471,6 +471,8 @@ public final class RouteFeature
         boolean asLines = config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES;
         var lines = new ArrayList<List<WorldPoint>>();
         var lineColors = new ArrayList<Color>();
+        var lineArrows = new ArrayList<Integer>();
+        int every = config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS ? ARROW_EVERY : 0;
         if (asLines)
         {
             eachLine(route, (points, color) -> {
@@ -488,6 +490,7 @@ public final class RouteFeature
                     {
                         lines.add(line);
                         lineColors.add(color);
+                        lineArrows.add(every);
                         line = new ArrayList<>();
                     }
                 }
@@ -495,9 +498,11 @@ public final class RouteFeature
                 {
                     lines.add(line);
                     lineColors.add(color);
+                    lineArrows.add(every);
                 }
             });
         }
+        // The pieces fading behind the player: an arrow passed keeps its own (one on its first tile).
         if (asLines)
         {
             Color walked = current();
@@ -508,13 +513,13 @@ public final class RouteFeature
                 {
                     lines.add(List.of(a, b));
                     lineColors.add(alpha(walked, walked.getAlpha() * alpha));
+                    lineArrows.add(piece[2]);
                 }
             });
         }
         if (asLines || sentLines)
         {
-            eventBus.post(TileMarkersBridge.lines(lines, lineColors, config.routeLineWidth(),
-                config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS ? ARROW_EVERY : 0));
+            eventBus.post(TileMarkersBridge.lines(lines, lineColors, lineArrows, config.routeLineWidth()));
             sentLines = asLines;
         }
         var tiles = new ArrayList<TileMarkersBridge.Tile>();
@@ -1112,6 +1117,7 @@ public final class RouteFeature
         fadeTimer.stop();
         itemReroute.stop();
         fading.clear();
+        gone.clear();
         appearing.clear();
         if (hdTiles)
         {
@@ -1348,6 +1354,7 @@ public final class RouteFeature
             }
         }
         fading.values().removeIf(since -> now - since >= FADE_MS);
+        gone.removeIf(line -> now - line.since >= FADE_MS);
         appearing.values().removeIf(since -> now - since >= FADE_IN_MS);
         if (fading.isEmpty() && appearing.isEmpty())
         {
@@ -2982,11 +2989,23 @@ public final class RouteFeature
                 // The old way fades out as the new one fades in.
                 var was = walkedAhead(before);
                 var now = walkedAhead(ahead);
+                if (ahead == null && config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES)
+                {
+                    // Gone as a whole: its lines fade as they were.
+                    long t = System.currentTimeMillis();
+                    before.steps.stream().filter(s -> s.kind == Kind.WALK)
+                        .forEach(s -> gone.add(new Gone(s.points, current(), t)));
+                }
                 fadeOut(minus(was, now));
                 fadeInTiles(minus(now, was));
             }
         }
         shown = inGame(ahead);
+        if (hdTiles)
+        {
+            // A new route or look reaches HD World Markers at once, not at the next game tick.
+            clientThread.invokeLater(() -> updateHdTiles(start));
+        }
         boolean up = bringUp;
         bringUp = false;
         showSteps(c, up);
@@ -3340,7 +3359,27 @@ public final class RouteFeature
                 sink.accept(steps.get(index).points, blocked >= 0 && index >= blocked ? CANNOT : current());
             }
         }
+        long now = System.currentTimeMillis();
+        for (var line : gone)
+        {
+            float alpha = fadeAlpha(line.since, now);
+            if (alpha > 0.02f)
+            {
+                sink.accept(line.points, alpha(line.color, line.color.getAlpha() * alpha));
+            }
+        }
     }
+
+    /** A walk of a route just gone (arrived, cleared), fading as it was drawn, its arrows where they were. */
+    @RequiredArgsConstructor
+    static final class Gone
+    {
+        final int[] points;
+        final Color color;
+        final long since;
+    }
+
+    final List<Gone> gone = new CopyOnWriteArrayList<>();
 
     /**
      * The passed tiles still fading, as pieces of line: between two of them next to each other, and from one to the
@@ -3348,22 +3387,52 @@ public final class RouteFeature
      */
     void eachFadingPiece(Route route, long now, BiConsumer<int[], Float> sink)
     {
+        markArrows(route);
         Step walk = route == null ? null : route.first(Kind.WALK);
         int first = walk == null ? -1 : walk.first();
+        // Not the tiles of a route gone, which fade as whole lines.
+        var whole = new HashSet<Integer>();
+        gone.forEach(line -> Arrays.stream(line.points).forEach(whole::add));
         for (var entry : fading.entrySet())
         {
             int p = entry.getKey();
-            float alpha = fadeAlpha(entry.getValue(), now);
+            float alpha = whole.contains(p) ? 0 : fadeAlpha(entry.getValue(), now);
             for (int dx = -1; dx <= 1 && alpha > 0.05f; dx++)
             {
                 for (int dy = -1; dy <= 1; dy++)
                 {
                     int q = Tiles.pack(Tiles.x(p) + dx, Tiles.y(p) + dy, Tiles.z(p));
                     Long other = q == first ? null : fading.get(q);
-                    if ((dx | dy) != 0 && (q == first || other != null && q > p))
+                    // A passed arrow fades with its piece, pointing as it did: that piece goes its way round.
+                    boolean arrow = arrowsTo.getOrDefault(p, -1) == q;
+                    if ((dx | dy) != 0 && (q == first || other != null) && (arrow
+                        || arrowsTo.getOrDefault(q, -1) != p && (q == first || q > p)))
                     {
-                        sink.accept(new int[]{p, q}, other == null ? alpha : min(alpha, fadeAlpha(other, now)));
+                        sink.accept(new int[]{p, q, arrow ? 1 : 0},
+                            other == null ? alpha : min(alpha, fadeAlpha(other, now)));
                     }
+                }
+            }
+        }
+    }
+
+    /** With arrows: each arrow's tile to the tile it points at, the route's and those passed while they fade. */
+    final Map<Integer, Integer> arrowsTo = new ConcurrentHashMap<>();
+
+    /** The route's arrows (each walk's every {@link #ARROW_EVERY}th tile from its far end), keeping those fading. */
+    void markArrows(Route route)
+    {
+        boolean on = config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS;
+        arrowsTo.keySet().retainAll(on ? fading.keySet() : Set.of());
+        for (Step step : on && route != null ? route.steps : List.<Step>of())
+        {
+            int[] p = step.kind == Kind.WALK ? step.points : new int[0];
+            for (int i = 0; i + 1 < p.length; i++)
+            {
+                if ((p.length - 1 - i) % ARROW_EVERY == ARROW_EVERY / 2 && Tiles.distance(p[i], p[i + 1]) == 1
+                    && Tiles.z(p[i]) == Tiles.z(p[i + 1]))
+                {
+                    arrowsTo.put(p[i], p[i + 1]);
                 }
             }
         }
@@ -3397,7 +3466,8 @@ public final class RouteFeature
                     path.moveTo(at.getX(), at.getY());
                 }
                 previous = at == null ? -1 : point;
-                if (arrows && at != null && i % ARROW_EVERY == ARROW_EVERY / 2 && i + 1 < points.length
+                // Counted from the walk's far end, which stays as the player walks it: the arrows stay put.
+                if (arrows && at != null && (points.length - 1 - i) % ARROW_EVERY == ARROW_EVERY / 2 && i + 1 < points.length
                     && Tiles.distance(point, points[i + 1]) == 1 && Tiles.z(points[i + 1]) == plane)
                 {
                     var on = local;
@@ -3418,6 +3488,11 @@ public final class RouteFeature
             {
                 g.setColor(alpha(walked, walked.getAlpha() * alpha));
                 g.drawLine(a.getX(), a.getY(), b.getX(), b.getY());
+                if (piece[2] == 1)
+                {
+                    arrow(g, yourHouse.local(view, piece[0]), Tiles.x(piece[1]) - Tiles.x(piece[0]),
+                        Tiles.y(piece[1]) - Tiles.y(piece[0]), plane);
+                }
             }
         });
     }

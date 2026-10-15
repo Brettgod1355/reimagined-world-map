@@ -71,9 +71,10 @@ final class TileMarkersBridge
 
     /**
      * The route's walks as lines through the tiles' centres ({@code lines}; points next to each other are joined, a
-     * jump breaks the line), with an arrowhead every {@code arrows} tiles (0: none); an empty list takes them away.
+     * jump breaks the line), each with an arrowhead every so many tiles from its end ({@code arrows}, 0: none); an empty
+     * list takes them away.
      */
-    static PluginMessage lines(List<List<WorldPoint>> lines, List<Color> colors, int width, int arrows)
+    static PluginMessage lines(List<List<WorldPoint>> lines, List<Color> colors, List<Integer> arrows, int width)
     {
         var list = new ArrayList<Map<String, Object>>();
         for (int i = 0; i < lines.size(); i++)
@@ -82,9 +83,9 @@ final class TileMarkersBridge
             entry.put("points", lines.get(i));
             entry.put("color", colors.get(i));
             entry.put("width", width);
-            if (arrows > 0)
+            if (arrows.get(i) > 0)
             {
-                entry.put("arrows", arrows);
+                entry.put("arrows", arrows.get(i));
             }
             list.add(entry);
         }
