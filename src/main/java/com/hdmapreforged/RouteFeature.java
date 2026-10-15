@@ -728,8 +728,13 @@ public final class RouteFeature
                     1, true, RouteRequest.DEFAULT_NODE_LIMIT);
                 try
                 {
-                    pf.find(request, () -> asked != spAsked.get()).steps.stream().filter(s -> s.kind == Kind.WALK)
-                        .forEach(s -> walks.add(s.points));
+                    // Only a walk that gets there: an end off the map (its route from inside a house starts on the
+                    // house's instance tiles) gave a walk toward it that stopped somewhere else.
+                    var walk = pf.find(request, () -> asked != spAsked.get());
+                    if (walk.outcome == FOUND)
+                    {
+                        walk.steps.stream().filter(s -> s.kind == Kind.WALK).forEach(s -> walks.add(s.points));
+                    }
                 }
                 catch (RuntimeException e)
                 {
