@@ -606,6 +606,7 @@ public final class RouteFeature
         {
             return;
         }
+        directions = path ? message : null;
         if (target == null && handedOver != null)
         {
             forgetHandOver();
@@ -613,12 +614,7 @@ public final class RouteFeature
         }
         else if (target != null && shortestPathOn())
         {
-            forgetHandOver();
-            handedOver = target;
-            // As every message to it: from the client thread, whichever thread brought this one.
-            var ask = ShortestPathBridge.path(null, ShortestPathBridge.config(message));
-            clientThread.invokeLater(() -> eventBus.post(sent = ask));
-            invokeLater(() -> showShortestPath(false));
+            handOver(target, ShortestPathBridge.path(null, ShortestPathBridge.config(message)), false);
         }
         if (shortestPathPlanner() || !config.routeFollowPlugins())
         {
@@ -627,6 +623,9 @@ public final class RouteFeature
         var wilderness = path ? ShortestPathBridge.avoidWilderness(message) : null;
         invokeLater(() -> follow(targets, wilderness));
     }
+
+    /** Another plugin's last directions (a path message), kept for a change of planner; null after a clear. */
+    volatile PluginMessage directions;
 
     /**
      * Swing: our planner plans another plugin's directions; of several targets (a clue's possible spots) to the one
@@ -649,6 +648,31 @@ public final class RouteFeature
         {
             fromPlugin = false;
             c.clear();
+        }
+    }
+
+    /**
+     * Swing: after a change of planner, another plugin's last directions go to the planner now chosen (the other
+     * plugin sends them once, and the change cleared the route of the planner before).
+     */
+    void followAgain()
+    {
+        var last = directions;
+        List<WorldPoint> targets = last == null ? List.of() : ShortestPathBridge.targets(last);
+        if (targets.isEmpty())
+        {
+            return;
+        }
+        if (shortestPathPlanner())
+        {
+            if (shortestPathOn())
+            {
+                handOver(ShortestPathBridge.nearest(targets, lastLocation), ShortestPathBridge.again(last), false);
+            }
+        }
+        else if (config.routeFollowPlugins())
+        {
+            follow(targets, ShortestPathBridge.avoidWilderness(last));
         }
     }
 
@@ -801,12 +825,17 @@ public final class RouteFeature
 
     void handOver(WorldPoint target)
     {
+        handOver(target, ShortestPathBridge.path(target), true);
+    }
+
+    /** Any thread: Shortest Path is sent {@code ask}, and its route to {@code target} is drawn. */
+    void handOver(WorldPoint target, PluginMessage ask, boolean up)
+    {
         forgetHandOver();
         handedOver = target;
         // Shortest Path reads the player's position when a message arrives: client thread.
-        var path = ShortestPathBridge.path(target);
-        clientThread.invokeLater(() -> eventBus.post(sent = path));
-        showShortestPath(true);
+        clientThread.invokeLater(() -> eventBus.post(sent = ask));
+        invokeLater(() -> showShortestPath(up));
     }
 
     /** Shortest Path plans it as the planner (true), or also when both are on: drawn under ours, to compare. */
@@ -1035,6 +1064,7 @@ public final class RouteFeature
         bringUp = false;
         fromPlugin = false;
         pluginAsked.incrementAndGet();
+        directions = null;
     }
 
     // ---- client thread ----
@@ -1540,8 +1570,13 @@ public final class RouteFeature
                 {
                     changed();
                 }
+                followAgain();
             });
             return;
+        }
+        if ("routeFollowPlugins".equals(key))
+        {
+            invokeLater(this::followAgain);
         }
         if (LOOK_KEYS.contains(key))
         {

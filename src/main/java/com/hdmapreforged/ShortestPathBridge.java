@@ -37,6 +37,22 @@ final class ShortestPathBridge
         {
             data.put(TARGET, target);
         }
+        return askingTransports(data, config);
+    }
+
+    /**
+     * Another plugin's path message sent again, as it was but planned from where the player is now, asking it to
+     * tell its transports: for when the planner changed after the message came (the other plugin sends it once).
+     */
+    static PluginMessage again(PluginMessage message)
+    {
+        var data = new HashMap<String, Object>(message.getData() == null ? Map.of() : message.getData());
+        data.remove("start");
+        return askingTransports(data, config(message));
+    }
+
+    static PluginMessage askingTransports(Map<String, Object> data, Map<?, ?> config)
+    {
         var wanted = new HashMap<Object, Object>(config);
         wanted.put("postTransports", true);
         data.put("config", wanted);
