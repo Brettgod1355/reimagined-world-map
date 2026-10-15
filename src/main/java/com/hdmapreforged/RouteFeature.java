@@ -2763,6 +2763,11 @@ public final class RouteFeature
             }
         }
         shown = config.routeInGame() ? ahead : null;
+        if (hdTiles)
+        {
+            // A new route or look reaches HD World Markers at once, not at the next game tick.
+            clientThread.invokeLater(() -> updateHdTiles(start));
+        }
         boolean up = bringUp;
         bringUp = false;
         showSteps(c, up);
@@ -3173,7 +3178,8 @@ public final class RouteFeature
                     path.moveTo(at.getX(), at.getY());
                 }
                 previous = at == null ? -1 : point;
-                if (arrows && at != null && i % ARROW_EVERY == ARROW_EVERY / 2 && i + 1 < points.length
+                // Counted from the walk's far end, which stays as the player walks it: the arrows stay put.
+                if (arrows && at != null && (points.length - 1 - i) % ARROW_EVERY == ARROW_EVERY / 2 && i + 1 < points.length
                     && Tiles.distance(point, points[i + 1]) == 1 && Tiles.z(points[i + 1]) == plane)
                 {
                     var on = local;
