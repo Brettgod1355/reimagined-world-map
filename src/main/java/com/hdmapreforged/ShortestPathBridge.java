@@ -50,6 +50,21 @@ final class ShortestPathBridge
         return config instanceof Map<?, ?> ? (Map<?, ?>) config : Map.of();
     }
 
+    /** A path message's avoidWilderness override (Shortest Clue turns it off for clues in the Wilderness); null when none. */
+    static Boolean avoidWilderness(PluginMessage message)
+    {
+        var value = config(message).get("avoidWilderness");
+        if (value instanceof Boolean)
+        {
+            return (Boolean) value;
+        }
+        if (value instanceof String && ("true".equalsIgnoreCase((String) value) || "false".equalsIgnoreCase((String) value)))
+        {
+            return Boolean.parseBoolean((String) value);
+        }
+        return null;
+    }
+
     static final String TRANSPORTS = "transports";
 
     /** A transport or teleport of Shortest Path's route. */

@@ -600,7 +600,8 @@ public final class RouteFeature
             return;
         }
         boolean path = ShortestPathBridge.isPath(message);
-        var target = path ? ShortestPathBridge.nearest(ShortestPathBridge.targets(message), lastLocation) : null;
+        List<WorldPoint> targets = path ? ShortestPathBridge.targets(message) : List.of();
+        var target = ShortestPathBridge.nearest(targets, lastLocation);
         if (message == sent || (path ? target == null : !ShortestPathBridge.isClear(message)))
         {
             return;
@@ -623,21 +624,38 @@ public final class RouteFeature
         {
             return;
         }
-        invokeLater(() -> {
-            var c = controller;
-            if (c != null && target != null)
-            {
-                fromPlugin = true;
-                routeAvoid.clear();
-                c.setTarget(pack(target));
-            }
-            else if (c != null && fromPlugin)
-            {
-                fromPlugin = false;
-                c.clear();
-            }
-        });
+        var wilderness = path ? ShortestPathBridge.avoidWilderness(message) : null;
+        invokeLater(() -> follow(targets, wilderness));
     }
+
+    /**
+     * Swing: our planner plans another plugin's directions; of several targets (a clue's possible spots) to the one
+     * reached soonest, as Shortest Path plans. No targets: their route, if shown, is cleared.
+     */
+    void follow(List<WorldPoint> targets, Boolean wilderness)
+    {
+        var c = controller;
+        int asked = pluginAsked.incrementAndGet();
+        if (c != null && !targets.isEmpty())
+        {
+            fastest(targets, true, () -> pluginAsked.get() != asked || controller != c, wilderness, best -> {
+                fromPlugin = true;
+                pluginWilderness = wilderness;
+                routeAvoid.clear();
+                c.setTarget(pack(best));
+            });
+        }
+        else if (c != null && fromPlugin)
+        {
+            fromPlugin = false;
+            c.clear();
+        }
+    }
+
+    /** Which plugin's directions are current; an older look for their fastest target stops. */
+    final AtomicInteger pluginAsked = new AtomicInteger();
+    /** The avoidWilderness the plugin's directions gave, used while the route is theirs ({@link #fromPlugin}); null none. */
+    volatile Boolean pluginWilderness;
 
     /** As the planner, Shortest Path's route has the card; else it is only drawn, under ours. */
     void showShortestPath(boolean up)
@@ -1016,6 +1034,7 @@ public final class RouteFeature
         lastAheadPoints = -1;
         bringUp = false;
         fromPlugin = false;
+        pluginAsked.incrementAndGet();
     }
 
     // ---- client thread ----
@@ -1563,12 +1582,15 @@ public final class RouteFeature
     /** Also without {@code leftOut}: what a custom route leaves out. */
     RouteRequest request(int begin, int target, boolean anything, boolean everyItem, List<String> leftOut)
     {
-        return request(begin, target, anything, everyItem, leftOut, state);
+        return request(begin, target, anything, everyItem, leftOut, state, fromPlugin ? pluginWilderness : null);
     }
 
-    /** For {@code player} (the player with their bank's items). */
+    /**
+     * For {@code player} (the player with their bank's items); {@code wilderness}: another plugin's avoidWilderness for
+     * its directions, null for the setting.
+     */
     RouteRequest request(int begin, int target, boolean anything, boolean everyItem, List<String> leftOut,
-        PlayerState player)
+        PlayerState player, Boolean wilderness)
     {
         var from = source;
         var on = screens;
@@ -1582,7 +1604,7 @@ public final class RouteFeature
             anything || everyItem || config.routeIgnoreItems(), avoided(leftOut), anything ? RouteSource.Saving.NONE
                 : new RouteSource.Saving(config.routeSaveTeleport(), config.routeSaveShortcut(),
                     config.routeSaveTransport(), config.routeSaveCanoe(), config.routeSaveCarpet(), config.routeSaveShip()),
-            anything, config.routeAvoidWilderness(), config.routeSailToLand());
+            anything, wilderness != null ? wilderness : config.routeAvoidWilderness(), config.routeSailToLand());
         nameItems(view.pois());
         from.itemNames(itemNames);
         from.plantedSpiritTrees(planted.grown());
@@ -1608,7 +1630,7 @@ public final class RouteFeature
         // On from the bank: out of the house, with the bank's items.
         var player = state.outOfHouse();
         var banked = banks.length == 0 ? null : request(begin, target, false, false,
-            r == null ? List.of() : r.avoid, player.withBank(bank));
+            r == null ? List.of() : r.avoid, player.withBank(bank), fromPlugin ? pluginWilderness : null);
         return banked == null ? plain : plain.withBank(new BankDetour(banks, banked));
     }
 
@@ -1714,6 +1736,18 @@ public final class RouteFeature
      */
     void lookAtFastest(List<WorldPoint> places)
     {
+        int asked = fastestAsked.incrementAndGet();
+        fastest(places, !shortestPathPlanner(), () -> fastestAsked.get() != asked, null, this::lookAt);
+    }
+
+    /**
+     * Swing thread: of these places, the one the planner gets to soonest goes to {@code chosen} (on Swing, unless
+     * {@code stale} by then); with {@code plan} false, or when no route can be planned now, the nearest as the crow
+     * flies. {@code wilderness}: as {@link #request}.
+     */
+    void fastest(List<WorldPoint> places, boolean plan, BooleanSupplier stale, Boolean wilderness,
+        Consumer<WorldPoint> chosen)
+    {
         int from = start;
         var pool = background;
         Pathfinder pathfinder = walker;
@@ -1731,12 +1765,13 @@ public final class RouteFeature
             return;
         }
         var candidates = nearest.subList(0, min(FASTEST_OF, nearest.size()));
-        if (from < 0 || pool == null || pathfinder == null || shortestPathPlanner() || candidates.size() == 1)
+        if (from < 0 || pool == null || pathfinder == null || !plan || candidates.size() == 1)
         {
-            lookAt(candidates.get(0));
+            chosen.accept(candidates.get(0));
             return;
         }
-        int asked = fastestAsked.incrementAndGet();
+        Running running = tour;
+        List<String> leftOut = running == null ? List.of() : running.avoid;
         toast("Finding the fastest…");
         try
         {
@@ -1746,18 +1781,18 @@ public final class RouteFeature
                 int bestCost = Integer.MAX_VALUE;
                 for (var p : candidates)
                 {
-                    if (fastestAsked.get() != asked)
+                    if (stale.getAsBoolean())
                     {
                         return;
                     }
-                    var request = request(from, atSea(p) ? Tiles.seaAt(p.getX(), p.getY()) : pack(p), false);
+                    var request = request(from, atSea(p) ? Tiles.seaAt(p.getX(), p.getY()) : pack(p), false, false,
+                        leftOut, state, wilderness);
                     Route route;
                     try
                     {
                         // Nearest as the crow flies first; a place that cannot beat the best so far is given up on
                         // early (the search's cost weighs teleports a little heavier than their time).
-                        route = request == null ? null
-                            : pathfinder.find(request, () -> fastestAsked.get() != asked, bestCost);
+                        route = request == null ? null : pathfinder.find(request, stale, bestCost);
                     }
                     catch (Throwable e)
                     {
@@ -1771,18 +1806,18 @@ public final class RouteFeature
                         bestCost = route.cost;
                     }
                 }
-                var chosen = best;
+                var found = best;
                 invokeLater(() -> {
-                    if (fastestAsked.get() == asked)
+                    if (!stale.getAsBoolean())
                     {
-                        lookAt(chosen);
+                        chosen.accept(found);
                     }
                 });
             });
         }
         catch (RejectedExecutionException e)
         {
-            lookAt(candidates.get(0));
+            chosen.accept(candidates.get(0));
         }
     }
 
