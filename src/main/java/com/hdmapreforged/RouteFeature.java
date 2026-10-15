@@ -248,7 +248,20 @@ public final class RouteFeature
 
     boolean shortestPathOn()
     {
-        return pluginOn(ShortestPathBridge.PLUGIN_NAME);
+        return shortestPathName() != null;
+    }
+
+    /** The plugin on that answers Shortest Path's messages (Shortest Path, or GPS), or null. */
+    String shortestPathName()
+    {
+        for (Plugin plugin : pluginManager.getPlugins())
+        {
+            if (ShortestPathBridge.PLUGIN_NAMES.contains(plugin.getName()) && pluginManager.isPluginEnabled(plugin))
+            {
+                return plugin.getName();
+            }
+        }
+        return null;
     }
 
     boolean pluginOn(String name)
@@ -271,21 +284,25 @@ public final class RouteFeature
     {
         clientThread.invokeLater(() -> {
             warned &= !again;
-            if (warned || client.getGameState() != GameState.LOGGED_IN || shortestPathPlanner() || !shortestPathOn())
+            var other = warned || client.getGameState() != GameState.LOGGED_IN || shortestPathPlanner() ? null
+                : shortestPathName();
+            if (other == null)
             {
                 return;
             }
             warned = true;
+            // RuneLite gives every plugin each message: neither can take another plugin's directions for itself.
             chatMessageManager.queue(QueuedMessage.builder().type(ChatMessageType.CONSOLE)
-                .value("Reimagined World Map: its route planner is on, and so is the Shortest Path plugin. The map "
-                    + "draws both routes; pick one (Reimagined World Map settings, Route planner).").build());
+                .value("Reimagined World Map: its route planner is on, and so is the " + other + " plugin. Both plan "
+                    + "other plugins' directions and the map draws both routes; pick one (switch " + other + " off, or "
+                    + "set Reimagined World Map's Route planner to Shortest Path).").build());
         });
     }
 
     @Subscribe
     public void onPluginChanged(PluginChanged event)
     {
-        if (event.isLoaded() && ShortestPathBridge.PLUGIN_NAME.equals(event.getPlugin().getName()))
+        if (event.isLoaded() && ShortestPathBridge.PLUGIN_NAMES.contains(event.getPlugin().getName()))
         {
             warnBoth(true);
         }
@@ -747,12 +764,13 @@ public final class RouteFeature
         {
             panel.add(tourHeader(running, width));
         }
-        panel.add(label("Route by Shortest Path", width, Font.BOLD, Color.WHITE));
-        boolean on = shortestPathOn();
-        panel.add(label(on ? "Planned by Shortest Path, which draws it in the game. On this map: the teleports and "
+        var name = shortestPathName();
+        boolean on = name != null;
+        panel.add(label("Route by " + (on ? name : "Shortest Path"), width, Font.BOLD, Color.WHITE));
+        panel.add(label(on ? "Planned by " + name + ", which draws it in the game. On this map: the teleports and "
             + "transports it takes, and the walks between them as found here on foot."
-            : "The Shortest Path plugin is not on. Install or switch it on, or set Route planner to "
-                + "Reimagined World Map.",
+            : "Neither the Shortest Path nor the GPS plugin is on. Install or switch one on, or set Route planner "
+                + "to Reimagined World Map.",
             width, Font.PLAIN, on ? ColorScheme.LIGHT_GRAY_COLOR : NOTE));
         int number = 1;
         for (var j : spJumps)

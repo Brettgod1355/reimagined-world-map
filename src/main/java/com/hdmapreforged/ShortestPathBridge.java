@@ -12,7 +12,8 @@ final class ShortestPathBridge
     static final String PATH = "path";
     static final String CLEAR = "clear";
     static final String TARGET = "target";
-    static final String PLUGIN_NAME = "Shortest Path";
+    /** Plugins that answer this namespace: Shortest Path, and GPS (its own name, Shortest Path's messages). */
+    static final List<String> PLUGIN_NAMES = List.of("Shortest Path", "GPS");
     /** Cap per message: messages come from other plugins. */
     static final int MAX_POINTS = 64;
 
