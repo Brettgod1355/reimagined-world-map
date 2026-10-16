@@ -52,7 +52,7 @@ final class MapScreen extends JPanel implements MapView.Listener
     final JTextField search = new HintField(() -> this.mode.hint);
     final JComboBox<BaseMap> maps = new JComboBox<>();
     final JComboBox<String> floors = new JComboBox<>(new String[]{"Floor 0", "Floor 1", "Floor 2", "Floor 3"});
-    final JToggleButton follow = new JToggleButton(new ImageIcon(PoiIcons.followIcon()));
+    final JToggleButton follow = new JToggleButton(new ImageIcon(PoiIcons.icon(14, "FOLLOW")));
     final JButton popOut = new JButton();
     final JButton zoomIn;
     final JButton zoomOut;
@@ -98,7 +98,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         this.config = config;
         setBackground(ColorScheme.DARK_GRAY_COLOR);
         view = new MapView(tiles, config);
-        view.setListener(this);
+        view.listener = this;
         card = new InfoCard(view, world, itemNames, config);
         this.world = world;
         npcs = new SearchResults(view, world, new SearchResults.Card()
@@ -139,7 +139,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         npcs.setItemPictures(itemNames::picture);
         npcs.setPrices(itemNames);
         card.setItemSearch(npcs::findItem);
-        npcs.setPlaceNames(this::place);
+        npcs.setPlaces(this::place);
         cardScroll = scroll(card);
         for (Floating floating : new Floating[]{cardFloat, npcFloat, toursFloat, houseFloat})
         {
@@ -153,7 +153,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         HintField.bind(search, KeyEvent.VK_DOWN, "down", () -> move(1), () -> true);
         HintField.bind(search, KeyEvent.VK_UP, "up", () -> move(-1), () -> true);
         HintField.bind(search, KeyEvent.VK_ESCAPE, "leave", () -> {
-            if (results != null && results.isVisible())
+            if (resultsShown())
             {
                 results.setVisible(false);
                 highlighted = -1;
@@ -162,14 +162,14 @@ final class MapScreen extends JPanel implements MapView.Listener
             {
                 search.setText("");
             }
-        }, () -> results != null && results.isVisible() || !search.getText().isEmpty());
+        }, () -> resultsShown() || !search.getText().isEmpty());
         // Clicked again: what the field holds shows at once, not only after more typing.
         search.addMouseListener(new MouseAdapter()
         {
             @Override
             public void mousePressed(MouseEvent e)
             {
-                if (results == null || !results.isVisible())
+                if (!resultsShown())
                 {
                     showResults();
                 }
@@ -266,7 +266,7 @@ final class MapScreen extends JPanel implements MapView.Listener
             {
                 layers.add(part, PALETTE_LAYER);
             }
-            cardFloat.setVisible(view.selected() != null || card.hasRoute() || card.hasExtra());
+            cardFloat.setVisible(view.selected() != null || card.route != null || card.extra != null);
             add(layers, BorderLayout.CENTER);
             placeFloatingCard();
         }
@@ -381,7 +381,7 @@ final class MapScreen extends JPanel implements MapView.Listener
             return;
         }
         card.setExtra(section);
-        showCardAtTop(section != null || view.selected() != null || card.hasRoute());
+        showCardAtTop(section != null || view.selected() != null || card.route != null);
     }
 
     final JPanel npcPanel = new JPanel(new BorderLayout());
@@ -557,12 +557,9 @@ final class MapScreen extends JPanel implements MapView.Listener
     void opened()
     {
         // On a route: its steps show whenever the map opens, not only when the route was asked for.
-        if (card.hasRoute())
+        if (card.route != null)
         {
-            if (view.selected() != null)
-            {
-                view.select(null);
-            }
+            view.select(null);
             card.showRoute();
             showCard(true);
         }
@@ -580,7 +577,7 @@ final class MapScreen extends JPanel implements MapView.Listener
     {
         var previous = view.selected();
         syncing = true;
-        maps.setModel(new DefaultComboBoxModel<>(baseMaps.all().toArray(new BaseMap[0])));
+        maps.setModel(new DefaultComboBoxModel<>(baseMaps.sorted.toArray(new BaseMap[0])));
         syncing = false;
         view.setMaps(baseMaps);
         view.setPois(data.pois, data.hidden);
@@ -595,11 +592,6 @@ final class MapScreen extends JPanel implements MapView.Listener
     {
         view.setUnlocks(unlocks);
         card.refresh();
-    }
-
-    void setFollowing(boolean following)
-    {
-        view.setFollowing(following);
     }
 
     @Override
@@ -629,32 +621,10 @@ final class MapScreen extends JPanel implements MapView.Listener
         card.setNpcPictures(npcPictures);
     }
 
-    void setRouter(Consumer<WorldPoint> router)
-    {
-        card.setRouter(router);
-    }
-
-    /** Shows a place of the search's result, as a click on it in the list does. */
-    void lookAtFound(WorldPoint place)
-    {
-        npcs.lookAtPoint(place);
-    }
-
-    /** Finds the fastest of a search's places and shows it. */
-    void setFastest(Consumer<List<WorldPoint>> fastest)
-    {
-        npcs.setFastest(fastest);
-    }
-
     void setStopAdder(Consumer<Tour.Stop> adder)
     {
         card.setStopAdder(adder);
         npcs.setStopAdder(adder);
-    }
-
-    void showToast(String text)
-    {
-        view.showToast(text);
     }
 
     /** A kind of place by its label, from the data shown: never waits for the search index. */
@@ -664,20 +634,10 @@ final class MapScreen extends JPanel implements MapView.Listener
             .findFirst().orElse(null);
     }
 
-    void setWindowControls(MapView.WindowControls controls)
-    {
-        view.setWindowControls(controls);
-    }
-
-    MapView view()
-    {
-        return view;
-    }
-
     /** {@code bringUp}: show in front of a selected icon, for a route the user just asked for. */
     void showRoute(IntFunction<JComponent> route, boolean bringUp)
     {
-        if (bringUp && route != null && view.selected() != null)
+        if (bringUp && route != null)
         {
             view.select(null);
         }
@@ -686,16 +646,6 @@ final class MapScreen extends JPanel implements MapView.Listener
         {
             showCard(view.selected() != null || route != null);
         }
-        view.repaint();
-    }
-
-    void setPlayer(WorldPoint player)
-    {
-        view.setPlayer(player);
-    }
-
-    void refresh()
-    {
         view.repaint();
     }
 
@@ -709,7 +659,7 @@ final class MapScreen extends JPanel implements MapView.Listener
     public void selectionChanged(Poi poi)
     {
         card.show(poi);
-        showCardAtTop(poi != null || card.hasRoute() || card.hasExtra());
+        showCardAtTop(poi != null || card.route != null || card.extra != null);
     }
 
     @Override
@@ -724,15 +674,13 @@ final class MapScreen extends JPanel implements MapView.Listener
         {
             floors.setSelectedIndex(view.plane());
         }
-        follow.setSelected(view.isFollowing());
+        follow.setSelected(view.following);
         syncing = false;
     }
 
     BaseMap myMap()
     {
-        var me = view.player();
-        var baseMaps = view.maps();
-        return me == null || baseMaps == null ? null : baseMaps.find(me);
+        return view.mapOf(view.player());
     }
 
     void openMap(BaseMap map)
@@ -751,18 +699,15 @@ final class MapScreen extends JPanel implements MapView.Listener
 
     double fitZoom(BaseMap map)
     {
-        double width = max(100, view.getWidth());
-        double height = max(100, view.getHeight());
         // Broken bounds must not make the zoom infinite or NaN.
-        double fit = min(width / max(1, map.maxX - map.minX), height / max(1, map.maxY - map.minY));
-        double zoom = log(fit) / log(2);
+        double zoom = MapView.fit(map, max(100, view.getWidth()), max(100, view.getHeight()));
         return Double.isFinite(zoom) ? max(MapView.MIN_ZOOM, min(2, zoom)) : MapView.PLAYER_ZOOM;
     }
 
     void updateSearchMode()
     {
         searchMode.setIcon(new ImageIcon(mode == MONSTERS ? SearchResults.dotIcon()
-            : mode == ITEMS ? SearchResults.itemIcon() : mode == PLACES ? PoiIcons.pinIcon()
+            : mode == ITEMS ? SearchResults.itemIcon() : mode == PLACES ? PoiIcons.icon(14, "PIN")
             : SearchResults.allIcon()));
         searchMode.setToolTipText(mode.tooltip);
         search.repaint();
@@ -817,6 +762,11 @@ final class MapScreen extends JPanel implements MapView.Listener
         keepFocus(() -> menu.show(search, 0, search.getHeight()));
     }
 
+    boolean resultsShown()
+    {
+        return results != null && results.isVisible();
+    }
+
     /** The suggestion the arrow keys moved to, lit in the popup; -1 for none. */
     int highlighted = -1;
 
@@ -824,7 +774,7 @@ final class MapScreen extends JPanel implements MapView.Listener
     List<JMenuItem> choosable()
     {
         var items = new ArrayList<JMenuItem>();
-        if (results != null && results.isVisible())
+        if (resultsShown())
         {
             for (Component item : results.getComponents())
             {
@@ -841,7 +791,7 @@ final class MapScreen extends JPanel implements MapView.Listener
     /** Lights the suggestion {@code by} places on from the lit one, round the ends. */
     void move(int by)
     {
-        if (results == null || !results.isVisible())
+        if (!resultsShown())
         {
             showResults();
         }
@@ -862,7 +812,7 @@ final class MapScreen extends JPanel implements MapView.Listener
     void chooseFirst()
     {
         typing.stop();
-        if (results == null || !results.isVisible())
+        if (!resultsShown())
         {
             showResults();
         }

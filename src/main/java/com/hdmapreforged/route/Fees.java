@@ -21,10 +21,6 @@ public final class Fees
 
     static final RouteFiles.Table<List<Fee>> FEES = new RouteFiles.Table<>(Fees::load);
 
-    Fees()
-    {
-    }
-
     public static Fee at(int x, int y, int plane)
     {
         for (Fee fee : FEES.get())

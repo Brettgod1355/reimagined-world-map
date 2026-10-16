@@ -356,7 +356,7 @@ final class WorldData
         {
             drawnFor = baseMaps;
             drawn = new HashMap<>();
-            if (baseMaps != null && mapVersion != null && mapVersion.equals(baseMaps.version()))
+            if (baseMaps != null && mapVersion != null && mapVersion.equals(baseMaps.version))
             {
                 maps.forEach((point, id) -> {
                     var map = id == null ? null : baseMaps.byId(id);
@@ -494,7 +494,11 @@ final class WorldData
 
     static List<?> list(Map<?, ?> o, String key)
     {
-        Object e = o.get(key);
+        return list(o.get(key));
+    }
+
+    static List<?> list(Object e)
+    {
         return e instanceof List ? (List<?>) e : Collections.emptyList();
     }
 
@@ -512,7 +516,7 @@ final class WorldData
     /** Texts of a list; none when it is no list of texts. */
     static String[] texts(Object e)
     {
-        var list = e instanceof List ? (List<?>) e : Collections.emptyList();
+        var list = list(e);
         return list.stream().allMatch(t -> t instanceof String && named((String) t)) ? list.toArray(new String[0])
             : new String[0];
     }
@@ -520,7 +524,7 @@ final class WorldData
     /** {@code [x, y, plane, ...]}; null when empty or malformed. */
     static List<WorldPoint> points(Object e)
     {
-        var at = e instanceof List ? (List<?>) e : Collections.emptyList();
+        var at = list(e);
         var points = new ArrayList<WorldPoint>();
         for (int i = 0; i + 2 < at.size(); i += 3)
         {

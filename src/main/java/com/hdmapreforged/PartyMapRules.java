@@ -20,10 +20,6 @@ final class PartyMapRules
     /** Sent at least this often while standing still, so newcomers and fading work. */
     static final int HEARTBEAT_TICKS = 50;
 
-    PartyMapRules()
-    {
-    }
-
     enum Join
     {
         JOIN,

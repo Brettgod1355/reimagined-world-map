@@ -16,10 +16,6 @@ public final class GameWalk
     static final int[] DX = {-1, 1, 0, 0, -1, 1, -1, 1};
     static final int[] DY = {0, 0, -1, 1, -1, -1, 1, 1};
 
-    GameWalk()
-    {
-    }
-
     /** A route's walk as the game would take it; pieces the game cannot do as short keep the route's tiles. */
     public static int[] follow(CollisionMap map, int[] points)
     {

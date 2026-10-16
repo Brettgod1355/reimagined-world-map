@@ -33,10 +33,6 @@ public final class Tiles
         }
     }
 
-    Tiles()
-    {
-    }
-
     public static int pack(int x, int y, int z)
     {
         return (z & 3) << 28 | (x & 0x3fff) << 14 | (y & 0x3fff);

@@ -343,11 +343,6 @@ final class MapView extends JComponent
     @Getter
     volatile Predicate<WorldPoint> ground;
 
-    void setGround(Predicate<WorldPoint> ground)
-    {
-        this.ground = ground;
-    }
-
     WorldPoint shown(WorldPoint game)
     {
         return shownOn(map, game);
@@ -609,22 +604,7 @@ final class MapView extends JComponent
         repaint();
     }
 
-    void setLinesChoice(Consumer<String> choice)
-    {
-        linesChoice = choice;
-    }
-
     final List<ClickCatcher> clickCatchers = new CopyOnWriteArrayList<>();
-
-    void addClickCatcher(ClickCatcher catcher)
-    {
-        clickCatchers.add(catcher);
-    }
-
-    void removeClickCatcher(ClickCatcher catcher)
-    {
-        clickCatchers.remove(catcher);
-    }
 
     boolean caught(Point at)
     {
@@ -643,21 +623,6 @@ final class MapView extends JComponent
         repaint();
     }
 
-    void addMenuContributor(MenuContributor contributor)
-    {
-        menuContributors.add(contributor);
-    }
-
-    void removeMenuContributor(MenuContributor contributor)
-    {
-        menuContributors.remove(contributor);
-    }
-
-    void addHitLayer(HitLayer layer)
-    {
-        hitLayers.add(layer);
-    }
-
     void setWindowControls(WindowControls controls)
     {
         windowControls = controls;
@@ -668,11 +633,6 @@ final class MapView extends JComponent
     {
         badgeCover = cover;
         repaint();
-    }
-
-    void setListener(Listener listener)
-    {
-        this.listener = listener;
     }
 
     void setMaps(BaseMaps maps)
@@ -697,11 +657,6 @@ final class MapView extends JComponent
         this.hidden = hidden;
         shownCache.clear();
         repaint();
-    }
-
-    void setSearchExtras(List<Poi> extras)
-    {
-        searchExtras = extras;
     }
 
     void setLabels(List<MapData.Place> labels)
@@ -753,11 +708,6 @@ final class MapView extends JComponent
     boolean usable(Needs needs)
     {
         return !config.onlyUsable() || unlocks == null || unlocks.usable(needs);
-    }
-
-    boolean isFollowing()
-    {
-        return following;
     }
 
     void setFollowing(boolean following)
@@ -829,13 +779,12 @@ final class MapView extends JComponent
         if (other != null)
         {
             rememberForBack(other);
-            showMap(other, shownOn(other, game), max(targetZoom, 1));
-            return;
         }
-        var at = shown(game);
-        plane = at.getPlane();
-        animateTo(at.getX() + 0.5, at.getY() + 0.5, max(targetZoom, 1));
-        fireViewChanged();
+        else
+        {
+            other = map;
+        }
+        showMap(other, shownOn(other, game), max(targetZoom, 1));
     }
 
     void select(Poi poi)
@@ -875,11 +824,6 @@ final class MapView extends JComponent
     WorldPoint near()
     {
         return player != null && HousePlan.contains(player.getX(), player.getY()) ? outside : player;
-    }
-
-    void setOutside(WorldPoint outside)
-    {
-        this.outside = outside;
     }
 
     void setHome(boolean home)
@@ -1031,9 +975,13 @@ final class MapView extends JComponent
         {
             return MIN_ZOOM;
         }
-        double fit = min(getWidth() / (double) max(1, map.maxX - map.minX),
-            getHeight() / (double) max(1, map.maxY - map.minY));
-        return max(MIN_ZOOM, min(1, log(fit) / log(2)));
+        return max(MIN_ZOOM, min(1, fit(map, getWidth(), getHeight())));
+    }
+
+    /** Log2 of the scale at which a map's bounds just fit {@code width} by {@code height}. */
+    static double fit(BaseMap map, double width, double height)
+    {
+        return log(min(width / max(1, map.maxX - map.minX), height / max(1, map.maxY - map.minY))) / log(2);
     }
 
     /** Once the view has a size, its centre stays on the map. */
@@ -1123,11 +1071,6 @@ final class MapView extends JComponent
         {
             super.repaint(tm, x, y, width, height);
         }
-    }
-
-    boolean isAnimating()
-    {
-        return animator.isRunning();
     }
 
     void stop()
@@ -1245,7 +1188,7 @@ final class MapView extends JComponent
 
     void paintTiles(Graphics2D g)
     {
-        if (tiles.version() == null)
+        if (tiles.version == null)
         {
             String notice = "Loading map…";
             g.setColor(new Color(200, 200, 200));
@@ -1472,27 +1415,7 @@ final class MapView extends JComponent
         /** Hidden below a zoom level each, so the zoomed-out map stays readable. */
         boolean shown(Layer layer)
         {
-            if (!toggled(layer))
-            {
-                return false;
-            }
-            switch (layer)
-            {
-                case TELEPORTS:
-                    return targetZoom >= -2.5;
-                case DUNGEONS:
-                    return targetZoom >= -0.5;
-                case SERVICES:
-                    return targetZoom >= 1;
-                case SAILING:
-                    return targetZoom >= -1.5;
-                case SKILLING:
-                    return targetZoom >= 1.5;
-                case ACTIVITIES:
-                    return targetZoom >= -1;
-                default:
-                    return true;
-            }
+            return toggled(layer) && targetZoom >= layer.minZoom;
         }
 
         /** Shown and usable. */
@@ -1506,25 +1429,7 @@ final class MapView extends JComponent
     /** The setting of a layer: the game's own icons of its kinds follow it too (a bank's sprite with the banks). */
     boolean toggled(Layer layer)
     {
-        switch (layer)
-        {
-            case TELEPORTS:
-                return config.showTeleports();
-            case TRANSPORTS:
-                return config.showTransports();
-            case DUNGEONS:
-                return config.showDungeons();
-            case SERVICES:
-                return config.showServices();
-            case SAILING:
-                return config.showSailing();
-            case SKILLING:
-                return config.showSkilling();
-            case ACTIVITIES:
-                return config.showActivities();
-            default:
-                return true;
-        }
+        return layer.setting.test(config);
     }
 
     boolean inGroup(Poi poi)
@@ -1964,10 +1869,6 @@ final class MapView extends JComponent
 
     void paintPlayer(Graphics2D g)
     {
-        if (player == null)
-        {
-            return;
-        }
         if (!onThisMap(mapOf(player)))
         {
             return;
@@ -2244,7 +2145,7 @@ final class MapView extends JComponent
         line(g, ax - 5, cy, ax + 5, cy);
         line(g, ax - 5, cy, ax - 1, cy - 4);
         line(g, ax - 5, cy, ax - 1, cy + 4);
-        g.drawString(to.name, (float) (x + 27), (float) (cy + metrics.getAscent() / 2.0 - 2));
+        g.drawString(to.name, (float) (x + 27), middle(cy, metrics));
     }
 
     /** A painted button of the control height. */
@@ -2279,7 +2180,12 @@ final class MapView extends JComponent
     {
         g.setColor(Color.WHITE);
         g.drawString(text, (float) (control.shape.getCenterX() - metrics.stringWidth(text) / 2.0),
-            (float) (control.shape.getCenterY() + metrics.getAscent() / 2.0 - 2));
+            middle(control.shape.getCenterY(), metrics));
+    }
+
+    static float middle(double cy, FontMetrics metrics)
+    {
+        return (float) (cy + metrics.getAscent() / 2.0 - 2);
     }
 
     static void line(Graphics2D g, double x1, double y1, double x2, double y2)
@@ -2399,11 +2305,6 @@ final class MapView extends JComponent
 
     /** Walkable area around a point as {minX, minY, maxX, maxY}; null when unknown or too large. Set by the route feature. */
     Function<WorldPoint, int[]> areaBounds = p -> null;
-
-    void setAreaBounds(Function<WorldPoint, int[]> areaBounds)
-    {
-        this.areaBounds = areaBounds;
-    }
 
     int[] areaOf(BaseMap on, WorldPoint point)
     {

@@ -34,10 +34,6 @@ public final class ReturnAreas
 
     static final RouteFiles.Table<List<Area>> AREAS = new RouteFiles.Table<>(ReturnAreas::read);
 
-    ReturnAreas()
-    {
-    }
-
     /** The area holding the tile, or null. */
     public static Area at(int node)
     {

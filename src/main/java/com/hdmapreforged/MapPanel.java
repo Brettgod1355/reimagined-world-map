@@ -89,11 +89,7 @@ final class MapPanel extends PluginPanel
         JPanel top = new Fitted(new BorderLayout(), 0);
         top.setBackground(DARK_GRAY_COLOR);
         top.add(content, BorderLayout.NORTH);
-        JScrollPane scroll = new JScrollPane(top, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-            ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        scroll.setBorder(null);
-        scroll.getVerticalScrollBar().setUnitIncrement(16);
-        add(scroll, BorderLayout.CENTER);
+        add(MapScreen.scroll(top), BorderLayout.CENTER);
 
         // Shown (its tab picked, the sidebar opened): a route that waited is built now.
         addHierarchyListener(e -> {
@@ -191,7 +187,7 @@ final class MapPanel extends PluginPanel
         for (Tour tour : saved)
         {
             boolean runs = tour.name.equals(running);
-            String what = tour.stops.size() + (tour.stops.size() == 1 ? " stop" : " stops");
+            String what = plural(tour.stops.size(), "stop");
             toursHolder.add(entry(tour.name, runs ? "Running, " + what : what, runs ? new Color(120, 220, 140) : null,
                 "Open this route: its stops, their order, Run", () -> edit(tour)));
         }
@@ -238,8 +234,7 @@ final class MapPanel extends PluginPanel
             {
                 JButton join = tip(button("Rejoin party", () -> friends.join(this)), "Join your last party again");
                 join.setAlignmentX(Component.LEFT_ALIGNMENT);
-                join.setMaximumSize(new Dimension(Integer.MAX_VALUE, join.getPreferredSize().height));
-                friendsHolder.add(join);
+                friendsHolder.add(capped(join));
                 friendsHolder.add(Box.createVerticalStrut(4));
             }
             friendsHolder.add(text("Not in a party. In one (RuneLite's Party panel), your friends show here: where "
@@ -309,14 +304,13 @@ final class MapPanel extends PluginPanel
             box.add(text("Nothing shared yet. They share it with this plugin's setting."));
             return box;
         }
-        int hp = Skill.HITPOINTS.ordinal();
-        int prayer = Skill.PRAYER.ordinal();
         var images = friends.images();
         JPanel status = new JPanel(new GridLayout(2, 2, 4, 4));
-        status.add(orb(Orbs.Kind.HITPOINTS, shared.boosted[hp], shared.levels[hp], images));
-        status.add(orb(Orbs.Kind.PRAYER, shared.boosted[prayer], shared.levels[prayer], images));
-        status.add(orb(Orbs.Kind.RUN, shared.run, 100, images));
-        status.add(orb(Orbs.Kind.SPECIAL, shared.special, 100, images));
+        int[][] orbs = FriendsWidget.orbs(shared);
+        for (int k = 0; k < 4; k++)
+        {
+            status.add(orb(Orbs.Kind.values()[k], orbs[k][0], orbs[k][1], images));
+        }
         box.add(fitted(status));
         box.add(Box.createVerticalStrut(6));
         JPanel pages = new JPanel(new GridLayout(1, 3, 4, 0));
@@ -450,11 +444,7 @@ final class MapPanel extends PluginPanel
                 }
             });
         }
-        line.setMaximumSize(new Dimension(Integer.MAX_VALUE, line.getPreferredSize().height));
-        JPanel spaced = column();
-        spaced.add(line);
-        spaced.add(Box.createVerticalStrut(4));
-        return spaced;
+        return RoutePanels.wrapped(line, 4);
     }
 
     static JComponent card(JComponent heading, JComponent body)
@@ -473,8 +463,7 @@ final class MapPanel extends PluginPanel
     {
         c.setOpaque(false);
         c.setAlignmentX(Component.LEFT_ALIGNMENT);
-        c.setMaximumSize(new Dimension(Integer.MAX_VALUE, c.getPreferredSize().height));
-        return c;
+        return capped(c);
     }
 
     static JLabel heading(String text)

@@ -24,10 +24,6 @@ final class Requirements
         final String quest;
     }
 
-    Requirements()
-    {
-    }
-
     /** Lines such as {@code "25 Magic"}, {@code "3 × Air rune"} and {@code "Quest: Sea Slug"}. */
     static List<Line> describe(Needs needs, IntFunction<String> itemNames)
     {

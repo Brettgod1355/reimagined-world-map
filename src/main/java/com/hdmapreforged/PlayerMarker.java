@@ -12,10 +12,6 @@ final class PlayerMarker
     static final Color SHADOW = new Color(0, 0, 0, 170);
     static final Font FONT = new Font(Font.SANS_SERIF, Font.BOLD, 11);
 
-    PlayerMarker()
-    {
-    }
-
     /** {@code otherFloor}: drawn fainter and dashed; {@code home}: in a box saying so, where the house stands. */
     static void paint(Graphics2D g, TextSprites text, double x, double y, double zoom, boolean otherFloor, boolean home)
     {

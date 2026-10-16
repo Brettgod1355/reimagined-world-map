@@ -37,10 +37,6 @@ final class Orbs
         OrbFiller.PRAYER, OrbFiller.RUN, OrbFiller.SPECIAL, OrbIcon.HITPOINTS,
         OrbIcon.PRAYER, OrbIcon.RUN, OrbIcon.SPECIAL};
 
-    Orbs()
-    {
-    }
-
     /** A negative {@code value} is unknown (empty, a dash); {@code sprites} returns null while loading. */
     static void paint(Graphics2D g, int x, int y, Kind kind, int value, int max, IntFunction<BufferedImage> sprites)
     {

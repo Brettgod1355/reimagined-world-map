@@ -55,12 +55,6 @@ final class PartyMapOverlay implements MapView.Overlay
         ticker = new Ticker(repaint);
     }
 
-    /** Swing thread. */
-    void dispose()
-    {
-        ticker.stop();
-    }
-
     /**
      * Repaints ~30 times a second while something moves, instead of asking for a frame from inside paint (which never
      * lets the map rest); stops by itself once nothing moved for a moment. Swing thread only.
@@ -99,12 +93,6 @@ final class PartyMapOverlay implements MapView.Overlay
         }
     }
 
-    void setFocus(LongPredicate selected, LongPredicate hovered)
-    {
-        this.selected = selected;
-        this.hovered = hovered;
-    }
-
     static Color color(long id)
     {
         long mixed = id * 0x9E3779B97F4A7C15L;
@@ -141,9 +129,12 @@ final class PartyMapOverlay implements MapView.Overlay
                 {
                     continue;
                 }
-                paintMarker(g, projection, marker, favourite, myWorld.getAsInt(), selected.test(marker.id),
+                var at = projection.shown(marker.point);
+                double x = projection.screenX(at.getX() + 0.5);
+                double y = projection.screenY(at.getY() + 0.5);
+                paintMarker(g, projection, marker, at, x, y, favourite, myWorld.getAsInt(), selected.test(marker.id),
                     hovered.test(marker.id));
-                rising |= paintLoot(g, projection, marker);
+                rising |= paintLoot(g, projection, marker, x, y);
             }
         }
         ticker.painted(rising);
@@ -171,16 +162,13 @@ final class PartyMapOverlay implements MapView.Overlay
     }
 
     /** Drops rising above the marker, newest lowest; true while any shows. */
-    boolean paintLoot(Graphics2D g, MapView.Projection projection, Marker marker)
+    boolean paintLoot(Graphics2D g, MapView.Projection projection, Marker marker, double x, double y)
     {
         var showing = loot.apply(marker.id);
         if (showing.isEmpty())
         {
             return false;
         }
-        var at = projection.shown(marker.point);
-        double x = projection.screenX(at.getX() + 0.5);
-        double y = projection.screenY(at.getY() + 0.5);
         // Off screen: nothing to keep the map drawing for.
         if (x < -120 || x > projection.width() + 120 || y < -40 || y > projection.height() + 40 + 22 * showing.size() + 60)
         {
@@ -224,12 +212,9 @@ final class PartyMapOverlay implements MapView.Overlay
         return true;
     }
 
-    static void paintMarker(Graphics2D g, MapView.Projection projection, Marker marker,
-        boolean favourite, int myWorld, boolean chosen, boolean hover)
+    static void paintMarker(Graphics2D g, MapView.Projection projection, Marker marker, WorldPoint at, double x,
+        double y, boolean favourite, int myWorld, boolean chosen, boolean hover)
     {
-        var at = projection.shown(marker.point);
-        double x = projection.screenX(at.getX() + 0.5);
-        double y = projection.screenY(at.getY() + 0.5);
         if (x < -40 || y < -40 || x > projection.width() + 40 || y > projection.height() + 40)
         {
             return;

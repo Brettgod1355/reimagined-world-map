@@ -284,7 +284,7 @@ final class MapData
                 Needs linkNeeds = needs(link.needs);
                 if (to != null && linkNeeds != null && link.name != null)
                 {
-                    poi.addLink(new Poi.Link(link.name, to, map(link.map), linkNeeds));
+                    poi.links.add(new Poi.Link(link.name, to, map(link.map), linkNeeds));
                 }
             }
             for (var member : depth < 2 ? list(place.members) : Collections.<PoiJson>emptyList())
@@ -292,7 +292,7 @@ final class MapData
                 var read = poi(member, 2);
                 if (read != null)
                 {
-                    poi.addMember(read);
+                    poi.members.add(read);
                 }
             }
             for (var near : depth == 0 ? list(place.nearby) : Collections.<PoiJson>emptyList())
@@ -300,7 +300,7 @@ final class MapData
                 var read = poi(near, 1);
                 if (read != null)
                 {
-                    poi.addNearby(read);
+                    poi.nearby.add(read);
                 }
             }
             return poi;

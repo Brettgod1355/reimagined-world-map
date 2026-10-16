@@ -101,10 +101,6 @@ final class GameIconSprites
         return image != null && image.getWidth() > 0 && image.getHeight() > 0 ? image : null;
     }
 
-    GameIconSprites()
-    {
-    }
-
     /** Null when not loaded yet, or a type we draw ourselves. */
     static BufferedImage get(PoiType type)
     {

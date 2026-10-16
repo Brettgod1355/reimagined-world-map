@@ -76,8 +76,6 @@ final class TourPanel
         void stop();
     }
 
-    static final Color LINK = ColorScheme.GRAND_EXCHANGE_LIMIT;
-
     final Actions actions;
     final Consumer<IntFunction<JComponent>> show;
     final Consumer<WorldPoint> focus;
@@ -181,7 +179,6 @@ final class TourPanel
             }
         }));
         panel.add(pick);
-        panel.add(Box.createVerticalStrut(4));
         JPanel naming = row();
         JTextField name = new JTextField(current.name, 14);
         name.setToolTipText("The route's name: type and press Enter");
@@ -209,7 +206,7 @@ final class TourPanel
         // Not while the fastest order is worked out; moving or removing stops neither.
         delete.setEnabled(!ordering);
         naming.add(delete);
-        panel.add(naming);
+        add(panel, 4, naming);
         panel.add(Box.createVerticalStrut(8));
 
         if (current.stops.isEmpty())
@@ -235,12 +232,9 @@ final class TourPanel
                 save(tours, current.name);
             }, "Remove this stop", true));
             line.add(moves, BorderLayout.EAST);
-            line.setMaximumSize(new Dimension(Integer.MAX_VALUE, line.getPreferredSize().height));
-            panel.add(line);
+            panel.add(capped(line));
             panel.add(Box.createVerticalStrut(2));
         }
-        panel.add(Box.createVerticalStrut(8));
-
         JPanel go = row();
         String running = actions.running();
         if (running != null)
@@ -269,10 +263,9 @@ final class TourPanel
             });
             go.add(loop);
         }
-        panel.add(go);
+        add(panel, 8, go);
         if (current.stops.size() > 1)
         {
-            panel.add(Box.createVerticalStrut(4));
             JPanel ordering = row();
             JButton withItems = button(this.ordering ? "Working it out…" : "Order with current items",
                 () -> order(current, false));
@@ -284,10 +277,8 @@ final class TourPanel
             fastest.setEnabled(!this.ordering);
             ordering.add(tip(fastest, "The quickest order with every teleport and transport in the game, whatever you "
                 + "have; a home or minigame teleport is used once at most"));
-            panel.add(ordering);
+            add(panel, 4, ordering);
         }
-        panel.add(Box.createVerticalStrut(4));
-
         JPanel share = row();
         JButton export = choice("Export", what -> {
             item(what, "This route", () -> copy(Tour.share(List.of(current)), "\"" + current.name + "\""));
@@ -299,12 +290,11 @@ final class TourPanel
         JButton doImport = button("Import", () -> importRoutes(tours));
         doImport.setEnabled(!ordering);
         share.add(tip(doImport, "Add the routes on the clipboard, as Export copies them"));
-        panel.add(share);
+        add(panel, 4, share);
 
         if (!current.avoid.isEmpty())
         {
-            panel.add(Box.createVerticalStrut(8));
-            panel.add(tip(text("Leaves out:", ColorScheme.LIGHT_GRAY_COLOR, width),
+            add(panel, 8, tip(text("Leaves out:", ColorScheme.LIGHT_GRAY_COLOR, width),
                 "Ways this route never takes; chosen with ⋯ at a step while the route runs"));
             for (String avoided : new ArrayList<>(current.avoid))
             {
@@ -314,8 +304,7 @@ final class TourPanel
                     current.avoid.remove(avoided);
                     save(tours, current.name);
                 }, "Use it in this route again", true), BorderLayout.EAST);
-                line.setMaximumSize(new Dimension(Integer.MAX_VALUE, line.getPreferredSize().height));
-                panel.add(line);
+                panel.add(capped(line));
             }
         }
         return panel;
@@ -388,7 +377,6 @@ final class TourPanel
         });
         return made[0];
     }
-
 
     void move(List<Tour> tours, Tour tour, int at, int by)
     {

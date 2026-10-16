@@ -214,23 +214,23 @@ public class HdMapReforgedPlugin extends Plugin
             .panel(panel)
             .build();
         clientToolbar.addNavigation(button);
-        party.start(screen.view(), fullScreen.view());
+        party.start(screen.view, fullScreen.view);
         route.setHouseFiles(home.joinSegment("house"), io);
         route.itemNames(itemNames);
         route.start(screen, fullScreen);
         route.setSidebar(panel::showRoute, this::showOnMap);
         panel.setTours(route.sidebarTours(panel::refreshTours));
         gameIcons = new MapIconLayer[]{gameIconLayer(screen), gameIconLayer(fullScreen)};
-        graves = new GraveMarker[]{new GraveMarker(screen.view()), new GraveMarker(fullScreen.view())};
+        graves = new GraveMarker[]{new GraveMarker(screen.view), new GraveMarker(fullScreen.view)};
         clientThread.invoke(this::checkGrave);
         NpcPictures pictures = new NpcPictures((id, done) -> {
-            String version = tiles.version();
+            String version = tiles.version;
             serverCache.bytes("npcs", version, id + ".png", fetch -> server.npcPictureBytes(version, id, fetch),
                 bytes -> done.accept(MapServer.decode(bytes)));
         });
         for (MapScreen on : new MapScreen[]{screen, fullScreen})
         {
-            on.view().setLinesChoice(value -> configManager.setConfiguration(GROUP, "linesOff", value));
+            on.view.linesChoice = value -> configManager.setConfiguration(GROUP, "linesOff", value);
             on.setNpcPictures(pictures);
         }
 
@@ -260,10 +260,10 @@ public class HdMapReforgedPlugin extends Plugin
 
     private MapIconLayer gameIconLayer(MapScreen on)
     {
-        MapIconLayer layer = new MapIconLayer(on.view(), config::showGameIcons, config::iconSize);
-        on.view().addOverlay(layer);
-        on.view().addHitLayer(layer);
-        on.view().setBadgeCover(layer::covers);
+        MapIconLayer layer = new MapIconLayer(on.view, config::showGameIcons, config::iconSize);
+        on.view.addOverlay(layer);
+        on.view.hitLayers.add(layer);
+        on.view.setBadgeCover(layer::covers);
         return layer;
     }
 
@@ -377,9 +377,9 @@ public class HdMapReforgedPlugin extends Plugin
             lastPlayer = shown;
             atHome = boxed;
             screens(s -> {
-                s.view().setHome(boxed);
-                s.view().setOutside(outside);
-                s.setPlayer(shown);
+                s.view.setHome(boxed);
+                s.view.outside = outside;
+                s.view.setPlayer(shown);
             });
         }
         updateUnlocks();
@@ -624,7 +624,7 @@ public class HdMapReforgedPlugin extends Plugin
             unlocks = null;
             showGrave(null);
             screens(s -> {
-                s.setPlayer(null);
+                s.view.setPlayer(null);
                 s.setUnlocks(null);
             });
         }
@@ -648,10 +648,10 @@ public class HdMapReforgedPlugin extends Plugin
                 runData(() -> resolveVersions(true, false));
                 break;
             case "followPlayer":
-                screens(s -> s.setFollowing(config.followPlayer()));
+                screens(s -> s.view.setFollowing(config.followPlayer()));
                 break;
             case "linesOff":
-                screens(s -> s.view().setLinesOff(config.linesOff()));
+                screens(s -> s.view.setLinesOff(config.linesOff()));
                 return;
 
             default:
@@ -685,8 +685,8 @@ public class HdMapReforgedPlugin extends Plugin
     {
         if (screen != null)
         {
-            screen.refresh();
-            fullScreen.refresh();
+            screen.view.repaint();
+            fullScreen.view.repaint();
         }
     }
 
@@ -826,11 +826,12 @@ public class HdMapReforgedPlugin extends Plugin
             byte[] routeData = files.get(3).join();
             BaseMaps maps = list == null ? null : BaseMaps.parse(gson, MapServer.text(list));
             MapData data = null;
-            if (maps != null && maps.isUsable() && regions != null && places != null)
+            if (maps != null && maps.byId(BaseMap.SURFACE) != null && regions != null && places != null)
             {
                 try
                 {
-                    maps.withRegions(new RegionTable().read(MapServer.text(regions))).withVersion(version);
+                    maps.regions = new RegionTable().read(MapServer.text(regions));
+                    maps.version = version;
                     data = MapData.read(gson, MapServer.text(places), maps, version);
                 }
                 catch (IOException | RuntimeException e)
@@ -887,7 +888,7 @@ public class HdMapReforgedPlugin extends Plugin
 
     private void switchVersion(String version, BaseMaps maps, MapData data, int started)
     {
-        String current = tiles.version();
+        String current = tiles.version;
         if (current != null && !current.equals(version))
         {
             // The tiles of the version in use carry over, but for those the server says changed.
@@ -972,6 +973,6 @@ public class HdMapReforgedPlugin extends Plugin
             return;
         }
         fullMap.open();
-        fullScreen.view().focus(point);
+        fullScreen.view.focus(point);
     }
 }

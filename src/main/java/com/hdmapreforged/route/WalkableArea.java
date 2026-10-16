@@ -5,9 +5,6 @@ import java.util.*;
 /** How far a dungeon, cave or room reaches on its floor, to fit the map to the dungeon one enters. */
 public final class WalkableArea
 {
-    WalkableArea()
-    {
-    }
 
     /** {minX, minY, maxX, maxY} of the tiles walkable from a point, or null when none or over {@code limit} tiles. */
     public static int[] bounds(CollisionMap map, int x, int y, int z, int limit)
@@ -20,12 +17,14 @@ public final class WalkableArea
         BitSet seen = new BitSet();
         // Dungeons never span more than this.
         int size = 1024;
-        int ox = Tiles.x(start) - size / 2;
-        int oy = Tiles.y(start) - size / 2;
+        int sx = Tiles.x(start);
+        int sy = Tiles.y(start);
+        int ox = sx - size / 2;
+        int oy = sy - size / 2;
         var open = new ArrayDeque<int[]>();
-        open.add(new int[]{Tiles.x(start), Tiles.y(start)});
-        seen.set((Tiles.x(start) - ox) * size + (Tiles.y(start) - oy));
-        int[] b = {Tiles.x(start), Tiles.y(start), Tiles.x(start), Tiles.y(start)};
+        open.add(new int[]{sx, sy});
+        seen.set((sx - ox) * size + (sy - oy));
+        int[] b = {sx, sy, sx, sy};
         int count = 0;
         while (!open.isEmpty())
         {

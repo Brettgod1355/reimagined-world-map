@@ -7,10 +7,6 @@ public final class InstanceCopies
 {
     static final RouteFiles.Table<List<int[]>> COPIES = new RouteFiles.Table<>(InstanceCopies::load);
 
-    InstanceCopies()
-    {
-    }
-
     static List<int[]> load()
     {
         var copies = new ArrayList<int[]>();

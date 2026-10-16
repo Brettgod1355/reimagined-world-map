@@ -132,7 +132,7 @@ public final class RouteFeature
      */
     WorldPoint markerPoint(int point)
     {
-        if (!HousePlan.contains(Tiles.x(point), Tiles.y(point)))
+        if (!HousePlan.contains(point))
         {
             // In an instance copying a place: the template's tile, which HD World Markers finds in the instance.
             var scene = client.getTopLevelWorldView();
@@ -177,7 +177,7 @@ public final class RouteFeature
     volatile Pathfinder walker;
     void repaint()
     {
-        forScreens(screen -> screen.view().repaint());
+        forScreens(screen -> screen.view.repaint());
     }
 
     void forScreens(Consumer<MapScreen> action)
@@ -254,26 +254,20 @@ public final class RouteFeature
     /** The plugin on that answers Shortest Path's messages (Shortest Path, or GPS), or null. */
     String shortestPathName()
     {
+        return pluginOn(ShortestPathBridge.PLUGIN_NAMES);
+    }
+
+    /** The first of these plugins that is on, or null. */
+    String pluginOn(List<String> names)
+    {
         for (Plugin plugin : pluginManager.getPlugins())
         {
-            if (ShortestPathBridge.PLUGIN_NAMES.contains(plugin.getName()) && pluginManager.isPluginEnabled(plugin))
+            if (names.contains(plugin.getName()) && pluginManager.isPluginEnabled(plugin))
             {
                 return plugin.getName();
             }
         }
         return null;
-    }
-
-    boolean pluginOn(String name)
-    {
-        for (Plugin plugin : pluginManager.getPlugins())
-        {
-            if (name.equals(plugin.getName()))
-            {
-                return pluginManager.isPluginEnabled(plugin);
-            }
-        }
-        return false;
     }
 
     /** Client thread. */
@@ -401,14 +395,18 @@ public final class RouteFeature
     /** HD World Markers dropped every plugin's tiles (logout, world hop, lost connection, profile change): send again. */
     void tileMarkersCleared()
     {
-        clientThread.invokeLater(() -> {
-            sentAhead = null;
-            sentLegs = null;
-            sentFrom = -1;
-            sentTiles = false;
-            sentLines = false;
-            lastHdTilesCheck = Integer.MIN_VALUE / 2;
-        });
+        clientThread.invokeLater(this::unsent);
+    }
+
+    /** Client thread: nothing counts as sent. */
+    void unsent()
+    {
+        sentAhead = null;
+        sentLegs = null;
+        sentFrom = -1;
+        sentTiles = false;
+        sentLines = false;
+        lastHdTilesCheck = Integer.MIN_VALUE / 2;
     }
 
     void updateHdTiles(int player)
@@ -419,7 +417,7 @@ public final class RouteFeature
             hdHome = home;
             lastHdTilesCheck = ticks;
             // Also in one's house: its tiles go as the scene's own instance tiles (markerPoint).
-            boolean on = config.routeHdTiles() && config.routeInGame() && pluginOn(TileMarkersBridge.PLUGIN_NAME);
+            boolean on = config.routeHdTiles() && config.routeInGame() && pluginOn(List.of(TileMarkersBridge.PLUGIN_NAME)) != null;
             if (!on && hdTiles)
             {
                 eventBus.post(TileMarkersBridge.clear());
@@ -477,10 +475,10 @@ public final class RouteFeature
         {
             eachLine(route, (points, color) -> {
                 var line = new ArrayList<WorldPoint>();
-                for (int point : points)
+                // One past the end closes the last line.
+                for (int i = 0; i <= points.length; i++)
                 {
-                    var at = player < 0 || Tiles.distance(point, player) <= MARKER_REACH ? markerPoint(point)
-                        : null;
+                    var at = i < points.length && reach(points[i], player) ? markerPoint(points[i]) : null;
                     // Out of reach or not drawable: the line breaks there (HD World Markers joins only neighbours).
                     if (at != null)
                     {
@@ -493,12 +491,6 @@ public final class RouteFeature
                         lineArrows.add(every);
                         line = new ArrayList<>();
                     }
-                }
-                if (!line.isEmpty())
-                {
-                    lines.add(line);
-                    lineColors.add(color);
-                    lineArrows.add(every);
                 }
             });
         }
@@ -534,7 +526,7 @@ public final class RouteFeature
             {
                 for (int point : asLines ? new int[0] : step.points)
                 {
-                    if (player < 0 || Tiles.distance(point, player) <= MARKER_REACH)
+                    if (reach(point, player))
                     {
                         taken.add(point);
                         tiles.add(hdTile(point, fadeIn(point, now), color));
@@ -545,7 +537,7 @@ public final class RouteFeature
                 && (step.first() != step.last() || step.kind == Kind.BANK))
             {
                 int at = step.first();
-                if (player < 0 || Tiles.distance(at, player) <= MARKER_REACH)
+                if (reach(at, player))
                 {
                     var marked = markerPoint(at);
                     if (marked != null)
@@ -574,7 +566,7 @@ public final class RouteFeature
             {
                 for (int point : step.kind == Kind.WALK ? step.points : new int[0])
                 {
-                    if ((player < 0 || Tiles.distance(point, player) <= MARKER_REACH) && taken.add(point))
+                    if (reach(point, player) && taken.add(point))
                     {
                         tiles.add(hdTile(point, 1, color));
                     }
@@ -584,6 +576,11 @@ public final class RouteFeature
         tiles.removeIf(Objects::isNull);
         eventBus.post(TileMarkersBridge.tiles(tiles));
         sentTiles = true;
+    }
+
+    static boolean reach(int point, int player)
+    {
+        return player < 0 || Tiles.distance(point, player) <= MARKER_REACH;
     }
 
     /** The last message we sent Shortest Path, not taken for another plugin's. */
@@ -597,17 +594,17 @@ public final class RouteFeature
     @Subscribe(priority = -1)
     public void onPluginMessage(PluginMessage message)
     {
-        if (ShortestPathBridge.isTransports(message) && handedOver != null)
+        if (ShortestPathBridge.is(message, "transports") && handedOver != null)
         {
             spJumps = ShortestPathBridge.jumps(message);
             walkShortestPath(spJumps, handedOver);
             invokeLater(() -> showShortestPath(false));
             return;
         }
-        boolean path = ShortestPathBridge.isPath(message);
+        boolean path = ShortestPathBridge.is(message, "path");
         List<WorldPoint> targets = path ? ShortestPathBridge.targets(message) : List.of();
         var target = ShortestPathBridge.nearest(targets, lastLocation);
-        if (message == sent || (path ? target == null : !ShortestPathBridge.isClear(message)))
+        if (message == sent || (path ? target == null : !ShortestPathBridge.is(message, "clear")))
         {
             return;
         }
@@ -822,13 +819,9 @@ public final class RouteFeature
         int last = -1;
         for (int i = 0; i < steps.size(); i++)
         {
-            for (int point : steps.get(i).points)
+            if (Arrays.stream(steps.get(i).points).anyMatch(point -> !Tiles.isSea(point) && HousePlan.contains(point)))
             {
-                if (!Tiles.isSea(point) && HousePlan.contains(Tiles.x(point), Tiles.y(point)))
-                {
-                    last = i;
-                    break;
-                }
+                last = i;
             }
         }
         return steps.subList(0, last + 1);
@@ -962,7 +955,7 @@ public final class RouteFeature
 
     void handOver(WorldPoint target)
     {
-        handOver(target, ShortestPathBridge.path(target), true);
+        handOver(target, ShortestPathBridge.path(target, Map.of()), true);
     }
 
     /** Any thread: Shortest Path is sent {@code ask}, and its route to {@code target} is drawn. */
@@ -1017,11 +1010,11 @@ public final class RouteFeature
         background = daemon("Reimagined World Map route extras", Thread.MIN_PRIORITY);
         for (var screen : on)
         {
-            screen.view().addOverlay(mapOverlay);
-            screen.view().addMenuContributor(menu);
-            screen.setRouter(this::routeTo);
+            screen.view.addOverlay(mapOverlay);
+            screen.view.menuContributors.add(menu);
+            screen.card.setRouter(this::routeTo);
             screen.setStopAdder(this::addStop);
-            screen.setFastest(this::lookAtFastest);
+            screen.npcs.setFastest(this::lookAtFastest);
             screen.setTours(tourActions);
         }
         overlays.forEach(overlayManager::add);
@@ -1070,10 +1063,10 @@ public final class RouteFeature
                     for (var screen : screens)
                     {
                         // Entering a dungeon fits the map to its walkable area.
-                        screen.view().setAreaBounds(p -> WalkableArea.bounds(map, p.getX(), p.getY(), p.getPlane(),
+                        screen.view.areaBounds = (p -> WalkableArea.bounds(map, p.getX(), p.getY(), p.getPlane(),
                             AREA_LIMIT));
                         // A click on ground drawn on another floor than it is walked on asks for that floor.
-                        screen.view().setGround(p -> map.walkable(p.getX(), p.getY(), p.getPlane()));
+                        screen.view.ground = p -> map.walkable(p.getX(), p.getY(), p.getPlane());
                     }
                     walker = pathfinder;
                     controller = new RouteController(searches, SwingUtilities::invokeLater, pathfinder,
@@ -1126,11 +1119,11 @@ public final class RouteFeature
         }
         for (var screen : screens)
         {
-            screen.view().removeOverlay(mapOverlay);
-            screen.view().removeMenuContributor(menu);
+            screen.view.removeOverlay(mapOverlay);
+            screen.view.menuContributors.remove(menu);
             screen.showRoute(null, false);
-            screen.view().setAreaBounds(p -> null); // holds the collision map
-            screen.view().setGround(null);
+            screen.view.areaBounds = p -> null; // holds the collision map
+            screen.view.ground = null;
         }
         sidebar.accept(null);
         sidebar = section -> { };
@@ -1164,13 +1157,8 @@ public final class RouteFeature
             lastLocation = null;
             start = -2;
             state = PlayerState.UNKNOWN;
-            sentAhead = null;
-            sentLegs = null;
-            sentFrom = -1;
+            unsent();
             sentFade = 1;
-            sentTiles = false;
-            sentLines = false;
-            lastHdTilesCheck = Integer.MIN_VALUE / 2;
             warned = false;
         });
         // Work still on the extras thread finds it is not wanted.
@@ -1217,7 +1205,7 @@ public final class RouteFeature
 
     WorldPoint nearFrom(int node)
     {
-        return node < 0 ? null : HousePlan.contains(Tiles.x(node), Tiles.y(node)) ? outside() : worldPoint(node);
+        return node < 0 ? null : HousePlan.contains(node) ? outside() : worldPoint(node);
     }
 
     WorldPoint home()
@@ -1347,10 +1335,10 @@ public final class RouteFeature
         // Tiles fade all the while a route is walked: a map paints again only round the dots it shows, not whole.
         for (var screen : screens)
         {
-            Rectangle dots = screen.view().isShowing() ? fadingDots(screen.view().projection(), fading.keySet()) : null;
+            Rectangle dots = screen.view.isShowing() ? fadingDots(screen.view.projection(), fading.keySet()) : null;
             if (dots != null)
             {
-                screen.view().repaint(dots);
+                screen.view.repaint(dots);
             }
         }
         fading.values().removeIf(since -> now - since >= FADE_MS);
@@ -1611,13 +1599,18 @@ public final class RouteFeature
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event)
     {
-        atBank |= event.getGroupId() == InterfaceID.BANKMAIN || event.getGroupId() == InterfaceID.BANK_DEPOSITBOX;
+        atBank |= bank(event.getGroupId());
+    }
+
+    static boolean bank(int group)
+    {
+        return group == InterfaceID.BANKMAIN || group == InterfaceID.BANK_DEPOSITBOX;
     }
 
     @Subscribe
     public void onWidgetClosed(WidgetClosed event)
     {
-        if (event.getGroupId() == InterfaceID.BANKMAIN || event.getGroupId() == InterfaceID.BANK_DEPOSITBOX)
+        if (bank(event.getGroupId()))
         {
             atBank = false;
             if (changedAtBank)
@@ -1739,7 +1732,7 @@ public final class RouteFeature
 
     void toast(String text)
     {
-        forScreens(screen -> screen.showToast(text));
+        forScreens(screen -> screen.view.showToast(text));
     }
 
     // ---- Swing ----
@@ -1747,14 +1740,14 @@ public final class RouteFeature
     /** With {@code anything}, every requirement counts as met. Swing or the extras thread. */
     RouteRequest request(int begin, int target, boolean anything)
     {
-        return request(begin, target, anything, false);
+        return request(begin, target, anything, false, leftOut());
     }
 
-    /** With {@code everyItem}, the player's levels and quests but any item: what bringing something would give. */
-    RouteRequest request(int begin, int target, boolean anything, boolean everyItem)
+    /** What the running custom route leaves out. */
+    List<String> leftOut()
     {
         Running r = tour;
-        return request(begin, target, anything, everyItem, r == null ? List.of() : r.avoid);
+        return r == null ? List.of() : r.avoid;
     }
 
     /** Also without {@code leftOut}: what a custom route leaves out. */
@@ -1776,7 +1769,7 @@ public final class RouteFeature
         {
             return null;
         }
-        var view = on[0].view();
+        var view = on[0].view;
         var options = new RouteSource.Options(config.routeTeleports(), config.routeSailing(),
             shipwrights, anything || config.routeIgnoreLevels(),
             anything || everyItem || config.routeIgnoreItems(), avoided(leftOut), anything ? RouteSource.Saving.NONE
@@ -1802,13 +1795,12 @@ public final class RouteFeature
         {
             return plain;
         }
-        var banks = Poi.flatten(on[0].view().pois()).stream().filter(p -> p.type == PoiType.BANK)
+        var banks = Poi.flatten(on[0].view.pois()).stream().filter(p -> p.type == PoiType.BANK)
             .map(p -> RouteSource.bankStands(pack(p.location))).toArray(int[][]::new);
-        Running r = tour;
         // On from the bank: out of the house, with the bank's items.
         var player = state.outOfHouse();
-        var banked = banks.length == 0 ? null : request(begin, target, false, false,
-            r == null ? List.of() : r.avoid, player.withBank(bank), fromPlugin ? pluginWilderness : null);
+        var banked = banks.length == 0 ? null : request(begin, target, false, false, leftOut(), player.withBank(bank),
+            fromPlugin ? pluginWilderness : null);
         return banked == null ? plain : plain.withBank(new BankDetour(banks, banked));
     }
 
@@ -1948,8 +1940,7 @@ public final class RouteFeature
             chosen.accept(candidates.get(0));
             return;
         }
-        Running running = tour;
-        List<String> leftOut = running == null ? List.of() : running.avoid;
+        var leftOut = leftOut();
         toast("Finding the fastest…");
         try
         {
@@ -1963,7 +1954,7 @@ public final class RouteFeature
                     {
                         return;
                     }
-                    var request = request(from, atSea(p) ? Tiles.seaAt(p.getX(), p.getY()) : pack(p), false, false,
+                    var request = request(from, node(p), false, false,
                         leftOut, state, wilderness);
                     Route route;
                     try
@@ -2002,7 +1993,7 @@ public final class RouteFeature
     /** Swing thread: the maps show a search result's place, as a click on it in the list does. */
     void lookAt(WorldPoint place)
     {
-        forScreens(screen -> screen.lookAtFound(place));
+        forScreens(screen -> screen.npcs.lookAtPoint(place));
     }
 
     /** Swing thread; nothing while the data loads. */
@@ -2017,8 +2008,14 @@ public final class RouteFeature
         if (now != null)
         {
             newRoute();
-            now.setTarget(atSea(point) ? Tiles.seaAt(point.getX(), point.getY()) : pack(point));
+            now.setTarget(node(point));
         }
+    }
+
+    /** Where the planner goes for a spot: its sea block for one {@link #atSea}. */
+    int node(WorldPoint p)
+    {
+        return atSea(p) ? Tiles.seaAt(p.getX(), p.getY()) : pack(p);
     }
 
     /**
@@ -2040,7 +2037,7 @@ public final class RouteFeature
         {
             return false;
         }
-        for (var poi : screens[0].view().pois())
+        for (var poi : screens[0].view.pois())
         {
             if (poi.atSea() && poi.location.getPlane() == 0 && poi.location.distanceTo2D(point) <= 2)
             {
@@ -2192,7 +2189,7 @@ public final class RouteFeature
     {
         if (screens.length > 0)
         {
-            for (var poi : screens[0].view().pois())
+            for (var poi : screens[0].view.pois())
             {
                 if (poi.location.getPlane() == point.getPlane() && poi.location.distanceTo2D(point) <= 2)
                 {
@@ -2804,7 +2801,7 @@ public final class RouteFeature
         }
         int from = start;
         int target = c.target();
-        TileCache.execute(pool, () -> tipFound(c, route, request(from, target, false, true), pathfinder, asked));
+        TileCache.execute(pool, () -> tipFound(c, route, request(from, target, false, true, leftOut()), pathfinder, asked));
     }
 
     /** Extras thread; always hands back to Swing. */
@@ -3015,7 +3012,7 @@ public final class RouteFeature
     void showSteps(RouteController c, boolean up)
     {
         boolean none = c == null || c.target() < 0;
-        forScreens(screen -> screen.showRoute(none ? null : width -> steps(c, width, screen.view()::focus, false),
+        forScreens(screen -> screen.showRoute(none ? null : width -> steps(c, width, screen.view::focus, false),
             !none && up));
         sidebar.accept(none ? null : width -> steps(c, width, sidebarFocus, true));
     }
@@ -3223,7 +3220,7 @@ public final class RouteFeature
         // the head only what is cast anywhere, and obstacles on the way.
         Step jump = route.steps.stream().filter(Step::isJump).findFirst().orElse(null);
         boolean onIt = jump != null && jump.kind != Kind.TELEPORT && jump.first() >= 0
-            && (jump.kind != Kind.HOUSE || HousePlan.contains(Tiles.x(jump.first()), Tiles.y(jump.first())));
+            && (jump.kind != Kind.HOUSE || HousePlan.contains(jump.first()));
         var view = client.getTopLevelWorldView();
         if (onIt && !hdTiles && view != null)
         {
@@ -3280,7 +3277,7 @@ public final class RouteFeature
             {
                 base = c;
                 alpha = value;
-                made = new Color(c.getRed(), c.getGreen(), c.getBlue(), value);
+                made = alpha(c, a);
             }
             return made;
         }
@@ -3454,9 +3451,7 @@ public final class RouteFeature
             for (int i = 0; i < points.length; i++)
             {
                 int point = points[i];
-                var local = Tiles.z(point) != plane || Tiles.distance(point, me) > Constants.EXTENDED_SCENE_SIZE
-                    ? null : yourHouse.local(view, point);
-                Point at = local == null ? null : Perspective.localToCanvas(client, local, plane);
+                Point at = canvas(view, point, plane, me);
                 if (at != null && previous >= 0 && Tiles.distance(previous, point) == 1)
                 {
                     path.lineTo(at.getX(), at.getY());
@@ -3470,7 +3465,7 @@ public final class RouteFeature
                 if (arrows && at != null && (points.length - 1 - i) % ARROW_EVERY == ARROW_EVERY / 2 && i + 1 < points.length
                     && Tiles.distance(point, points[i + 1]) == 1 && Tiles.z(points[i + 1]) == plane)
                 {
-                    var on = local;
+                    var on = yourHouse.local(view, point);
                     int dx = Tiles.x(points[i + 1]) - Tiles.x(point);
                     int dy = Tiles.y(points[i + 1]) - Tiles.y(point);
                     heads.add(() -> arrow(g, on, dx, dy, plane));
@@ -3678,15 +3673,15 @@ public final class RouteFeature
         Point se = Perspective.localToCanvas(client, x + half, y - half, heights[plane][ex + 1][ey]);
         Point ne = Perspective.localToCanvas(client, x + half, y + half, heights[plane][ex + 1][ey + 1]);
         Point nw = Perspective.localToCanvas(client, x - half, y + half, heights[plane][ex][ey + 1]);
-        if (sw == null || se == null || ne == null || nw == null)
-        {
-            return null;
-        }
         Polygon poly = new Polygon();
-        poly.addPoint(sw.getX(), sw.getY());
-        poly.addPoint(se.getX(), se.getY());
-        poly.addPoint(ne.getX(), ne.getY());
-        poly.addPoint(nw.getX(), nw.getY());
+        for (Point corner : new Point[]{sw, se, ne, nw})
+        {
+            if (corner == null)
+            {
+                return null;
+            }
+            poly.addPoint(corner.getX(), corner.getY());
+        }
         return poly;
     }
 
@@ -3734,10 +3729,6 @@ public final class RouteFeature
                 }
             }
             return -1;
-        }
-
-        RouteText()
-        {
         }
 
         static String escape(String text)
@@ -3882,7 +3873,7 @@ public final class RouteFeature
                     : step.name.substring(0, arrow) + ", then " + inHouse(step.name);
             }
             int to = step.last();
-            if (!inside && step.isJump() && to >= 0 && HousePlan.contains(Tiles.x(to), Tiles.y(to)))
+            if (!inside && step.isJump() && to >= 0 && HousePlan.contains(to))
             {
                 // Into the house, then past the walk (and stairs) inside to what is used there.
                 for (int i = route.steps.indexOf(step) + 1; i < route.steps.size(); i++)
@@ -3908,8 +3899,8 @@ public final class RouteFeature
                 case WALK:
                 {
                     int tiles = step.points.length - 1;
-                    return "Walk " + tiles + (tiles == 1 ? " tile" : " tiles")
-                        + (step.doors > 0 ? " (" + step.doors + (step.doors == 1 ? " door)" : " doors)") : "");
+                    return "Walk " + plural(tiles, "tile")
+                        + (step.doors > 0 ? " (" + plural(step.doors, "door") + ")" : "");
                 }
                 case SAIL:
                     return "Sail about " + (step.points.length - 1) * Tiles.CELL + " tiles";

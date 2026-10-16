@@ -67,7 +67,7 @@ public final class HousePlan
         var queue = new ArrayDeque<Integer>();
         for (int node : from)
         {
-            boolean in = contains(x(node), y(node));
+            boolean in = contains(node);
             reach(tiles, reached, queue, in ? (x(node) - X) * SIZE + y(node) - Y : -1, z(node));
         }
         while (!queue.isEmpty())
@@ -106,7 +106,7 @@ public final class HousePlan
         int from = (x(node) - X) * SIZE + y(node) - Y;
         var ring = List.of(from);
         var seen = new HashSet<Integer>(ring);
-        for (int step = 0; step <= 3 && contains(x(node), y(node)) && z >= 0 && z < 4; step++)
+        for (int step = 0; step <= 3 && contains(node) && z >= 0 && z < 4; step++)
         {
             var next = new ArrayList<Integer>();
             int best = -1;
@@ -162,6 +162,11 @@ public final class HousePlan
         return pack(X + sceneX, Y + sceneY, plane);
     }
 
+    public static boolean contains(int node)
+    {
+        return contains(x(node), y(node));
+    }
+
     public static boolean contains(int x, int y)
     {
         return x >= X && x < X + SIZE && y >= Y && y < Y + SIZE;
@@ -203,7 +208,7 @@ public final class HousePlan
         {
             var all = in.readNBytes(4 * TILES + 1);
             int arrival = Integer.parseInt(lines[1]);
-            if (all.length != 4 * TILES || !contains(x(arrival), y(arrival)))
+            if (all.length != 4 * TILES || !contains(arrival))
             {
                 return null;
             }
@@ -217,7 +222,7 @@ public final class HousePlan
             {
                 var parts = lines[i].split("\t", 2);
                 int node = Integer.parseInt(parts[0]);
-                if (parts.length == 2 && contains(x(node), y(node)) && parts[1].length() <= 2000)
+                if (parts.length == 2 && contains(node) && parts[1].length() <= 2000)
                 {
                     things.put(node, parts[1]);
                 }

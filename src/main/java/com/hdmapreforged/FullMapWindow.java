@@ -73,7 +73,7 @@ final class FullMapWindow implements MapView.WindowControls
         this.screen = screen;
         this.saveBounds = saveBounds;
         this.isMapKey = isMapKey;
-        screen.setWindowControls(this);
+        screen.view.setWindowControls(this);
         var decoded = decode(savedBounds);
         if (decoded != null)
         {
@@ -81,7 +81,7 @@ final class FullMapWindow implements MapView.WindowControls
             maximised = (Boolean) decoded[1];
         }
         screen.setScreenLayout(MapScreen.Layout.FULL);
-        screen.view().addMouseListener(new MouseAdapter()
+        screen.view.addMouseListener(new MouseAdapter()
         {
             @Override
             public void mouseReleased(MouseEvent e)
@@ -104,8 +104,11 @@ final class FullMapWindow implements MapView.WindowControls
 
     void setHostBounds(Rectangle screenBounds)
     {
-        window.setBounds(screenBounds);
-        window.validate();
+        if (!window.getBounds().equals(screenBounds))
+        {
+            window.setBounds(screenBounds);
+            window.validate();
+        }
     }
 
     /** Whether the map's window has the keyboard. */
@@ -190,7 +193,7 @@ final class FullMapWindow implements MapView.WindowControls
         maximised = !maximised;
         save();
         place();
-        screen.refresh();
+        screen.view.repaint();
     }
 
     /**
@@ -294,26 +297,19 @@ final class FullMapWindow implements MapView.WindowControls
             return;
         }
         Rectangle view = onScreen(canvas);
-        Rectangle bounds = maximised ? view : fit(relative, view);
-        if (!window.getBounds().equals(bounds))
-        {
-            setHostBounds(bounds);
-        }
+        setHostBounds(maximised ? view : fit(relative, view));
     }
 
     /** Screen bounds for fractions of the game view (null: the default), inside the view, at least the minimum size. */
     static Rectangle fit(Rectangle2D relative, Rectangle view)
     {
-        double rx = relative != null ? relative.getX() : 0.08;
-        double ry = relative != null ? relative.getY() : 0.06;
-        double rw = relative != null ? relative.getWidth() : 0.84;
-        double rh = relative != null ? relative.getHeight() : 0.88;
-        int width = (int) round(rw * view.width);
-        int height = (int) round(rh * view.height);
+        var r = relative != null ? relative : new Rectangle2D.Double(0.08, 0.06, 0.84, 0.88);
+        int width = (int) round(r.getWidth() * view.width);
+        int height = (int) round(r.getHeight() * view.height);
         width = min(view.width, max(min(MIN_WIDTH, view.width), width));
         height = min(view.height, max(min(MIN_HEIGHT, view.height), height));
-        int x = view.x + (int) round(rx * view.width);
-        int y = view.y + (int) round(ry * view.height);
+        int x = view.x + (int) round(r.getX() * view.width);
+        int y = view.y + (int) round(r.getY() * view.height);
         x = max(view.x, min(view.x + view.width - width, x));
         y = max(view.y, min(view.y + view.height - height, y));
         return new Rectangle(x, y, width, height);
@@ -330,10 +326,7 @@ final class FullMapWindow implements MapView.WindowControls
         Rectangle fitted = fit(fraction(bounds, view), view);
         relative = fraction(fitted, view);
         maximised = false;
-        if (!window.getBounds().equals(fitted))
-        {
-            setHostBounds(fitted);
-        }
+        setHostBounds(fitted);
     }
 
     /** Screen bounds as fractions of the game view. */

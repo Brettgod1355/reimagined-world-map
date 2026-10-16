@@ -53,7 +53,7 @@ final class RoutesButton implements MapView.Widget
         {
             g.fill(new Ellipse2D.Double(p[0] - 2, p[1] - 2, 4, 4));
         }
-        g.drawString("Routes", (float) (x + 20), (float) (y + metrics.getAscent() / 2.0 - 2));
+        g.drawString("Routes", (float) (x + 20), MapView.middle(y, metrics));
         clicks.add(button, toggle, "Custom routes: your own routes with several stops, to order, save and run");
     }
 }

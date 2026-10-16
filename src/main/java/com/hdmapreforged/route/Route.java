@@ -103,6 +103,13 @@ public final class Route
         return new Route(outcome, steps, cost, target, end, exhausted, limited, nodes, reached, true, keptOut);
     }
 
+    /** This route, ending near the target of {@code shut}, which proved it out of reach. */
+    Route near(Route shut)
+    {
+        return new Route(Outcome.NEAREST, steps, cost, shut.target, end, shut.exhausted, limited, nodes, shut.reached,
+            throughWilderness, keptOut);
+    }
+
     /** This route, of a search that left out ways into the Wilderness. */
     Route keptOut()
     {
@@ -133,7 +140,7 @@ public final class Route
         // Past a bank step nothing in one's house counts while one is in it: the route may go from the house to the bank
         // and back (its fairy ring), and in the house before it the bank is still to do.
         boolean banked = false;
-        boolean home = inHouse(player);
+        boolean home = HousePlan.contains(player);
         for (int s = 0; s < steps.size(); s++)
         {
             Step step = steps.get(s);
@@ -150,12 +157,12 @@ public final class Route
                 // Nearer where it starts (a gate, a door): not crossed yet.
                 boolean before = from >= 0 && !isSea(from) && sameLevel(player, from)
                     && distance(player, from) < distance(player, landing);
-                if (banked && home && inHouse(landing))
+                if (banked && home && HousePlan.contains(landing))
                 {
                     continue;
                 }
                 // Into one's house (a teleport, its portal): anywhere in it, it was taken, wherever the game put one.
-                boolean entered = from >= 0 && !inHouse(from) && inHouse(landing) && home;
+                boolean entered = from >= 0 && !HousePlan.contains(from) && HousePlan.contains(landing) && home;
                 if (sameLevel(player, landing) && (distance(player, landing) <= 2 || entered) && !before)
                 {
                     bestStep = s + 1;
@@ -167,7 +174,7 @@ public final class Route
             for (int i = 0; i < step.points.length; i++)
             {
                 int point = step.points[i];
-                if (!sameLevel(player, point) || banked && home && inHouse(point))
+                if (!sameLevel(player, point) || banked && home && HousePlan.contains(point))
                 {
                     continue;
                 }
@@ -211,11 +218,6 @@ public final class Route
         }
         return new Route(outcome, Collections.unmodifiableList(left), cost, target, end, exhausted, limited, nodes, null,
             throughWilderness, keptOut);
-    }
-
-    static boolean inHouse(int node)
-    {
-        return HousePlan.contains(x(node), y(node));
     }
 
     static boolean sameLevel(int a, int b)

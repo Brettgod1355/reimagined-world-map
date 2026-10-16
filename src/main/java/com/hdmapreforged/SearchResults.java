@@ -78,6 +78,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     final MapView view;
     final Supplier<WorldData> world;
     final Card card;
+    @Setter
     Function<WorldPoint, MapData.Place> places = point -> null;
     Result result;
     String failed;
@@ -161,7 +162,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         this.world = world;
         this.card = card;
         view.addOverlay(this);
-        view.addHitLayer(this);
+        view.hitLayers.add(this);
         filter.setAlignmentX(Component.LEFT_ALIGNMENT);
         filter.setToolTipText("Only the monsters whose names hold the words typed");
         FullMapWindow.typable(filter);
@@ -243,11 +244,6 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         var map = maps == null ? null : world.get().drawnBy(maps).get(point);
         return map != null && map.id != BaseMap.SURFACE && map.id != BaseMap.FULL ? MapScreen.mapPlace(map, point)
             : places.apply(point);
-    }
-
-    void setPlaceNames(Function<WorldPoint, MapData.Place> places)
-    {
-        this.places = places;
     }
 
     void findMonster(String name)
@@ -426,7 +422,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         var parts = new ArrayList<String>();
         if (!shops.isEmpty())
         {
-            parts.add("sold in " + shops.size() + (shops.size() == 1 ? " shop" : " shops"));
+            parts.add("sold in " + plural(shops.size(), "shop"));
         }
         if (!grounds.isEmpty())
         {
@@ -434,7 +430,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         }
         if (!found.droppers.isEmpty())
         {
-            parts.add("dropped by " + found.droppers.size() + (found.droppers.size() == 1 ? " monster" : " monsters"));
+            parts.add("dropped by " + plural(found.droppers.size(), "monster"));
         }
         String summary = Character.toUpperCase(parts.get(0).charAt(0)) + String.join(", ", parts).substring(1)
             + (shops.isEmpty() && grounds.isEmpty() ? "." : ": marked on the map" + (player != null ? ", nearest first"
@@ -488,7 +484,12 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
 
     static String places(int n)
     {
-        return n + (n == 1 ? " place" : " places");
+        return plural(n, "place");
+    }
+
+    static String plural(int n, String thing)
+    {
+        return n + " " + thing + (n == 1 ? "" : "s");
     }
 
     static long distance(WorldPoint a, WorldPoint b)
@@ -593,21 +594,16 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         }
         var c = standing(group.center(), view.ground());
         boolean shop = SHOPS.equals(group.category);
-        var icon = view.searchExtras().stream().filter(poi -> shop && poi.type == PoiType.SHOP
+        return view.searchExtras().stream().filter(poi -> shop && poi.type == PoiType.SHOP
             && poi.location.distanceTo(c) <= WorldData.SHOP_RADIUS)
-            .min(Comparator.comparingInt(poi -> poi.location.distanceTo2D(c)));
-        if (icon.isPresent())
-        {
-            return icon.get();
-        }
-        return foundPois.computeIfAbsent(group, g -> {
+            .min(Comparator.comparingInt(poi -> poi.location.distanceTo2D(c))).orElseGet(() -> foundPois.computeIfAbsent(group, g -> {
             String title = result == null ? g.name : result.title;
             String name = placeName(g, title);
             String note = dotted(g.note);
             String page = shop ? g.name : result != null && result.page != null ? result.page : g.name;
             return new Poi(shop ? PoiType.SHOP : PoiType.FOUND, name.equals(title) || shop ? name : title + ": " + name,
                 c, map, null, Needs.NONE, page, null, note.isEmpty() ? null : note);
-        });
+        }));
     }
 
     /** One per place of the result shown, so a click and a hover pick the same. */
@@ -893,20 +889,10 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     /** The tabs of the result shown, {key, label}: places by kind (a monster's all as "Locations"), drops, droppers. */
     List<String[]> tabs()
     {
-        var categories = new ArrayList<String>();
-        for (var group : result.groups)
-        {
-            if (!categories.contains(category(group)))
-            {
-                categories.add(category(group));
-            }
-        }
+        var counts = new LinkedHashMap<String, Integer>();
+        result.groups.forEach(g -> counts.merge(category(g), 1, Integer::sum));
         var tabs = new ArrayList<String[]>();
-        for (String category : categories)
-        {
-            long n = result.groups.stream().filter(g -> category.equals(category(g))).count();
-            tabs.add(new String[]{category, category + " (" + n + ")"});
-        }
+        counts.forEach((category, n) -> tabs.add(new String[]{category, category + " (" + n + ")"}));
         var drops = shownDrops();
         if (!drops.isEmpty())
         {
@@ -1191,7 +1177,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             return below ? "underground" : "on the surface";
         }
         int d = player.distanceTo2D(place);
-        String tiles = d >= 1000 ? String.format(Locale.ROOT, "%.1fk tiles", d / 1000.0) : d + (d == 1 ? " tile" : " tiles");
+        String tiles = d >= 1000 ? String.format(Locale.ROOT, "%.1fk tiles", d / 1000.0) : plural(d, "tile");
         return tiles + " " + MapScreen.compass(player, place);
     }
 
@@ -1458,6 +1444,12 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     {
         panel.add(Box.createVerticalStrut(space));
         panel.add(c);
+    }
+
+    static <T extends JComponent> T capped(T c)
+    {
+        c.setMaximumSize(new Dimension(Integer.MAX_VALUE, c.getPreferredSize().height));
+        return c;
     }
 
     static JButton button(String text, Runnable action)

@@ -58,6 +58,21 @@ final class TileCache
         {
             return map + "/" + zoom + "/" + plane + "_" + x + "_" + y + ".png";
         }
+
+        /** A line of missing.txt; null for a broken one. */
+        static Key parse(String line)
+        {
+            var p = line.trim().split(" ");
+            try
+            {
+                return p.length == 5 ? new Key(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]),
+                    Integer.parseInt(p[3]), Integer.parseInt(p[4])) : null;
+            }
+            catch (NumberFormatException e)
+            {
+                return null;
+            }
+        }
     }
 
     final OkHttpClient http;
@@ -132,11 +147,6 @@ final class TileCache
         }
     }
 
-    String version()
-    {
-        return version;
-    }
-
     /**
      * The tiles of {@code from} become {@code to}'s, but for those the server says changed or went, so only they are
      * fetched again: the folder is renamed, the changed tiles deleted, the tiles known missing kept but for the changed
@@ -175,9 +185,8 @@ final class TileCache
                         String line;
                         while ((line = in.readLine()) != null)
                         {
-                            var p = line.trim().split(" ");
-                            String path = p.length == 5 ? p[0] + "/" + p[1] + "/" + p[2] + "_" + p[3] + "_" + p[4] + ".png" : "";
-                            if (!path.isEmpty() && !changed.contains(path))
+                            var key = Key.parse(line);
+                            if (key != null && !changed.contains(key.path()))
                             {
                                 kept.append(line.trim()).append('\n');
                             }
@@ -266,18 +275,10 @@ final class TileCache
             String line;
             while ((line = in.readLine()) != null)
             {
-                var p = line.trim().split(" ");
-                try
+                var key = Key.parse(line);
+                if (key != null)
                 {
-                    if (p.length == 5)
-                    {
-                        keys.add(new Key(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]),
-                            Integer.parseInt(p[3]), Integer.parseInt(p[4])));
-                    }
-                }
-                catch (NumberFormatException e)
-                {
-                    // A broken line: that tile is asked again.
+                    keys.add(key);
                 }
             }
         }

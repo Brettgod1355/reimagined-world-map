@@ -173,7 +173,9 @@ public final class RouteController
         searchedAt = player;
         nextAutomatic = now + backoff;
         var request = requests.apply(target);
-        if (request != null && unreachableFrom(request))
+        // A search that tried everything reached where this one would start, with the same ways.
+        if (request != null && unreachable != null && unreachableAsked.sameWays(request)
+            && unreachable.reached(pathfinder.startNode(request.start)))
         {
             // Out of reach from here with these ways (proved): looked at again after the wait, not searched.
             return;
@@ -181,13 +183,6 @@ public final class RouteController
         automatic++;
         backoff = Math.min(MAX_BACKOFF_MS, backoff * 2);
         start(request, false);
-    }
-
-    /** Whether a search that tried everything reached where this one would start, with the same ways. */
-    boolean unreachableFrom(RouteRequest request)
-    {
-        return unreachable != null && unreachableAsked.sameWays(request)
-            && unreachable.reached(pathfinder.startNode(request.start));
     }
 
     public static final int ARRIVED = 3;

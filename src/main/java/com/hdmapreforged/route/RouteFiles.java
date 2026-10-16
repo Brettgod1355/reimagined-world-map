@@ -19,10 +19,6 @@ public final class RouteFiles
     /** Counts the route.zips used, so tables read from them are read again. */
     static volatile int generation;
 
-    RouteFiles()
-    {
-    }
-
     /** Uses a map version's route.zip: its files by name ("links.tsv", "collision.zip"). */
     public static void use(byte[] zip) throws IOException
     {

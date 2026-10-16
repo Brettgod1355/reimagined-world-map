@@ -45,10 +45,6 @@ final class WorldMapMoves
         }
     }
 
-    WorldMapMoves()
-    {
-    }
-
     /** The last move that fits: whole map squares are listed before zones, so a zone's (finer) wins, as in the game. */
     static Move last(Predicate<Move> fits)
     {

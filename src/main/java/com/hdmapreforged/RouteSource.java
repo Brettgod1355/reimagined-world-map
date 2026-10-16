@@ -133,15 +133,7 @@ final class RouteSource
         var startEdges = new ArrayList<Edge>();
         var edges = new ArrayList<Edge>();
         var teleportsByName = new HashMap<String, Poi>();
-        var notGrown = new HashSet<WorldPoint>();
-        for (var poi : Poi.flatten(pois))
-        {
-            if (notPlanted(poi))
-            {
-                notGrown.add(poi.location);
-            }
-        }
-        call.notGrown = notGrown;
+        call.notGrown = Poi.flatten(pois).stream().filter(this::notPlanted).map(poi -> poi.location).collect(Collectors.toSet());
         for (var poi : Poi.flatten(pois))
         {
             if (poi.type == TELEPORT)
@@ -180,7 +172,7 @@ final class RouteSource
         {
             for (int exit : back.exits)
             {
-                int from = snap(new WorldPoint(Tiles.x(exit), Tiles.y(exit), Tiles.z(exit)));
+                int from = snap(RouteFeature.worldPoint(exit));
                 if (from >= 0)
                 {
                     edges.add(new Edge(from, state.returnExit, Edge.Kind.ENTRANCE, back.exitName, null, 6));
@@ -507,14 +499,15 @@ final class RouteSource
             return;
         }
         boolean outside = state.inHouse && "Minigame teleports".equals(member.group);
-        int from = outside && state.houseExit >= 0 ? snap(new WorldPoint(Tiles.x(state.houseExit),
-            Tiles.y(state.houseExit), Tiles.z(state.houseExit))) : Edge.ANYWHERE;
+        int from = outside && state.houseExit >= 0 ? snap(RouteFeature.worldPoint(state.houseExit)) : Edge.ANYWHERE;
         if (outside && from < 0)
         {
             return;
         }
         (outside ? edges : into).add(new Edge(from, to, Edge.Kind.TELEPORT, member.name,
-            detail(call, unlocks, TELEPORT, member.needs), teleportTime(once), category)
+            detail(call, unlocks, TELEPORT, member.needs),
+            // Half ticks: 4 ticks (a teleport spell, a tablet); a home teleport 19 to 25, a minigame teleport 22 (Grouping).
+            once ? 44 : 8, category)
             .weighed(call.saving.teleport + lacking));
     }
 
@@ -560,9 +553,9 @@ final class RouteSource
             // shortcuts and gates (Gu'Tanoth behind its crumbling wall), which a snap would leave for open ground.
             boolean exact = poi.type == AGILITY_SHORTCUT;
             int from = exact && walkable(poi.location) ? pack(poi.location)
-                : sameFloor ? snap(poi.location, link.point) : snap(poi.location);
+                : snap(poi.location, sameFloor ? link.point : poi.location);
             int to = exact && walkable(link.point) ? pack(link.point)
-                : sameFloor ? snap(link.point, poi.location) : snap(link.point);
+                : snap(link.point, sameFloor ? poi.location : link.point);
             if (to < 0 || to == from)
             {
                 continue;
@@ -671,15 +664,6 @@ final class RouteSource
             && onceOnly(step.name.toLowerCase(ROOT), step.category);
     }
 
-    /**
-     * Half ticks a teleport takes: 4 ticks (a teleport spell's speed, a teleport tablet's ticks); home teleports
-     * 19 to 25 ticks (Home Teleport) and minigame teleports 22 (Grouping), with their cooldown.
-     */
-    static int teleportTime(boolean once)
-    {
-        return once ? 44 : 8;
-    }
-
     static int cost(PoiType type)
     {
         switch (type)
@@ -688,8 +672,6 @@ final class RouteSource
             case SPIRIT_TREE:
             case MUSHTREE:
                 return 10;
-            case QUETZAL:
-                return 12;
             case LEVER:
             case AGILITY_SHORTCUT:
             case OBELISK:
@@ -697,13 +679,11 @@ final class RouteSource
             case PORTAL:
                 return 6;
             // A ship's trip is a few seconds of its map interlude, a boat's with its talk more.
-            case CHARTER:
-                return 14;
-            case BOAT:
-                return 20;
             case MINECART:
             case GNOME_GLIDER:
+            case QUETZAL:
                 return 12;
+            case CHARTER:
             case BALLOON:
                 return 14;
             case CANOE:
@@ -858,7 +838,7 @@ final class RouteSource
             : new WorldPoint(Tiles.x(state.houseExit), Tiles.y(state.houseExit), 0);
         if (state.inHouse && portal != null && (plan == null || !plan.things.containsValue("Portal")))
         {
-            addHouse(into, portal, "Leave the house by its portal", 6);
+            addHouse(into, portal, "Leave the house by its portal", 6, null);
         }
         var placed = new HashSet<String>();
         if (plan != null)
@@ -886,7 +866,7 @@ final class RouteSource
                 }
                 if (name.equals("Portal") && portal != null)
                 {
-                    addHouse(out, portal, "Leave the house by its portal", 6);
+                    addHouse(out, portal, "Leave the house by its portal", 6, null);
                 }
                 for (int dz = -1; stairs(name) && dz <= 1; dz += 2)
                 {
@@ -902,7 +882,7 @@ final class RouteSource
                 {
                     if (at >= 0 && e.to >= 0)
                     {
-                        edges.add(new Edge(at, e.to, e.kind, e.name, e.detail, e.cost));
+                        edges.add(e.at(at));
                     }
                 }
             });
@@ -917,7 +897,7 @@ final class RouteSource
         }
         if (plan != null)
         {
-            into.forEach(e -> edges.add(new Edge(plan.arrival, e.to, e.kind, e.name, e.detail, e.cost)));
+            into.forEach(e -> edges.add(e.at(plan.arrival)));
             into.clear();
         }
         if (state.inHouse)
@@ -1000,7 +980,7 @@ final class RouteSource
             {
                 // Named as the portal is ("Troll Stronghold"), not as the teleport that says where it leads.
                 addHouse(into, teleport.location, (feature.startsWith("nexus:") ? "Portal nexus: " : "House portal: ")
-                    + place, 6);
+                    + place, 6, null);
             }
         }
         else if (feature.startsWith("box:") || Arrays.asList(HouseSettings.MOUNTED).contains(feature))
@@ -1015,7 +995,7 @@ final class RouteSource
                 if (teleport.group != null && groups.contains(teleport.group) && usable(unlocks, teleport.needs))
                 {
                     addHouse(into, teleport.location, (mounted >= 0 ? MOUNTED_NAMES[mounted] : "Jewellery box: ")
-                        + teleport.name, 8);
+                        + teleport.name, 8, null);
                 }
             }
         }
@@ -1026,7 +1006,7 @@ final class RouteSource
             {
                 if (poi.type == OBELISK && usable(unlocks, poi.needs))
                 {
-                    addHouse(into, poi.location, "House obelisk: " + poi.name, cost(OBELISK));
+                    addHouse(into, poi.location, "House obelisk: " + poi.name, cost(OBELISK), null);
                 }
             }
         }
@@ -1086,11 +1066,6 @@ final class RouteSource
         return best;
     }
 
-    void addHouse(List<Edge> into, WorldPoint point, String name, int cost)
-    {
-        addHouse(into, point, name, cost, null);
-    }
-
     void addHouse(List<Edge> into, WorldPoint point, String name, int cost, String detail)
     {
         int to = snap(point);
@@ -1141,10 +1116,6 @@ final class RouteSource
     /** The groups of a column like {@code "563=1&&556=3"} that are not carried, by name: "1 × Law rune". */
     static String missingItems(ItemSnapshot carried, String column, IntFunction<String> names)
     {
-        if (names == null)
-        {
-            return "items you do not have";
-        }
         var missing = new ArrayList<String>();
         for (String all : ItemSnapshot.ALL.split(column))
         {
@@ -1153,8 +1124,7 @@ final class RouteSource
                 missing.add(all);
             }
         }
-        var lines = Requirements.items(String.join("&&", missing), names);
-        return lines.isEmpty() ? "items you do not have" : String.join(", ", lines);
+        return itemLines(missing, names, "items you do not have");
     }
 
     /** A step's detail: what it needs from the bank ({@link #bankNeeds}), else {@link #needsText}. */
@@ -1197,12 +1167,13 @@ final class RouteSource
                 parts.add(String.join("||", held.isEmpty() ? List.of(all) : held.subList(0, 1)));
             }
         }
-        if (call.itemNames == null)
-        {
-            return "items";
-        }
-        var lines = Requirements.items(String.join("&&", parts), call.itemNames);
-        return lines.isEmpty() ? "items" : String.join(", ", lines);
+        return itemLines(parts, call.itemNames, "items");
+    }
+
+    static String itemLines(List<String> all, IntFunction<String> names, String none)
+    {
+        var lines = names == null ? List.<String>of() : Requirements.items(String.join("&&", all), names);
+        return lines.isEmpty() ? none : String.join(", ", lines);
     }
 
     /** A step's requirements when not all could be checked (logged out, unknown quest or item); else null. */

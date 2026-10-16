@@ -15,7 +15,7 @@ final class GraveMarker implements MapView.Overlay, MapView.HitLayer
     {
         this.view = view;
         view.addOverlay(this);
-        view.addHitLayer(this);
+        view.hitLayers.add(this);
     }
 
     /** Null when no grave stands. */

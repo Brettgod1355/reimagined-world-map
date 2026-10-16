@@ -20,10 +20,6 @@ final class TileMarkersBridge
     /** It takes at most this many tiles from one sender. */
     static final int MAX_TILES = 1000;
 
-    TileMarkersBridge()
-    {
-    }
-
     /** A tile to mark, optionally labelled. */
     @AllArgsConstructor
     static final class Tile
@@ -63,10 +59,7 @@ final class TileMarkersBridge
             }
             list.add(entry);
         }
-        var data = new HashMap<String, Object>();
-        data.put("owner", OWNER);
-        data.put("tiles", list);
-        return new PluginMessage(NAMESPACE, "tiles", data);
+        return message("tiles", list);
     }
 
     /**
@@ -89,16 +82,23 @@ final class TileMarkersBridge
             }
             list.add(entry);
         }
-        var data = new HashMap<String, Object>();
-        data.put("owner", OWNER);
-        data.put("lines", list);
-        return new PluginMessage(NAMESPACE, "lines", data);
+        return message("lines", list);
     }
 
     static PluginMessage clear()
     {
+        return message("clear", null);
+    }
+
+    /** Ours, with {@code list} under its name (none: null). */
+    static PluginMessage message(String name, Object list)
+    {
         var data = new HashMap<String, Object>();
         data.put("owner", OWNER);
-        return new PluginMessage(NAMESPACE, "clear", data);
+        if (list != null)
+        {
+            data.put(name, list);
+        }
+        return new PluginMessage(NAMESPACE, name, data);
     }
 }

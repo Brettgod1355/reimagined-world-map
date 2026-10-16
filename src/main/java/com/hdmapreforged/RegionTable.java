@@ -175,12 +175,7 @@ class RegionTable
         var ids = NONE;
         if (cells.length > 1 && !cells[1].trim().isEmpty())
         {
-            var parts = cells[1].split(",");
-            ids = new int[parts.length];
-            for (int i = 0; i < parts.length; i++)
-            {
-                ids[i] = Integer.parseInt(parts[i].trim());
-            }
+            ids = Arrays.stream(cells[1].split(",")).mapToInt(s -> Integer.parseInt(s.trim())).toArray();
         }
         int region = Integer.parseInt(cells[0].trim());
         if (region < 0 || region > 0xFFFF)
@@ -188,7 +183,7 @@ class RegionTable
             return;
         }
         String zoned = cells.length > 2 ? cells[2].trim() : "";
-        if (zoned.length() == ZONES * ZONES && ids.length > 0 && validZones(zoned))
+        if (zoned.length() == ZONES * ZONES && ids.length > 0 && zoned.chars().allMatch(c -> MASKS.indexOf(c) >= 0))
         {
             zones.put(region, zoned);
         }
@@ -200,9 +195,9 @@ class RegionTable
         put(region, ids);
     }
 
-    private static boolean validZones(String zoned)
+    static boolean valid(int floor, int map, int drawn)
     {
-        return zoned.chars().allMatch(c -> MASKS.indexOf(c) >= 0);
+        return floor >= 0 && floor < 4 && map >= BaseMap.FULL && map < 1 << 20 && drawn >= 0 && drawn < 4;
     }
 
     static final String FLOOR_LINE = "F\t";
@@ -213,8 +208,7 @@ class RegionTable
     {
         readEntries(line, 5, (region, p) -> {
             int x = p[0], y = p[1], floor = p[2], map = p[3], drawn = p[4];
-            if (x >= 0 && x < 64 && y >= 0 && y < 64 && floor >= 0 && floor < 4 && map >= BaseMap.FULL
-                && map < 1 << 20 && drawn >= 0 && drawn < 4)
+            if (x >= 0 && x < 64 && y >= 0 && y < 64 && valid(floor, map, drawn))
             {
                 putTileFloor(((region >> 8) << 6) + x, ((region & 255) << 6) + y, floor, map, drawn);
             }
@@ -226,8 +220,7 @@ class RegionTable
     {
         readEntries(line, 4, (region, p) -> {
             int zone = p[0], floor = p[1], map = p[2], drawn = p[3];
-            if (zone >= 0 && zone < ZONES * ZONES && floor >= 0 && floor < 4 && map >= BaseMap.FULL && map < 1 << 20
-                && drawn >= 0 && drawn < 4)
+            if (zone >= 0 && zone < ZONES * ZONES && valid(floor, map, drawn))
             {
                 putFloor(region, zone, floor, map, drawn);
             }

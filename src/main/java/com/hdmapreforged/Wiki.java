@@ -7,10 +7,6 @@ final class Wiki
 {
     static final String WIKI = "https://oldschool.runescape.wiki";
 
-    Wiki()
-    {
-    }
-
     static String pageUrl(String title)
     {
         return HttpUrl.get(WIKI).newBuilder().addPathSegment("w").addPathSegment(title.replace(' ', '_')).build().toString();

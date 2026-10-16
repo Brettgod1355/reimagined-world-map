@@ -9,6 +9,7 @@ import static com.hdmapreforged.HouseSettings.*;
 
 import com.hdmapreforged.route.*;
 import java.awt.*;
+import java.awt.event.*;
 import java.awt.image.*;
 import java.io.*;
 import java.util.*;
@@ -676,7 +677,7 @@ public final class RouteHouse
         JTextField portals = new JTextField(HouseSettings.places(now, PORTAL));
         JTextField nexus = new JTextField(HouseSettings.places(now, NEXUS));
         long account = houseOf;
-        Runnable save = () ->
+        ActionListener save = e ->
         {
             var amulet = new HashSet<String>();
             for (int i = 0; i < mounted.length; i++)
@@ -689,18 +690,18 @@ public final class RouteHouse
             editHouse(account, HouseSettings.features(BOXES[box.getSelectedIndex()], amulet,
                 garden.getSelectedIndex(), obelisk.isSelected(), portals.getText(), nexus.getText()));
         };
-        box.addActionListener(e -> save.run());
+        box.addActionListener(save);
         for (var amulet : mounted)
         {
-            amulet.addActionListener(e -> save.run());
+            amulet.addActionListener(save);
         }
-        garden.addActionListener(e -> save.run());
-        obelisk.addActionListener(e -> save.run());
+        garden.addActionListener(save);
+        obelisk.addActionListener(save);
         for (JTextField places : new JTextField[]{portals, nexus})
         {
             places.setToolTipText("Where they lead, as the spellbooks name them, with commas; Enter saves");
             FullMapWindow.typable(places);
-            places.addActionListener(e -> save.run());
+            places.addActionListener(save);
         }
         var parts = new ArrayList<JComponent>(List.of(box));
         parts.addAll(List.of(mounted));
@@ -715,9 +716,8 @@ public final class RouteHouse
         }
         if (seen != null)
         {
-            panel.add(Box.createVerticalStrut(6));
-            panel.add(button("Show its plan",
-                () -> routes.forScreens(screen -> screen.view().focus(worldPoint(seen.arrival)))));
+            add(panel, 6, button("Show its plan",
+                () -> routes.forScreens(screen -> screen.view.focus(worldPoint(seen.arrival)))));
         }
         return panel;
     }

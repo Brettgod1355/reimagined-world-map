@@ -73,11 +73,6 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         return ICON_PIXELS * max(1, round(wanted / ICON_PIXELS));
     }
 
-    double drawnRadius(Projection projection)
-    {
-        return drawnSize(projection) / 2;
-    }
-
     static int region(int x, int y)
     {
         return (x >> 6) << 16 | (y >> 6) & 0xffff;
@@ -151,7 +146,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         byPoi = poiIcons;
         scaled.clear();
         scaledPixels = 0;
-        view.setSearchExtras(new ArrayList<>(made.keySet()));
+        view.searchExtras = new ArrayList<>(made.keySet());
         view.repaint();
     }
 
@@ -354,13 +349,6 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
                 || projection.plane() == 0 && (icon.drawn.getY() < MapView.UNDERGROUND_Y || icon.flat));
     }
 
-    /** Whether the game's icon is drawn on this one of ours (its sprite loaded), which then stays away. */
-    boolean covers(Poi poi, Projection projection)
-    {
-        var icon = covering.get(poi);
-        return icon != null && GameIconSprites.element(icon.element) != null && shows(icon, projection);
-    }
-
     /** {@link #covers} for a frame, the settings read once. */
     Predicate<Poi> covers(Projection projection)
     {
@@ -397,7 +385,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         {
             return null;
         }
-        double reach = drawnRadius(projection) + 1;
+        double reach = drawnSize(projection) / 2 + 1;
         Icon best = null;
         double bestDistance = reach;
         var toggled = toggles();
@@ -429,14 +417,14 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
     public Point2D labelAnchor(Poi poi, Projection projection)
     {
         var c = iconCenter(poi, projection);
-        return c == null ? null : new Point2D.Double(c.getX(), c.getY() + drawnRadius(projection) + 5);
+        return c == null ? null : new Point2D.Double(c.getX(), c.getY() + drawnSize(projection) / 2 + 5);
     }
 
     @Override
     public Point2D iconCenter(Poi poi, Projection projection)
     {
         var icon = created.get(poi);
-        if (icon == null && covers(poi, projection))
+        if (icon == null && covers(projection).test(poi))
         {
             icon = covering.get(poi);
         }
@@ -457,7 +445,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         {
             return;
         }
-        double r = drawnRadius(projection) + 2.5;
+        double r = drawnSize(projection) / 2 + 2.5;
         var ofSelected = byPoi.getOrDefault(selected, Collections.emptyList());
         var ringed = new ArrayList<Icon>(byPoi.getOrDefault(hovered, Collections.emptyList()));
         // The selected's last, on top. A passage's is the game's icon for it, which may be the one hovered.

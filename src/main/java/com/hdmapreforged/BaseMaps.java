@@ -102,33 +102,6 @@ final class BaseMaps
         return coordinate >= 0 && coordinate <= MAX_COORDINATE;
     }
 
-    boolean isUsable()
-    {
-        return byId(BaseMap.SURFACE) != null;
-    }
-
-    BaseMaps withRegions(RegionTable regions)
-    {
-        this.regions = regions;
-        return this;
-    }
-
-    BaseMaps withVersion(String version)
-    {
-        this.version = version;
-        return this;
-    }
-
-    String version()
-    {
-        return version;
-    }
-
-    List<BaseMap> all()
-    {
-        return sorted;
-    }
-
     BaseMap byId(int id)
     {
         return byId.get(id);

@@ -63,7 +63,8 @@ public final class PartyMap
         () -> PartyMap.this.config.partyOnlyFavourites(), () -> this.myWorld);
 
     {
-        overlay.setFocus(id -> this.widgets.values().stream().anyMatch(w -> w.selected() == id), id -> id == this.hoveredMember);
+        overlay.selected = id -> this.widgets.values().stream().anyMatch(w -> w.selected() == id);
+        overlay.hovered = id -> id == this.hoveredMember;
         overlay.setLoot(id -> members.loot(id, System.currentTimeMillis()), this::itemImage, this::repaint);
     }
 
@@ -103,13 +104,14 @@ public final class PartyMap
             {
                 MapView.MenuContributor menu = (popup, point) -> contribute(popup, view);
                 view.addOverlay(overlay);
-                view.addMenuContributor(menu);
+                view.menuContributors.add(menu);
                 FriendsWidget widget = new FriendsWidget(this::markers, this::groupMembers, party::isInParty,
                     () -> myWorld, config::partyFriendsTab, view::focus, view::repaint);
                 widget.setDrops(id -> members.drops(id, System.currentTimeMillis()));
-                widget.setActions(() -> !party.isInParty() && lastParty() != null, () -> join(view));
+                widget.canJoin = () -> !party.isInParty() && lastParty() != null;
+                widget.join = () -> join(view);
                 MapView.ClickCatcher catcher = (at, projection) -> clickedMember(widget, at, projection);
-                view.addClickCatcher(catcher);
+                view.clickCatchers.add(catcher);
                 MouseAdapter pointing = new MouseAdapter()
                 {
                     @Override
@@ -135,17 +137,18 @@ public final class PartyMap
                 };
                 view.addMouseMotionListener(pointing);
                 view.addMouseListener(pointing);
-                widget.setDetails(members::gear, sidebarImages);
+                widget.gear = members::gear;
+                widget.images = sidebarImages;
                 widgets.put(view, widget);
                 view.addWidget(widget);
                 views.put(view, () -> {
                     view.removeOverlay(overlay);
-                    view.removeMenuContributor(menu);
-                    view.removeClickCatcher(catcher);
+                    view.menuContributors.remove(menu);
+                    view.clickCatchers.remove(catcher);
                     view.removeMouseMotionListener(pointing);
                     view.removeMouseListener(pointing);
                     view.removeWidget(widget);
-                    widget.dispose();
+                    widget.ticker.stop();
                 });
             }
             idleCheck = new Timer(30_000, e -> checkIdle());
@@ -171,7 +174,7 @@ public final class PartyMap
             views.values().forEach(Runnable::run);
             views.clear();
             widgets.clear();
-            overlay.dispose();
+            overlay.ticker.stop();
             if (PartyMapRules.leaveOnShutdown(joinedCode, party.getPartyPassphrase()))
             {
                 party.changeParty(null);

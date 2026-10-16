@@ -45,6 +45,8 @@ public final class Pathfinder
     final List<Edge> passages;
     final List<ShortcutPassage> shortcutPassages;
     final EdgeIndex passagesByOrigin;
+    /** Where the Agility shortcuts start (shortcuts.tsv, the game's passages that are one): ways out for {@link #pocket}. */
+    final IntMap shortcutStarts = new IntMap(1024);
     final EdgeIndex passagesByDestination;
     /** The jumps the heuristic must know when a tile costs a half tick (running, sailing) and when it costs one. */
     final List<Edge> heuristicPassages;
@@ -116,6 +118,8 @@ public final class Pathfinder
             return at != null && atShortcuts.add(at);
         });
         shortcutPassages = Collections.unmodifiableList(atShortcuts);
+        ShortcutPassage.known().forEach(s -> shortcutStarts.put(s.origin, 0));
+        atShortcuts.forEach(s -> shortcutStarts.put(s.edge.from, 0));
         passages = Collections.unmodifiableList(edges);
         passagesByOrigin = EdgeIndex.of(edges, 0);
         passagesByDestination = EdgeIndex.byDestination(edges, 0);
@@ -215,7 +219,7 @@ public final class Pathfinder
                 int next = pack(x, y, z(e.from));
                 if (map.walkable(x, y, z(e.from)) && open.computeIfAbsent(next, n -> reaches(map, n, at -> false)))
                 {
-                    extra.add(new Edge(next, e.to, e.kind, e.name, e.detail, e.cost));
+                    extra.add(e.at(next));
                 }
             }
         }
@@ -350,6 +354,12 @@ public final class Pathfinder
 
     public int resolveGoal(int target)
     {
+        return resolveGoal(target, at -> false);
+    }
+
+    /** {@code out}: more ways out of a pocket than the passages (a request's own: fairy rings, boats, shortcuts). */
+    public int resolveGoal(int target, IntPredicate out)
+    {
         if (isSea(target))
         {
             return target;
@@ -369,15 +379,15 @@ public final class Pathfinder
             {
                 for (int other : new int[]{z - dz, z + dz})
                 {
-                    if (other >= 0 && other <= 3 && map.walkable(x, y, other) && !pocket(pack(x, y, other)))
+                    if (other >= 0 && other <= 3 && map.walkable(x, y, other) && !pocket(pack(x, y, other), out))
                     {
                         return pack(x, y, other);
                     }
                 }
             }
         }
-        int near = nearestOpen(x, y, z, SNAP_RADIUS);
-        if (near >= 0 && !pocket(near))
+        int near = nearestOpen(x, y, z, SNAP_RADIUS, out);
+        if (near >= 0 && !pocket(near, out))
         {
             return near;
         }
@@ -387,30 +397,30 @@ public final class Pathfinder
             return seaAt(x, y);
         }
         // Only a pocket here: the spot may be given on another floor than the ground it marks.
-        int there = otherFloor(x, y, z, 3, true);
+        int there = otherFloor(x, y, z, 3, true, out);
         if (there >= 0 || near >= 0)
         {
             return there >= 0 ? there : near;
         }
         // A spot given on the wrong floor: the same spot on another floor first.
-        near = otherFloor(x, y, z, 1, false);
+        near = otherFloor(x, y, z, 1, false, out);
         if (near < 0)
         {
-            near = otherFloor(x, y, z, SNAP_RADIUS, false);
+            near = otherFloor(x, y, z, SNAP_RADIUS, false, out);
         }
         return near;
     }
 
     /** {@code open}: the nearest open non-pocket tile, else any walkable one. */
-    int otherFloor(int x, int y, int z, int radius, boolean open)
+    int otherFloor(int x, int y, int z, int radius, boolean open, IntPredicate out)
     {
         for (int dz = 1; dz < 4; dz++)
         {
             for (int other : new int[]{z - dz, z + dz})
             {
                 int near = other < 0 || other > 3 ? -1
-                    : open ? nearestOpen(x, y, other, radius) : map.nearestWalkable(x, y, other, radius);
-                if (near >= 0 && !(open && pocket(near)))
+                    : open ? nearestOpen(x, y, other, radius, out) : map.nearestWalkable(x, y, other, radius);
+                if (near >= 0 && !(open && pocket(near, out)))
                 {
                     return near;
                 }
@@ -426,12 +436,12 @@ public final class Pathfinder
         {
             return start;
         }
-        int near = nearestOpen(x(start), y(start), z(start), 5);
+        int near = nearestOpen(x(start), y(start), z(start), 5, at -> false);
         return near >= 0 ? near : start;
     }
 
     /** Nearest walkable non-pocket tile, else nearest walkable, else -1. */
-    int nearestOpen(int x, int y, int z, int radius)
+    int nearestOpen(int x, int y, int z, int radius, IntPredicate out)
     {
         int fallback = -1;
         for (int r = 1; r <= radius; r++)
@@ -452,7 +462,7 @@ public final class Pathfinder
                     {
                         fallback = node;
                     }
-                    if (d < bestDistance && !pocket(node))
+                    if (d < bestDistance && !pocket(node, out))
                     {
                         best = node;
                         bestDistance = d;
@@ -467,10 +477,24 @@ public final class Pathfinder
         return fallback;
     }
 
-    /** A small shut-in area (behind bank booths, between stepping stones) with no passages. */
+    /** A small shut-in area (behind bank booths) with no passages; ground left by an Agility shortcut is not one. */
     public boolean pocket(int node)
     {
-        return !reaches(map, node, at -> passagesByOrigin.get(at) != null);
+        return pocket(node, at -> false);
+    }
+
+    boolean pocket(int node, IntPredicate out)
+    {
+        return !reaches(map, node, at -> passagesByOrigin.get(at) != null || shortcutStarts.get(at) != MISSING
+            || out.test(at));
+    }
+
+    /** Where a request's own jumps start (fairy rings, boats, a shortcut's icon): ways out of a pocket for its target. */
+    public static IntPredicate waysOut(RouteRequest request)
+    {
+        var starts = new IntMap(64);
+        request.edges.forEach(e -> starts.put(e.from, 0));
+        return at -> starts.get(at) != MISSING;
     }
 
     public Route find(RouteRequest request, BooleanSupplier cancelled)
@@ -483,6 +507,11 @@ public final class Pathfinder
      * be found: looking for the quickest of several places, a place that cannot beat the best so far stops early.
      */
     public Route find(RouteRequest request, BooleanSupplier cancelled, int costLimit)
+    {
+        return outside(request, kept(request, cancelled, costLimit), cancelled, costLimit);
+    }
+
+    Route kept(RouteRequest request, BooleanSupplier cancelled, int costLimit)
     {
         Route route = walkOrSail(request, cancelled, costLimit);
         // Kept out of the Wilderness, yet no way around it gets there (the Mage Arena's bank, Entrana's dungeon without a
@@ -497,6 +526,39 @@ public final class Pathfinder
             }
             // Out of reach only if the search through it tried everything too.
             return through.outcome == CANCELLED || through.exhausted ? route : route.unproved();
+        }
+        return route;
+    }
+
+    /**
+     * A target the search proved shut off (ground the game never lets one walk, past a cave's wall: an icon drawn there):
+     * the route to the nearest open ground outside it instead, which that search gave up on before getting to.
+     */
+    Route outside(RouteRequest request, Route route, BooleanSupplier cancelled, int costLimit)
+    {
+        int target = request.target;
+        if (route.outcome != NEAREST || route.reached == null || !route.reached.complement || target < 0 || isSea(target))
+        {
+            return route;
+        }
+        for (int r = 1; r <= SNAP_RADIUS; r++)
+        {
+            for (int dx = -r; dx <= r; dx++)
+            {
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    int near = pack(x(target) + dx, y(target) + dy, z(target));
+                    if (max(abs(dx), abs(dy)) == r && map.walkable(x(near), y(near), z(near))
+                        && route.reached.contains(near) && !pocket(near) && !cancelled.getAsBoolean())
+                    {
+                        var ways = route.throughWilderness ? request.throughWilderness() : request;
+                        Route there = walkOrSail(ways.between(request.start, near).withBank(request.bank), cancelled,
+                            costLimit);
+                        // Still out of reach itself: the proof stays, so it is not searched again from here.
+                        return there.outcome != FOUND ? route : there.near(route);
+                    }
+                }
+            }
         }
         return route;
     }
@@ -525,7 +587,7 @@ public final class Pathfinder
     Route search(RouteRequest request, BooleanSupplier cancelled, int costLimit)
     {
         int target = request.target;
-        int goal = resolveGoal(target);
+        int goal = resolveGoal(target, waysOut(request));
         var all = new ArrayList<Edge>(passages.size() + request.edges.size() + request.startEdges.size());
         all.addAll(passages);
         int requestOffset = all.size();
@@ -678,17 +740,9 @@ public final class Pathfinder
         boolean exhausted = found < 0 && (proof != null || tried);
         Reached reached = found >= 0 ? null : tried ? new Reached(nodes.reached(), false) : proof;
         int end = found >= 0 ? found : best;
-        Route route;
-        if (end < 0)
-        {
-            route = new Route(NONE, Collections.emptyList(), 0, target, -1, exhausted, limited, popped,
-                reached);
-        }
-        else
-        {
-            route = new Route(found >= 0 ? FOUND : NEAREST, steps(nodes, all, startOffset, end),
-                nodes.cost(end), target, end, exhausted, limited, popped, reached);
-        }
+        Route route = end < 0 ? new Route(NONE, Collections.emptyList(), 0, target, -1, exhausted, limited, popped,
+            reached) : new Route(found >= 0 ? FOUND : NEAREST, steps(nodes, all, startOffset, end),
+            nodes.cost(end), target, end, exhausted, limited, popped, reached);
         return keptOut ? route.keptOut() : route;
     }
 
@@ -1071,14 +1125,16 @@ public final class Pathfinder
             }
             int bx = x(node) / BLOCK;
             int by = fy(node) / BLOCK;
-            var area = blocks[(bx >> 4) << 7 | by >> 4];
+            int block = (bx >> 4) << 7 | by >> 4;
+            int cell = (bx & 15) << 4 | by & 15;
+            var area = blocks[block];
             if (area == null)
             {
                 area = new int[256];
                 Arrays.fill(area, -1);
-                blocks[(bx >> 4) << 7 | by >> 4] = area;
+                blocks[block] = area;
             }
-            int cached = area[(bx & 15) << 4 | by & 15];
+            int cached = area[cell];
             if (cached < 0)
             {
                 int cx = bx * BLOCK + BLOCK / 2;
@@ -1090,7 +1146,7 @@ public final class Pathfinder
                     min = min(min, scale * max(0, d - BLOCK / 2) + bounds[i]);
                 }
                 cached = min;
-                area[(bx & 15) << 4 | by & 15] = cached;
+                area[cell] = cached;
             }
             return min(direct, cached);
         }

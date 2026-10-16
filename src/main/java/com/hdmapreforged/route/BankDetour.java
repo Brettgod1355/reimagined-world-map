@@ -177,7 +177,7 @@ public final class BankDetour
     {
         var from = new ArrayList<int[]>();
         int start = request.start;
-        if (start >= 0 && !HousePlan.contains(Tiles.x(start), Tiles.y(start)))
+        if (start >= 0 && !HousePlan.contains(start))
         {
             from.add(new int[]{start, 0});
         }
@@ -189,8 +189,8 @@ public final class BankDetour
         {
             // Out of one's house: its portals, the box, the glory and the like; a teleport cast once out of it (a
             // minigame teleport by the house portal).
-            if (e.from >= 0 && (e.kind == Edge.Kind.TELEPORT || HousePlan.contains(Tiles.x(e.from), Tiles.y(e.from))
-                && !HousePlan.contains(Tiles.x(e.to), Tiles.y(e.to))))
+            if (e.from >= 0 && (e.kind == Edge.Kind.TELEPORT || HousePlan.contains(e.from)
+                && !HousePlan.contains(e.to)))
             {
                 from.add(new int[]{e.to, e.cost + (e.kind == Edge.Kind.TELEPORT ? OUT_OF_HOUSE : 0)});
             }
@@ -201,12 +201,7 @@ public final class BankDetour
             guessed[i] = (long) guess(from, banks[i][0]) << 32 | i;
         }
         Arrays.sort(guessed);
-        int[] tried = new int[Math.min(TRIED, banks.length)];
-        for (int i = 0; i < tried.length; i++)
-        {
-            tried[i] = (int) guessed[i];
-        }
-        return tried;
+        return Arrays.stream(guessed, 0, Math.min(TRIED, banks.length)).mapToInt(g -> (int) g).toArray();
     }
 
     /** Half ticks from the nearest of {@code from} ({tile, half ticks to get there}) to the bank, as the crow flies. */

@@ -8,10 +8,6 @@ public final class Ports
 {
     public static final String RESOURCE = "/com/hdmapreforged/route/ports.tsv";
 
-    Ports()
-    {
-    }
-
     /** Port id → packed tile of the boat. */
     public static Map<Integer, Integer> load() throws IOException
     {

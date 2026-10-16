@@ -243,14 +243,7 @@ final class Unlocks
 
     boolean check(Needs needs)
     {
-        for (var line : Requirements.skillsAndQuests(needs))
-        {
-            if (Boolean.FALSE.equals(met(line)))
-            {
-                return false;
-            }
-        }
-        return vars(needs.varbits, varbits, varps);
+        return RouteSource.unmetLines(this, needs).isEmpty() && vars(needs.varbits, varbits, varps);
     }
 
     /** Conditions like {@code "4070=0;6069<3;4560&2;p4130>11999"} (a p: a varp). */

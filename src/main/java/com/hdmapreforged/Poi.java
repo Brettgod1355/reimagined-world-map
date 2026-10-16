@@ -48,29 +48,14 @@ final class Poi
     /** Other things at the same place this icon stands for. */
     final List<Poi> nearby = new ArrayList<>();
 
-    void addLink(Link link)
-    {
-        links.add(link);
-    }
-
     List<Link> links()
     {
         return Collections.unmodifiableList(links);
     }
 
-    void addMember(Poi member)
-    {
-        members.add(member);
-    }
-
     List<Poi> members()
     {
         return members.isEmpty() ? Collections.singletonList(this) : Collections.unmodifiableList(members);
-    }
-
-    void addNearby(Poi poi)
-    {
-        nearby.add(poi);
     }
 
     List<Poi> nearby()

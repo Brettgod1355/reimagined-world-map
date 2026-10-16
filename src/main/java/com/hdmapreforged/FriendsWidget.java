@@ -83,22 +83,10 @@ final class FriendsWidget implements MapView.Widget
     BooleanSupplier canJoin = () -> false;
     Runnable join = () -> { };
 
-    void setActions(BooleanSupplier canJoin, Runnable join)
-    {
-        this.canJoin = canJoin;
-        this.join = join;
-    }
-
     void show(long id)
     {
         open = true;
         selected = id;
-    }
-
-    void setDetails(LongFunction<PartyMapMembers.Gear> gear, Images images)
-    {
-        this.gear = gear;
-        this.images = images;
     }
 
     FriendsWidget(Supplier<List<PartyMapMembers.Marker>> party, Supplier<List<Member>> group,
@@ -157,11 +145,6 @@ final class FriendsWidget implements MapView.Widget
         {
             ticker.painted(dropsMoving);
         }
-    }
-
-    void dispose()
-    {
-        ticker.stop();
     }
 
     List<Member> groupNow()
@@ -427,18 +410,23 @@ final class FriendsWidget implements MapView.Widget
         {
             return;
         }
-        int hp = Skill.HITPOINTS.ordinal();
-        int prayer = Skill.PRAYER.ordinal();
         double gap = (width - 4 * Orbs.WIDTH) / 3.0;
         IntFunction<BufferedImage> sprites = images == null ? id -> null : images::sprite;
-        // Hitpoints, prayer, run energy, special attack: value and most.
-        int[][] orbs = {{shared.boosted[hp], shared.levels[hp]}, {shared.boosted[prayer], shared.levels[prayer]},
-            {shared.run, 100}, {shared.special, 100}};
+        int[][] orbs = orbs(shared);
         for (int k = 0; k < orbs.length; k++)
         {
             Orbs.paint(g, (int) (x + k * (Orbs.WIDTH + gap)), (int) y + 2, Orbs.Kind.values()[k], orbs[k][0], orbs[k][1],
                 sprites);
         }
+    }
+
+    /** Hitpoints, prayer, run energy, special attack: value and most. */
+    static int[][] orbs(PartyMapMembers.Gear shared)
+    {
+        int hp = Skill.HITPOINTS.ordinal();
+        int prayer = Skill.PRAYER.ordinal();
+        return new int[][]{{shared.boosted[hp], shared.levels[hp]}, {shared.boosted[prayer], shared.levels[prayer]},
+            {shared.run, 100}, {shared.special, 100}};
     }
 
     void paintDrops(Graphics2D g, long id, double x0, double start, int panelW)
@@ -520,12 +508,6 @@ final class FriendsWidget implements MapView.Widget
     static Color levelColor(int now, int real)
     {
         return now > real ? BOOSTED : now < real ? DRAINED : Color.WHITE;
-    }
-
-    /** Where text is drawn to stand centred on {@code cy}. */
-    static float middle(double cy, FontMetrics metrics)
-    {
-        return (float) (cy + metrics.getAscent() / 2.0 - 2);
     }
 
     static String fit(String text, FontMetrics metrics, int width)

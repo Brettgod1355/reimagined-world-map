@@ -17,15 +17,6 @@ final class ShortestPathBridge
     /** Cap per message: messages come from other plugins. */
     static final int MAX_POINTS = 64;
 
-    ShortestPathBridge()
-    {
-    }
-
-    static PluginMessage path(WorldPoint target)
-    {
-        return path(target, Map.of());
-    }
-
     /**
      * Asks it to tell which transports its path uses, so we can draw the route too (it keeps that until a clear);
      * {@code target} null keeps its route. {@code config}: overrides another plugin gave, kept.
@@ -69,16 +60,12 @@ final class ShortestPathBridge
     /** A path message's avoidWilderness override (Shortest Clue turns it off for clues in the Wilderness); null when none. */
     static Boolean avoidWilderness(PluginMessage message)
     {
-        var value = config(message).get("avoidWilderness");
-        if (value instanceof Boolean)
+        Object value = config(message).get("avoidWilderness");
+        if (value instanceof String && ((String) value).matches("(?i)true|false"))
         {
-            return (Boolean) value;
+            value = Boolean.valueOf((String) value);
         }
-        if (value instanceof String && ("true".equalsIgnoreCase((String) value) || "false".equalsIgnoreCase((String) value)))
-        {
-            return Boolean.parseBoolean((String) value);
-        }
-        return null;
+        return value instanceof Boolean ? (Boolean) value : null;
     }
 
     static final String TRANSPORTS = "transports";
@@ -90,11 +77,6 @@ final class ShortestPathBridge
         final WorldPoint from;
         final WorldPoint to;
         final String name;
-    }
-
-    static boolean isTransports(PluginMessage message)
-    {
-        return is(message, TRANSPORTS);
     }
 
     static boolean is(PluginMessage message, String name)
@@ -132,16 +114,6 @@ final class ShortestPathBridge
     static PluginMessage clear()
     {
         return new PluginMessage(NAMESPACE, CLEAR);
-    }
-
-    static boolean isPath(PluginMessage message)
-    {
-        return is(message, PATH);
-    }
-
-    static boolean isClear(PluginMessage message)
-    {
-        return is(message, CLEAR);
     }
 
     /** A WorldPoint, a packed point, or a collection of either; empty when none or unreadable. */

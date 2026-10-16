@@ -25,10 +25,6 @@ final class HouseSettings
             || features.contains(BOTH) && (GARDENS[1].equals(feature) || GARDENS[2].equals(feature));
     }
 
-    HouseSettings()
-    {
-    }
-
     /** {@code box}: a tier (any case), else none; {@code mounted}: of {@link #MOUNTED}. */
     static Set<String> features(String box, Set<String> mounted, int garden, boolean obelisk, String portals,
         String nexus)

@@ -143,11 +143,6 @@ final class InfoCard extends Fitted
         refresh();
     }
 
-    boolean hasRoute()
-    {
-        return route != null;
-    }
-
     /** The route again in place of a place or extra shown since (the map opened while one is walked). */
     void showRoute()
     {
@@ -184,11 +179,6 @@ final class InfoCard extends Fitted
             refresh();
         }
         return true;
-    }
-
-    boolean hasExtra()
-    {
-        return extra != null;
     }
 
     IntFunction<JComponent> extra;
@@ -230,7 +220,7 @@ final class InfoCard extends Fitted
     /** Not while the map animates: building a card with many rows made the map's flight stutter. */
     void refresh()
     {
-        if (!map.isAnimating())
+        if (!map.animator.isRunning())
         {
             if (waiting != null)
             {
@@ -238,9 +228,8 @@ final class InfoCard extends Fitted
                 waiting = null;
             }
             rebuildNow();
-            return;
         }
-        if (waiting == null)
+        else if (waiting == null)
         {
             // Until then only the name, so the old selection's buttons cannot be used.
             removeAll();
@@ -254,11 +243,9 @@ final class InfoCard extends Fitted
             revalidate();
             repaint();
             waiting = new Timer(40, e -> {
-                if (!map.isAnimating())
+                if (!map.animator.isRunning())
                 {
-                    waiting.stop();
-                    waiting = null;
-                    rebuildNow();
+                    refresh();
                 }
             });
             waiting.start();
@@ -440,10 +427,7 @@ final class InfoCard extends Fitted
                 // Only what this trip needs beyond the stop's own requirements, listed above.
                 var tripNeeds = Requirements.describe(link.needs, itemNames);
                 tripNeeds.removeIf(line -> ownLines.contains(line.text));
-                if (!tripNeeds.isEmpty())
-                {
-                    addRequirements(tripNeeds, "    ");
-                }
+                addRequirements(tripNeeds, "    ");
             }
         }
 
@@ -473,11 +457,7 @@ final class InfoCard extends Fitted
             return;
         }
         add(text((usable ? "" : "✗ ") + member.name + kind, usable ? Color.WHITE : MISSING, false));
-        var needs = Requirements.describe(member.needs, itemNames);
-        if (!needs.isEmpty())
-        {
-            addRequirements(needs, "    ");
-        }
+        addRequirements(Requirements.describe(member.needs, itemNames), "    ");
     }
 
     void buildWares()
@@ -505,17 +485,17 @@ final class InfoCard extends Fitted
             JLabel icon = SearchResults.pictureIcon(SearchResults.PICTURE);
             itemNames.picture(ware.itemId, icon);
             // The name, like a drop's in the search panel, looks the item up in the plugin: where else it comes from.
-            Runnable open = itemSearch != null ? () -> itemSearch.accept(ware.item)
-                : () -> LinkBrowser.browse(Wiki.pageUrl(ware.item));
+            Runnable wiki = () -> LinkBrowser.browse(Wiki.pageUrl(ware.item));
+            Runnable open = itemSearch != null ? () -> itemSearch.accept(ware.item) : wiki;
+            String onWiki = "Open " + ware.item + " on the wiki";
             JComponent name = SearchResults.tip(SearchResults.bold(link(ware.item, open)),
-                itemSearch != null ? "Where else to get " + ware.item : "Open " + ware.item + " on the wiki");
+                itemSearch != null ? "Where else to get " + ware.item : onWiki);
             int price = itemNames.price(ware.itemId);
             JPanel line = SearchResults.panel(new FlowLayout(FlowLayout.LEFT, 0, 0));
             line.add(SearchResults.tip(grey(SearchResults.dotted(ItemSources.stockText(ware.stock),
                 price >= 0 ? "GE " + SearchResults.gp(price) : null) + " · "),
                 "How many the shop keeps when no one has bought any, and the Grand Exchange price"));
-            line.add(SearchResults.tip(link("Wiki", () -> LinkBrowser.browse(Wiki.pageUrl(ware.item))),
-                "Open " + ware.item + " on the wiki"));
+            line.add(SearchResults.tip(link("Wiki", wiki), onWiki));
             add(Box.createVerticalStrut(3));
             add(SearchResults.clickableRow(SearchResults.pictureRow(icon, name, line), open));
         }

@@ -19,10 +19,6 @@ final class PoiIcons
     static final Color OUTLINE = new Color(20, 18, 16);
     static final Color GLYPH = new Color(255, 255, 255, 240);
 
-    PoiIcons()
-    {
-    }
-
     /** Rendered badges by type, size and screen scale. */
     static final Map<Long, BufferedImage> SPRITES = new ConcurrentHashMap<>();
     static final int MAX_SPRITES = 4000;
@@ -317,18 +313,6 @@ final class PoiIcons
     static BufferedImage icon(int size, String name)
     {
         return sprite(size, size, 1, g -> draw(g, GLYPHS.get(name), 0, 0, 1));
-    }
-
-    /** A map pin, for searching places. */
-    static BufferedImage pinIcon()
-    {
-        return icon(14, "PIN");
-    }
-
-    /** Crosshairs, for following the player. */
-    static BufferedImage followIcon()
-    {
-        return icon(14, "FOLLOW");
     }
 
     /** The sidebar button: a folded map. */

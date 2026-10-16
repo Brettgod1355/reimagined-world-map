@@ -17,9 +17,6 @@ import net.runelite.client.ui.*;
 /** The route's panels for the sidebar and the map's card: the step list, the "Now" box, and the pieces they are made of. */
 final class RoutePanels
 {
-    RoutePanels()
-    {
-    }
 
     static final Color SEA = new Color(64, 200, 255);
     static final Color NOTE = new Color(255, 190, 120);
@@ -40,14 +37,12 @@ final class RoutePanels
         for (int i = 1; i < Math.min(3, left.steps.size()); i++)
         {
             Step then = left.steps.get(i);
-            box.add(Box.createVerticalStrut(4));
-            box.add(text((i == 1 ? "Then: " : "After that: ") + RouteText.describe(then), color(then, walk, jump),
+            add(box, 4, text((i == 1 ? "Then: " : "After that: ") + RouteText.describe(then), color(then, walk, jump),
                 Font.PLAIN, 0, inner));
         }
-        box.add(Box.createVerticalStrut(4));
         JLabel remaining = text(RouteText.duration(left) + " left", LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner);
-        box.add(remaining);
-        var wrapped = wrapped(box);
+        add(box, 4, remaining);
+        var wrapped = wrapped(box, 8);
         // What changes as the player walks (updateNow).
         wrapped.putClientProperty("doing", doing);
         wrapped.putClientProperty("left", remaining);
@@ -66,13 +61,11 @@ final class RoutePanels
         box.add(text("Quicker if you bring", NOTE, Font.PLAIN, 0, inner));
         for (var thing : bring)
         {
-            box.add(Box.createVerticalStrut(4));
-            box.add(text(thing[0], Color.WHITE, Font.BOLD, 0, inner));
+            add(box, 4, text(thing[0], Color.WHITE, Font.BOLD, 0, inner));
             box.add(text("for " + thing[1], LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner));
         }
-        box.add(Box.createVerticalStrut(4));
-        box.add(text(sooner, NOTE, Font.PLAIN, 0, inner));
-        return wrapped(box);
+        add(box, 4, text(sooner, NOTE, Font.PLAIN, 0, inner));
+        return wrapped(box, 8);
     }
 
     /** A box like {@link #nowBox}/{@link #tipBox}: dark background, a coloured left edge. */
@@ -87,12 +80,11 @@ final class RoutePanels
     }
 
     /** {@code box} sized to its content, with the gap the route panels put after a box like this. */
-    static JComponent wrapped(JPanel box)
+    static JComponent wrapped(JComponent box, int gap)
     {
-        box.setMaximumSize(new Dimension(Integer.MAX_VALUE, box.getPreferredSize().height));
         JPanel spaced = column();
-        spaced.add(box);
-        spaced.add(Box.createVerticalStrut(8));
+        spaced.add(capped(box));
+        spaced.add(Box.createVerticalStrut(gap));
         return spaced;
     }
 
@@ -217,20 +209,17 @@ final class RoutePanels
                     menu.show(more, 0, more.getHeight());
                 });
                 line.add(more, BorderLayout.EAST);
-                line.setMaximumSize(new Dimension(Integer.MAX_VALUE, line.getPreferredSize().height));
-                panel.add(line);
+                panel.add(capped(line));
             }
             if (unsure)
             {
-                panel.add(Box.createVerticalStrut(4));
-                panel.add(label("Some steps may need a quest, level or item the map does not know about.", width,
+                add(panel, 4, label("Some steps may need a quest, level or item the map does not know about.", width,
                     Font.PLAIN, ColorScheme.MEDIUM_GRAY_COLOR));
             }
         }
         if (actions != null && !actions.neverUsed().isEmpty())
         {
-            panel.add(Box.createVerticalStrut(6));
-            panel.add(label("Never used:", width, Font.BOLD, LIGHT_GRAY_COLOR));
+            add(panel, 6, label("Never used:", width, Font.BOLD, LIGHT_GRAY_COLOR));
             for (String never : actions.neverUsed())
             {
                 JButton allow = flat("✕  " + Tour.describe(never), "Use it again", () -> actions.allow(never));
@@ -238,11 +227,10 @@ final class RoutePanels
                 panel.add(allow);
             }
         }
-        panel.add(Box.createVerticalStrut(4));
         JButton clearButton = button("Clear path", clear);
         clearButton.setAlignmentX(0);
         clearButton.setToolTipText("Remove the route from the map");
-        panel.add(clearButton);
+        add(panel, 4, clearButton);
         return panel;
     }
 

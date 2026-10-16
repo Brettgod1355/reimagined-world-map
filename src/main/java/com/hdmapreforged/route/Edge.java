@@ -40,6 +40,12 @@ public final class Edge
         this(from, to, kind, name, detail, Math.max(1, cost), Math.max(1, cost), category);
     }
 
+    /** The same from {@code start}. */
+    public Edge at(int start)
+    {
+        return new Edge(start, to, kind, name, detail, cost);
+    }
+
     /** Heavier in the search only ("only use a teleport when it saves at least 10 tiles"). */
     public Edge weighed(int extra)
     {

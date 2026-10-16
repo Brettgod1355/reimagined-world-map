@@ -154,9 +154,7 @@ final class Tour
         long bestDistance = Long.MAX_VALUE;
         for (var entry : kind.entries)
         {
-            long dx = entry.point.getX() - near.getX();
-            long dy = entry.point.getY() - near.getY();
-            long d = dx * dx + dy * dy + (entry.point.getPlane() == near.getPlane() ? 0 : 100_000_000L);
+            long d = SearchResults.distance(entry.point, near) + (entry.point.getPlane() == near.getPlane() ? 0 : 100_000_000L);
             if (d < bestDistance)
             {
                 best = entry.point;
@@ -260,10 +258,8 @@ final class Tour
             int at = Tiles.parse(cells[0]);
             if (at >= 0)
             {
-                int x = Tiles.x(at);
-                int y = Tiles.y(at);
-                stops.add(Stop.place(cells.length > 1 && !cells[1].isEmpty() ? cells[1] : x + ", " + y,
-                    new WorldPoint(x, y, Tiles.z(at))));
+                var p = RouteFeature.worldPoint(at);
+                stops.add(Stop.place(cells.length > 1 && !cells[1].isEmpty() ? cells[1] : p.getX() + ", " + p.getY(), p));
             }
         }
         if (name != null)
