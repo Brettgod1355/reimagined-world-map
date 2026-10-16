@@ -85,10 +85,15 @@ public final class BankDetour
         {
             return null;
         }
-        var carried = new HashSet<String>();
+        // Only what the bank's items add (not a ladder or cave on the way, which no item opens).
+        var fromBank = new HashSet<String>();
+        for (var ways : List.of(withBank.startEdges, withBank.edges))
+        {
+            ways.forEach(e -> fromBank.add(e.name));
+        }
         for (var ways : List.of(request.startEdges, request.edges))
         {
-            ways.forEach(e -> carried.add(e.name));
+            ways.forEach(e -> fromBank.remove(e.name));
         }
         var take = new LinkedHashSet<String>();
         for (var step : on.steps)
@@ -100,7 +105,7 @@ public final class BankDetour
             {
                 take.addAll(Arrays.asList(named.split(", ")));
             }
-            else if (named != null || step.isJump() && step.name != null && !carried.contains(step.name))
+            else if (named != null || step.isJump() && fromBank.contains(step.name))
             {
                 take.add(taken(step));
             }
