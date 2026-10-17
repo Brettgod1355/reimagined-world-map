@@ -13,7 +13,6 @@ public final class LruMap<K, V> extends LinkedHashMap<K, V>
         this.limit = limit;
     }
 
-    @Override
     protected boolean removeEldestEntry(Map.Entry<K, V> eldest)
     {
         return size() > limit;

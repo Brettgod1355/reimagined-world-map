@@ -393,7 +393,6 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
             projection.screenY(icon.drawn.getY()) + offset);
     }
 
-    @Override
     public Poi hit(Point point, Projection projection)
     {
         var icon = iconAt(point, projection);
@@ -435,14 +434,12 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         return best;
     }
 
-    @Override
     public Point2D labelAnchor(Poi poi, Projection projection)
     {
         var c = iconCenter(poi, projection);
         return c == null ? null : new Point2D.Double(c.getX(), c.getY() + drawnSize(projection) / 2 + 5);
     }
 
-    @Override
     public Point2D iconCenter(Poi poi, Projection projection)
     {
         var icon = created.get(poi);
@@ -454,7 +451,6 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
     }
 
     /** Draws the game's sprites once read from the client; then rings the hovered and selected. */
-    @Override
     public void paint(Graphics2D g, Projection projection)
     {
         if (GameIconSprites.hasElements() && enabled.getAsBoolean())

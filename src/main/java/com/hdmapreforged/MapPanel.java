@@ -395,7 +395,6 @@ final class MapPanel extends PluginPanel
     {
         JComponent orb = new JComponent()
         {
-            @Override
             protected void paintComponent(Graphics g)
             {
                 Graphics2D g2 = (Graphics2D) g.create();
@@ -436,13 +435,11 @@ final class MapPanel extends PluginPanel
             clickableRow(line, action).setToolTipText(tip);
             line.addMouseListener(new MouseAdapter()
             {
-                @Override
                 public void mouseEntered(MouseEvent e)
                 {
                     line.setBackground(DARK_GRAY_HOVER_COLOR);
                 }
 
-                @Override
                 public void mouseExited(MouseEvent e)
                 {
                     line.setBackground(DARK_GRAY_COLOR);

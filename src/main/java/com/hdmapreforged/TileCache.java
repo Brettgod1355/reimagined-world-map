@@ -578,7 +578,6 @@ final class TileCache
             calls.add(download);
             download.enqueue(new Callback()
             {
-                @Override
                 public void onFailure(Call call, IOException e)
                 {
                     calls.remove(call);
@@ -586,7 +585,6 @@ final class TileCache
                     finish(key, started, null, false, false);
                 }
 
-                @Override
                 public void onResponse(Call call, Response response)
                 {
                     calls.remove(call);

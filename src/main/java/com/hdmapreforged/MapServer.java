@@ -181,14 +181,12 @@ final class MapServer
         }
         http.newCall(new Request.Builder().url(url).build()).enqueue(new Callback()
         {
-            @Override
             public void onFailure(Call call, IOException e)
             {
                 log.debug("Map server request failed: {}", url, e);
                 callback.accept(fallback);
             }
 
-            @Override
             public void onResponse(Call call, Response response)
             {
                 T value = fallback;

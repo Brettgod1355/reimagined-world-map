@@ -2257,56 +2257,47 @@ public final class RouteFeature
 
     final TourPanel.Actions tourActions = new TourPanel.Actions()
     {
-        @Override
         public List<Tour> tours()
         {
             return RouteFeature.this.tours();
         }
 
-        @Override
         public String editing()
         {
             return editingName();
         }
 
-        @Override
         public void save(List<Tour> tours, String editing)
         {
             saveTours(tours, editing);
             refreshTours();
         }
 
-        @Override
         public void run(Tour tour)
         {
             runTour(tour);
         }
 
-        @Override
         public void fastestOrder(Tour tour, boolean everything, Runnable done)
         {
             RouteFeature.this.fastestOrder(tour, everything, done);
         }
 
-        @Override
         public void say(String text)
         {
             toast(text);
         }
 
-        @Override
         public void cancelOrder()
         {
             orders.incrementAndGet();
         }
 
-        @Override
         public String running()
         {
             return runningTour();
         }
 
-        @Override
         public void stop()
         {
             clearRoute();
@@ -3569,7 +3560,6 @@ public final class RouteFeature
             setLayer(OverlayLayer.ABOVE_WIDGETS);
         }
 
-        @Override
         public Dimension render(Graphics2D g)
         {
             Route route = drawn;
@@ -3609,7 +3599,6 @@ public final class RouteFeature
             setLayer(OverlayLayer.ABOVE_SCENE);
         }
 
-        @Override
         public Dimension render(Graphics2D g)
         {
             Route route = drawn;

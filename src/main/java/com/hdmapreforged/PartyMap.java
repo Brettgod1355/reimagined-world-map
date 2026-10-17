@@ -111,7 +111,6 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
                 view.clickCatchers.add(catcher);
                 MouseAdapter pointing = new MouseAdapter()
                 {
-                    @Override
                     public void mouseMoved(MouseEvent e)
                     {
                         long now = memberAt(e.getPoint(), view.projection());
@@ -122,7 +121,6 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
                         }
                     }
 
-                    @Override
                     public void mouseExited(MouseEvent e)
                     {
                         if (hoveredMember >= 0)
@@ -225,7 +223,6 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
 
     final Map<Integer, BufferedImage> sprites = new ConcurrentHashMap<>();
     /** The sidebar's and the map's pictures of what members share. */
-    @Override
     public BufferedImage skill(int ordinal)
     {
         Skill[] skills = Skill.values();
@@ -233,50 +230,42 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
             : skillIcons.getSkillImage(skills[ordinal], true);
     }
 
-    @Override
     public BufferedImage sprite(int id)
     {
         return sprites.get(id);
     }
 
     /** The sidebar's party list. */
-    @Override
     public boolean inGroup()
     {
         return party.isInParty();
     }
 
-    @Override
     public List<FriendsWidget.Row> rows()
     {
         return FriendsWidget.rows(markers(), groupMembers());
     }
 
-    @Override
     public int world()
     {
         return myWorld;
     }
 
-    @Override
     public PartyMapMembers.Gear gear(long id)
     {
         return members.gear(id);
     }
 
-    @Override
     public FriendsWidget.Images images()
     {
         return this;
     }
 
-    @Override
     public boolean canRejoin()
     {
         return lastParty() != null;
     }
 
-    @Override
     public void follow(long id)
     {
         views.keySet().forEach(view -> follow(view, id));
@@ -577,7 +566,6 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         return ids;
     }
 
-    @Override
     public BufferedImage item(int id, int quantity)
     {
         long key = (long) id << 32 | quantity;
@@ -706,7 +694,6 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         return last == null || last.trim().isEmpty() ? null : last.trim();
     }
 
-    @Override
     public void join(Component view)
     {
         String code = lastParty();

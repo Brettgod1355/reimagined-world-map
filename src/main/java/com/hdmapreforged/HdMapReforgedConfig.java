@@ -249,7 +249,6 @@ public interface HdMapReforgedConfig extends Config
 
         final String name;
 
-        @Override
         public String toString()
         {
             return name;
@@ -280,7 +279,6 @@ public interface HdMapReforgedConfig extends Config
 
         final String name;
 
-        @Override
         public String toString()
         {
             return name;

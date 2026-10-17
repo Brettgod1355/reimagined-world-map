@@ -142,7 +142,6 @@ final class NpcPictures
         final int size;
         boolean asked;
 
-        @Override
         public void paintIcon(Component c, Graphics g, int x, int y)
         {
             if (!asked && c instanceof JLabel)
@@ -153,13 +152,11 @@ final class NpcPictures
             }
         }
 
-        @Override
         public int getIconWidth()
         {
             return size;
         }
 
-        @Override
         public int getIconHeight()
         {
             return size;

@@ -19,7 +19,6 @@ final class RoutesButton implements MapView.Widget
     final BooleanSupplier open;
     final BooleanSupplier shown;
 
-    @Override
     public void paint(Graphics2D g, int width, int height, int bottom, MapView.Clicks clicks)
     {
         if (!shown.getAsBoolean())

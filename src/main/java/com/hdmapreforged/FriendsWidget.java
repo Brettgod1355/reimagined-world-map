@@ -132,7 +132,6 @@ final class FriendsWidget implements Widget
         return rows;
     }
 
-    @Override
     public void paint(Graphics2D g, int width, int height, int bottom, Clicks clicks)
     {
         dropsMoving = false;

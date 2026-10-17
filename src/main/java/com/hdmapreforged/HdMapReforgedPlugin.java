@@ -113,7 +113,6 @@ public class HdMapReforgedPlugin extends Plugin
     GraveMarker[] graves = new GraveMarker[0];
     final HotkeyListener mapKey = new HotkeyListener(() -> config.openMapKey())
     {
-        @Override
         public void keyPressed(KeyEvent e)
         {
             // A key that types goes to the chat or input box taking text, not to the map.
@@ -123,7 +122,6 @@ public class HdMapReforgedPlugin extends Plugin
             }
         }
 
-        @Override
         public void hotkeyPressed()
         {
             toggleFullMap();
@@ -134,7 +132,6 @@ public class HdMapReforgedPlugin extends Plugin
     /** Escape closes the map over the game while it is open. */
     final class Escape extends KeyAdapter implements KeyListener
     {
-        @Override
         public void keyPressed(KeyEvent e)
         {
             FullMapWindow open = fullMap;
@@ -176,7 +173,6 @@ public class HdMapReforgedPlugin extends Plugin
     }
 
     /** When this throws, RuneLite calls shutDown, which undoes only what was made. */
-    @Override
     protected void startUp() throws Exception
     {
         int started = life.incrementAndGet();
@@ -268,7 +264,6 @@ public class HdMapReforgedPlugin extends Plugin
     }
 
     /** Also safe after a startUp that failed half-way: only what was made is undone. */
-    @Override
     protected void shutDown()
     {
         life.incrementAndGet();

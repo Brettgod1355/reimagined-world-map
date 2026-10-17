@@ -115,7 +115,6 @@ final class Poi
         return view != null && map != null && (view.id == BaseMap.FULL || map == view);
     }
 
-    @Override
     public String toString()
     {
         return name;

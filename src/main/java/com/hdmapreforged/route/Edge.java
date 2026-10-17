@@ -49,7 +49,6 @@ public final class Edge
         return extra <= 0 ? this : withCost(cost + extra);
     }
 
-    @Override
     public String toString()
     {
         return kind + " " + name + " " + (from == ANYWHERE ? "anywhere" : Tiles.format(from)) + " -> " + Tiles.format(to);

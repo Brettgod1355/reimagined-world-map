@@ -40,7 +40,6 @@ final class BaseMap
         return (long) (maxX - minX) * (maxY - minY);
     }
 
-    @Override
     public String toString()
     {
         return name;

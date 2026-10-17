@@ -15,31 +15,26 @@ class Fitted extends JPanel implements Scrollable
         this.overlap = overlap;
     }
 
-    @Override
     public Dimension getPreferredScrollableViewportSize()
     {
         return getPreferredSize();
     }
 
-    @Override
     public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction)
     {
         return 16;
     }
 
-    @Override
     public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction)
     {
         return visible.height - overlap;
     }
 
-    @Override
     public boolean getScrollableTracksViewportWidth()
     {
         return true;
     }
 
-    @Override
     public boolean getScrollableTracksViewportHeight()
     {
         return false;

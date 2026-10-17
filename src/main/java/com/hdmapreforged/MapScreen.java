@@ -103,7 +103,6 @@ final class MapScreen extends JPanel implements MapView.Listener
         this.world = world;
         npcs = new SearchResults(view, world, new SearchResults.Card()
         {
-            @Override
             public void show(IntFunction<JComponent> section)
             {
                 searchSection = section;
@@ -114,7 +113,6 @@ final class MapScreen extends JPanel implements MapView.Listener
                 showSection(section);
             }
 
-            @Override
             public void update(IntFunction<JComponent> section)
             {
                 // Late answers never reopen or replace what the user opened since (a place's details, a route).
@@ -166,7 +164,6 @@ final class MapScreen extends JPanel implements MapView.Listener
         // Clicked again: what the field holds shows at once, not only after more typing.
         search.addMouseListener(new MouseAdapter()
         {
-            @Override
             public void mousePressed(MouseEvent e)
             {
                 if (!resultsShown())
@@ -212,7 +209,6 @@ final class MapScreen extends JPanel implements MapView.Listener
         card.setOnRebuilt(this::placeFloatingCard);
         layers.addComponentListener(new ComponentAdapter()
         {
-            @Override
             public void componentResized(ComponentEvent e)
             {
                 placeFloatingCard();
@@ -594,7 +590,6 @@ final class MapScreen extends JPanel implements MapView.Listener
         card.refresh();
     }
 
-    @Override
     public void nearestRequested(WorldPoint point)
     {
         var baseMaps = view.maps();
@@ -655,14 +650,12 @@ final class MapScreen extends JPanel implements MapView.Listener
         view.stop();
     }
 
-    @Override
     public void selectionChanged(Poi poi)
     {
         card.show(poi);
         showCardAtTop(poi != null || card.route != null || card.extra != null);
     }
 
-    @Override
     public void viewChanged()
     {
         syncing = true;

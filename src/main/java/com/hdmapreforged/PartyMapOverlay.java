@@ -102,7 +102,6 @@ final class PartyMapOverlay implements MapView.Overlay
             .toLowerCase(Locale.ROOT);
     }
 
-    @Override
     public void paint(Graphics2D g, MapView.Projection projection)
     {
         var all = markers.get();

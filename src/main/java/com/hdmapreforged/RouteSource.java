@@ -189,7 +189,7 @@ final class RouteSource
         }
         if (state.inHouse || options.teleports)
         {
-            house(call, pois, unlocks, state, teleportsByName, start, startEdges, edges);
+            house(call, pois, unlocks, state, teleportsByName, startEdges, edges);
         }
         if (!call.avoiding.isEmpty())
         {
@@ -863,7 +863,7 @@ final class RouteSource
      * teleport in to its arrival; else, in the house, the route starts with them, and from outside a teleport in or
      * its portal leads to them at once.
      */
-    void house(Call call, List<Poi> pois, Unlocks unlocks, PlayerState state, Map<String, Poi> teleports, int start,
+    void house(Call call, List<Poi> pois, Unlocks unlocks, PlayerState state, Map<String, Poi> teleports,
         List<Edge> starts, List<Edge> edges)
     {
         var plan = state.inHouse && !state.ownHouse ? null : map.house();
@@ -877,13 +877,9 @@ final class RouteSource
         var placed = new HashSet<String>();
         if (plan != null)
         {
-            // Where one clicks a thing from: where one stands in the house, else where one lands in it.
-            int from = HousePlan.contains(start) ? start : plan.arrival;
             plan.things.forEach((node, name) -> {
-                // The side the game walks to as it is clicked (on another floor each side: the route takes the nearest).
+                // Each side: the route takes the one the game walks to as it is clicked (Pathfinder.steps).
                 int[] at = plan.approach(node);
-                int[] walk = GameWalk.path(map, from, at);
-                at = walk == null ? at : new int[]{walk[walk.length - 1]};
                 var out = new ArrayList<Edge>();
                 List<String> features = name.startsWith(NEXUS + ": ") ? Arrays.stream(name.substring(NEXUS.length() + 2)
                     .split(", ")).map(place -> "nexus:" + place).collect(Collectors.toList())

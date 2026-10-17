@@ -260,7 +260,6 @@ public final class Route
         return steps.stream().filter(step -> step.kind == kind).findFirst().orElse(null);
     }
 
-    @Override
     public String toString()
     {
         StringBuilder sb = new StringBuilder(outcome + " " + (cost + 1) / 2 + " ticks, " + nodes + " nodes");

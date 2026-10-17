@@ -45,7 +45,6 @@ final class GraveMarker implements MapView.Overlay, MapView.HitLayer
         return grave;
     }
 
-    @Override
     public void paint(Graphics2D g, MapView.Projection p)
     {
         Point center = center(p);
@@ -57,7 +56,6 @@ final class GraveMarker implements MapView.Overlay, MapView.HitLayer
         }
     }
 
-    @Override
     public Poi hit(Point point, MapView.Projection p)
     {
         Point center = center(p);

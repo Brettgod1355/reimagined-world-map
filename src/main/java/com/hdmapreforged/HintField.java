@@ -16,7 +16,6 @@ final class HintField extends JTextField
 
     final Supplier<String> hint;
 
-    @Override
     protected void paintComponent(Graphics g)
     {
         super.paintComponent(g);
@@ -35,19 +34,16 @@ final class HintField extends JTextField
     {
         field.getDocument().addDocumentListener(new DocumentListener()
         {
-            @Override
             public void insertUpdate(DocumentEvent e)
             {
                 edited.run();
             }
 
-            @Override
             public void removeUpdate(DocumentEvent e)
             {
                 edited.run();
             }
 
-            @Override
             public void changedUpdate(DocumentEvent e)
             {
                 edited.run();
@@ -61,13 +57,11 @@ final class HintField extends JTextField
         field.getInputMap().put(KeyStroke.getKeyStroke(key, 0), name);
         field.getActionMap().put(name, new AbstractAction()
         {
-            @Override
             public boolean isEnabled()
             {
                 return when.getAsBoolean();
             }
 
-            @Override
             public void actionPerformed(ActionEvent e)
             {
                 action.run();

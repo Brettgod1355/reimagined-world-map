@@ -32,7 +32,6 @@ final class ItemNames implements IntFunction<String>, SearchResults.Prices
     /** The pictures of the items shown last, so a list built again never asks the game again. Swing thread. */
     final Map<Integer, AsyncBufferedImage> images = new LruMap<>(16, IMAGES);
 
-    @Override
     public int price(int id)
     {
         Integer price = prices.get(id);
@@ -45,7 +44,6 @@ final class ItemNames implements IntFunction<String>, SearchResults.Prices
         images.computeIfAbsent(id, itemManager::getImage).addTo(label);
     }
 
-    @Override
     public String apply(int id)
     {
         String name = names.get(id);
@@ -94,7 +92,6 @@ final class ItemNames implements IntFunction<String>, SearchResults.Prices
         }
     }
 
-    @Override
     public void resolve(Collection<Integer> ids, Runnable done)
     {
         // Previews run without a client.

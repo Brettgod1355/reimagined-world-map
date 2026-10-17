@@ -47,19 +47,16 @@ final class FullMapWindow implements MapView.WindowControls
     boolean maximised;
     final ComponentListener follower = new ComponentAdapter()
     {
-        @Override
         public void componentMoved(ComponentEvent e)
         {
             place();
         }
 
-        @Override
         public void componentResized(ComponentEvent e)
         {
             place();
         }
 
-        @Override
         public void componentHidden(ComponentEvent e)
         {
             close();
@@ -83,7 +80,6 @@ final class FullMapWindow implements MapView.WindowControls
         screen.setScreenLayout(MapScreen.Layout.FULL);
         screen.view.addMouseListener(new MouseAdapter()
         {
-            @Override
             public void mouseReleased(MouseEvent e)
             {
                 SwingUtilities.invokeLater(FullMapWindow.this::giveKeysBack);
@@ -91,7 +87,6 @@ final class FullMapWindow implements MapView.WindowControls
         });
     }
 
-    @Override
     public boolean isMaximised()
     {
         return maximised;
@@ -157,7 +152,6 @@ final class FullMapWindow implements MapView.WindowControls
             window.setFocusableWindowState(false);
             window.addWindowFocusListener(new WindowAdapter()
             {
-                @Override
                 public void windowLostFocus(WindowEvent e)
                 {
                     window.setFocusableWindowState(false);
@@ -176,7 +170,6 @@ final class FullMapWindow implements MapView.WindowControls
         }
     }
 
-    @Override
     public void close()
     {
         if (window != null && window.isVisible())
@@ -187,7 +180,6 @@ final class FullMapWindow implements MapView.WindowControls
         }
     }
 
-    @Override
     public void toggleMaximised()
     {
         maximised = !maximised;
@@ -221,7 +213,6 @@ final class FullMapWindow implements MapView.WindowControls
     {
         field.addMouseListener(new MouseAdapter()
         {
-            @Override
             public void mousePressed(MouseEvent e)
             {
                 Window host = SwingUtilities.getWindowAncestor(field);
@@ -248,13 +239,11 @@ final class FullMapWindow implements MapView.WindowControls
     {
         JPanel root = new JPanel(new BorderLayout())
         {
-            @Override
             protected boolean processKeyBinding(KeyStroke ks, KeyEvent e, int condition, boolean pressed)
             {
                 return pressed && closeKey(e) || super.processKeyBinding(ks, e, condition, pressed);
             }
 
-            @Override
             protected void paintComponent(Graphics graphics)
             {
                 super.paintComponent(graphics);
@@ -438,7 +427,6 @@ final class FullMapWindow implements MapView.WindowControls
             start = window.getBounds();
         }
 
-        @Override
         public void mouseReleased(MouseEvent e)
         {
             if (grab != null)
@@ -458,7 +446,6 @@ final class FullMapWindow implements MapView.WindowControls
             setToolTipText("Drag to move; double-click to fill the game view");
             Drag mouse = new Drag()
             {
-                @Override
                 public void mousePressed(MouseEvent e)
                 {
                     if (SwingUtilities.isLeftMouseButton(e))
@@ -467,7 +454,6 @@ final class FullMapWindow implements MapView.WindowControls
                     }
                 }
 
-                @Override
                 public void mouseDragged(MouseEvent e)
                 {
                     if (grab == null)
@@ -491,7 +477,6 @@ final class FullMapWindow implements MapView.WindowControls
                     setFromScreen(new Rectangle(start.x + now.x - grab.x, start.y + now.y - grab.y, start.width, start.height));
                 }
 
-                @Override
                 public void mouseClicked(MouseEvent e)
                 {
                     if (e.getClickCount() == 2)
@@ -504,7 +489,6 @@ final class FullMapWindow implements MapView.WindowControls
             addMouseMotionListener(mouse);
         }
 
-        @Override
         protected void paintComponent(Graphics graphics)
         {
             var g = (Graphics2D) graphics.create();
@@ -540,14 +524,12 @@ final class FullMapWindow implements MapView.WindowControls
                 | (p.y >= h - BOTTOM || p.y >= h - corner && (p.x < corner || p.x >= w - corner) ? 8 : 0);
         }
 
-        @Override
         public void mouseMoved(MouseEvent e)
         {
             int at = edgesAt(e.getPoint());
             root.setCursor(getPredefinedCursor(at < CURSORS.length ? CURSORS[at] : DEFAULT_CURSOR));
         }
 
-        @Override
         public void mouseExited(MouseEvent e)
         {
             if (grab == null)
@@ -556,7 +538,6 @@ final class FullMapWindow implements MapView.WindowControls
             }
         }
 
-        @Override
         public void mousePressed(MouseEvent e)
         {
             edges = edgesAt(e.getPoint());
@@ -566,7 +547,6 @@ final class FullMapWindow implements MapView.WindowControls
             }
         }
 
-        @Override
         public void mouseDragged(MouseEvent e)
         {
             if (grab == null)

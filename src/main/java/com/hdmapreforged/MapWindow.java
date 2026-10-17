@@ -19,7 +19,6 @@ final class MapWindow extends JFrame
         setLocationByPlatform(true);
         addWindowListener(new WindowAdapter()
         {
-            @Override
             public void windowClosed(WindowEvent e)
             {
                 onClose.run();

@@ -609,7 +609,6 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     final Map<Group, Poi> foundPois = new IdentityHashMap<>();
 
     /** A place's arrows on the map: clicked, the place is selected, and the map shows the way there. */
-    @Override
     public Poi hit(Point point, MapView.Projection projection)
     {
         Result shown = result;
@@ -1283,7 +1282,6 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             }
         }
 
-        @Override
         protected void paintComponent(Graphics g)
         {
             if (lit)
@@ -1304,19 +1302,16 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         row.addMouseListener(new MouseAdapter()
         {
-            @Override
             public void mouseClicked(MouseEvent e)
             {
                 action.run();
             }
 
-            @Override
             public void mouseEntered(MouseEvent e)
             {
                 light(row, true);
             }
 
-            @Override
             public void mouseExited(MouseEvent e)
             {
                 light(row, false);
@@ -1554,13 +1549,11 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         {
             label.addMouseListener(new MouseAdapter()
             {
-                @Override
                 public void mouseEntered(MouseEvent e)
                 {
                     label.setForeground(Color.WHITE);
                 }
 
-                @Override
                 public void mouseExited(MouseEvent e)
                 {
                     label.setForeground(LINK);
@@ -1619,7 +1612,6 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
 
     static final Map<Color, Color> FADED = new ConcurrentHashMap<>();
 
-    @Override
     public void paint(Graphics2D g, MapView.Projection projection)
     {
         Result shown = result;

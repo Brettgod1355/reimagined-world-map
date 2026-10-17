@@ -267,49 +267,41 @@ final class MapView extends JComponent
     @Getter
     final Projection projection = new Projection()
     {
-        @Override
         public double screenX(double worldX)
         {
             return MapView.this.screenX(worldX);
         }
 
-        @Override
         public double screenY(double worldY)
         {
             return MapView.this.screenY(worldY);
         }
 
-        @Override
         public double zoom()
         {
             return zoom;
         }
 
-        @Override
         public BaseMap map()
         {
             return map;
         }
 
-        @Override
         public int plane()
         {
             return plane;
         }
 
-        @Override
         public int width()
         {
             return getWidth();
         }
 
-        @Override
         public int height()
         {
             return getHeight();
         }
 
-        @Override
         public boolean shows(WorldPoint point)
         {
             // One's house: on the surface map, at its edge.
@@ -319,7 +311,6 @@ final class MapView extends JComponent
                 : WorldMapMoves.toDrawn(map.id, point) != null || maps.drawsGame(map, point));
         }
 
-        @Override
         public WorldPoint shown(WorldPoint point)
         {
             return MapView.this.shown(point);
@@ -396,7 +387,6 @@ final class MapView extends JComponent
         setMinimumSize(new Dimension(120, 120));
         var mouse = new MouseAdapter()
         {
-            @Override
             public void mousePressed(MouseEvent e)
             {
                 pressedControl = control(e.getPoint());
@@ -414,7 +404,6 @@ final class MapView extends JComponent
                 }
             }
 
-            @Override
             public void mouseDragged(MouseEvent e)
             {
                 if (pressed == null)
@@ -442,7 +431,6 @@ final class MapView extends JComponent
                 }
             }
 
-            @Override
             public void mouseReleased(MouseEvent e)
             {
                 if (pressedControl != null)
@@ -497,13 +485,11 @@ final class MapView extends JComponent
                 updateHover(e.getPoint());
             }
 
-            @Override
             public void mouseMoved(MouseEvent e)
             {
                 updateHover(e.getPoint());
             }
 
-            @Override
             public void mouseExited(MouseEvent e)
             {
                 if (hovered != null || hoveredControl != null)
@@ -516,7 +502,6 @@ final class MapView extends JComponent
                 }
             }
 
-            @Override
             public void mouseWheelMoved(MouseWheelEvent e)
             {
                 zoomAt(-e.getPreciseWheelRotation() * 0.5, e.getPoint());
@@ -536,7 +521,6 @@ final class MapView extends JComponent
         });
         addComponentListener(new ComponentAdapter()
         {
-            @Override
             public void componentResized(ComponentEvent e)
             {
                 double z = clampZoom(targetZoom);
@@ -1112,7 +1096,6 @@ final class MapView extends JComponent
      * While the view animates, its next step (within 15 ms) paints it whole: other repaints, a tile arriving, only added
      * frames, two or three a step zooming out.
      */
-    @Override
     public void repaint(long tm, int x, int y, int width, int height)
     {
         if (stepping || animator == null || !animator.isRunning())
@@ -1137,7 +1120,6 @@ final class MapView extends JComponent
         }
     }
 
-    @Override
     protected void paintComponent(Graphics graphics)
     {
         var g = (Graphics2D) graphics.create();
@@ -2002,13 +1984,11 @@ final class MapView extends JComponent
     {
         var clicks = new Clicks()
         {
-            @Override
             public void add(RoundRectangle2D shape, Runnable action, String tooltip)
             {
                 painted.add(new Control(shape, action, tooltip));
             }
 
-            @Override
             public boolean hovered(RoundRectangle2D shape)
             {
                 return isHovered(shape);

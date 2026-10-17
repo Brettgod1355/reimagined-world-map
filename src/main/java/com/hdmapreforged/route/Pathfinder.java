@@ -740,9 +740,10 @@ public final class Pathfinder
         boolean exhausted = found < 0 && (proof != null || tried);
         Reached reached = found >= 0 ? null : tried ? new Reached(nodes.reached(), false) : proof;
         int end = found >= 0 ? found : best;
-        Route route = end < 0 ? new Route(NONE, Collections.emptyList(), 0, target, -1, exhausted, limited, popped,
-            reached) : new Route(found >= 0 ? FOUND : NEAREST, steps(nodes, all, startOffset, end),
-            nodes.cost(end), target, end, exhausted, limited, popped, reached);
+        var steps = end < 0 ? List.<Route.Step>of() : steps(nodes, all, startOffset, end, found >= 0 ? target : -1);
+        Route route = end < 0 ? new Route(NONE, steps, 0, target, -1, exhausted, limited, popped, reached)
+            : new Route(found >= 0 ? FOUND : NEAREST, steps, nodes.cost(end), target,
+            steps.isEmpty() ? end : steps.get(steps.size() - 1).last(), exhausted, limited, popped, reached);
         return keptOut ? route.withKeptOut(true) : route;
     }
 
@@ -943,7 +944,7 @@ public final class Pathfinder
             : pack(x(node) - DX[d], y(node) - DY[d], z(node));
     }
 
-    List<Route.Step> steps(NodeTable nodes, List<Edge> all, int startOffset, int end)
+    List<Route.Step> steps(NodeTable nodes, List<Edge> all, int startOffset, int end, int target)
     {
         var reversed = new ArrayList<Route.Step>();
         var run = new ArrayList<Integer>();
@@ -971,6 +972,33 @@ public final class Pathfinder
         }
         flush(reversed, run, nodes);
         Collections.reverse(reversed);
+        int x = x(target);
+        int y = y(target);
+        int z = z(target);
+        // A target one cannot stand on (a ladder clicked on the map): the free tiles beside it with no wall between.
+        int[] beside = target < 0 || isSea(target) || map.walkable(x, y, z) ? new int[0] : IntStream.range(0, 4)
+            .filter(d -> map.walkable(x + DX[d], y + DY[d], z) && map.straightOpen(x + DX[d], y + DY[d], z, -DX[d], -DY[d]))
+            .map(d -> pack(x + DX[d], y + DY[d], z)).toArray();
+        for (int i = 1; i <= reversed.size(); i++)
+        {
+            // Where the game walks as a passage (its sides) or that target is clicked where the walk to it starts.
+            var walk = reversed.get(i - 1);
+            var jump = i < reversed.size() ? reversed.get(i) : null;
+            int[] game = walk.kind != Route.Step.Kind.WALK ? null : GameWalk.path(map, walk.first(), jump == null ? beside
+                : all.stream().filter(e -> e.from >= 0 && e.to == jump.last() && Objects.equals(e.name, jump.name))
+                .mapToInt(e -> e.from).toArray());
+            if (game != null && game.length <= walk.points.length)
+            {
+                int doors = (int) IntStream.range(1, game.length).filter(k -> map.door(x(game[k - 1]), y(game[k - 1]),
+                    z(game[k]), x(game[k]) - x(game[k - 1]), y(game[k]) - y(game[k - 1]))).count();
+                reversed.set(i - 1, new Route.Step(Route.Step.Kind.WALK, game, null, walk.detail,
+                    walk.cost * (game.length - 1) / (walk.points.length - 1), doors, walk.obstacles, null));
+                if (jump != null)
+                {
+                    jump.points[0] = game[game.length - 1];
+                }
+            }
+        }
         return reversed;
     }
 
