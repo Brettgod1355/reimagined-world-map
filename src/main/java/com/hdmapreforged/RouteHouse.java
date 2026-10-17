@@ -254,6 +254,9 @@ public final class RouteHouse
                             : k == standing.length ? tile.getWallObject() : tile.getDecorativeObject();
                         // Once per object, at its south-west tile.
                         Point base = object instanceof GameObject ? ((GameObject) object).getSceneMinLocation() : null;
+                        // Its tiles east (32) and north (64) of its first: routes use it from beside any.
+                        placed[z][(x - dx) * SIZE + y - dy] |= base == null ? 0 : base.getX() < x && base.getY() == y ? 32
+                            : base.getY() < y && base.getX() == x ? 64 : 0;
                         String name = object == null || base != null && (base.getX() != x || base.getY() != y) ? null
                             : name(object.getId());
                         if (name == null)

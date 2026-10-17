@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import static com.hdmapreforged.route.Tiles.*;
 import static com.hdmapreforged.PlayerMarker.circle;
 import static com.hdmapreforged.RoutePanels.*;
 import static com.hdmapreforged.SearchResults.*;
@@ -104,7 +105,7 @@ public final class RouteFeature
 
     static WorldPoint worldPoint(int node)
     {
-        return new WorldPoint(Tiles.x(node), Tiles.y(node), Tiles.z(node));
+        return new WorldPoint(x(node), y(node), z(node));
     }
 
     static int pack(WorldPoint p)
@@ -137,11 +138,11 @@ public final class RouteFeature
         {
             // In an instance copying a place: the template's tile, which HD World Markers finds in the instance.
             var template = view != null && view.isInstance()
-                ? InstanceCopies.template(Tiles.x(point), Tiles.y(point), Tiles.z(point)) : null;
+                ? InstanceCopies.template(x(point), y(point), z(point)) : null;
             return template != null ? new WorldPoint(template[0], template[1], template[2]) : worldPoint(point);
         }
         var local = view == null || !house.own() ? null : yourHouse.local(view, point);
-        return local == null ? null : WorldPoint.fromLocal(view, local.getX(), local.getY(), Tiles.z(point));
+        return local == null ? null : WorldPoint.fromLocal(view, local.getX(), local.getY(), z(point));
     }
 
     /** The tiles' look, read once for each message. Client thread. */
@@ -1193,12 +1194,12 @@ public final class RouteFeature
             state = capture();
         }
         int from = location == null ? -2 : house.inside() ? yourHouse.inHouse()
-            : onBoat ? Tiles.seaAt(location.getX(), location.getY()) : node;
+            : onBoat ? seaAt(location.getX(), location.getY()) : node;
         start = from;
         // Not in other instances (their tiles are copies); in one's own house its plan tells where one is, in an instance
         // copying a place on the map (instance_copies.tsv) that place.
         boolean replans = !instance || house.inside() && from >= 0
-            || from >= 0 && InstanceCopies.isPlace(Tiles.x(from), Tiles.y(from));
+            || from >= 0 && InstanceCopies.isPlace(x(from), y(from));
         updateHdTiles(from);
         // At once also on coming into (or leaving) the Rune essence mine or the Shipyard: their exits lead back; and after
         // a teleport, which is searched from at once.
@@ -1213,7 +1214,7 @@ public final class RouteFeature
             {
                 if (entered)
                 {
-                    c.placeChanged();
+                    c.placeChanged(from);
                 }
                 Running running = tour;
                 if (running != null && running.target >= 0 && (Tiles.near(from, running.target, RouteController.ARRIVED)
@@ -1400,7 +1401,7 @@ public final class RouteFeature
         }
         var walkedBefore = walkedAhead(before);
         var walkedNow = now == before ? walkedBefore : walked(now);
-        if (route != null && route == aheadOf && before != null && now != null && player >= 0 && !Tiles.isSea(player)
+        if (route != null && route == aheadOf && before != null && now != null && player >= 0 && !isSea(player)
             && !now.steps.isEmpty() && jumps(now) >= jumps(before) && Tiles.distance(player, now.steps.get(0).first()) > 2)
         {
             // Off the way: the route stays as it was, nothing passed (walking away beside it is not walking it) and
@@ -2079,7 +2080,7 @@ public final class RouteFeature
     /** Where the planner goes for a spot: its sea block for one {@link #atSea}. */
     int node(WorldPoint p)
     {
-        return atSea(p) ? Tiles.seaAt(p.getX(), p.getY()) : pack(p);
+        return atSea(p) ? seaAt(p.getX(), p.getY()) : pack(p);
     }
 
     /**
@@ -2972,7 +2973,7 @@ public final class RouteFeature
 
     static int distance(int from, int to)
     {
-        return Tiles.distance(from, to) + (Tiles.z(from) == Tiles.z(to) ? 0 : 32);
+        return Tiles.distance(from, to) + (z(from) == z(to) ? 0 : 32);
     }
 
     void changed()
@@ -3160,7 +3161,7 @@ public final class RouteFeature
     /** Whether a step is named on its tile in the game: not a teleport, which is cast anywhere (said over the head). */
     static boolean onItsTile(Step step)
     {
-        return step.isJump() && step.kind != Kind.TELEPORT && step.name != null && !Tiles.isSea(step.first())
+        return step.isJump() && step.kind != Kind.TELEPORT && step.name != null && !isSea(step.first())
             && (step.first() != step.last() || step.kind == Kind.BANK);
     }
 
@@ -3421,7 +3422,7 @@ public final class RouteFeature
             {
                 for (int dy = -1; dy <= 1; dy++)
                 {
-                    int q = Tiles.pack(Tiles.x(p) + dx, Tiles.y(p) + dy, Tiles.z(p));
+                    int q = Tiles.pack(x(p) + dx, y(p) + dy, z(p));
                     Long other = q == first ? null : fading.get(q);
                     // A passed arrow fades with its piece, pointing as it did: that piece goes its way round.
                     boolean arrow = arrowsTo.getOrDefault(p, -1) == q;
@@ -3487,8 +3488,8 @@ public final class RouteFeature
                 if (arrows && at != null && arrowAt(points, i))
                 {
                     var on = yourHouse.local(view, point);
-                    int dx = Tiles.x(points[i + 1]) - Tiles.x(point);
-                    int dy = Tiles.y(points[i + 1]) - Tiles.y(point);
+                    int dx = x(points[i + 1]) - x(point);
+                    int dy = y(points[i + 1]) - y(point);
                     heads.add(() -> arrow(g, on, dx, dy, plane));
                 }
             }
@@ -3506,8 +3507,8 @@ public final class RouteFeature
                 g.drawLine(a.getX(), a.getY(), b.getX(), b.getY());
                 if (piece[2] == 1)
                 {
-                    arrow(g, yourHouse.local(view, piece[0]), Tiles.x(piece[1]) - Tiles.x(piece[0]),
-                        Tiles.y(piece[1]) - Tiles.y(piece[0]), plane);
+                    arrow(g, yourHouse.local(view, piece[0]), x(piece[1]) - x(piece[0]),
+                        y(piece[1]) - y(piece[0]), plane);
                 }
             }
         });
@@ -3517,13 +3518,13 @@ public final class RouteFeature
     static boolean arrowAt(int[] points, int i)
     {
         return i + 1 < points.length && (points.length - 1 - i) % ARROW_EVERY == ARROW_EVERY / 2
-            && Tiles.distance(points[i], points[i + 1]) == 1 && Tiles.z(points[i]) == Tiles.z(points[i + 1]);
+            && Tiles.distance(points[i], points[i + 1]) == 1 && z(points[i]) == z(points[i + 1]);
     }
 
     /** A route tile's centre on the canvas: on this floor, within the extended scene; else null. */
     Point canvas(WorldView view, int point, int plane, int me)
     {
-        var local = Tiles.z(point) != plane || Tiles.distance(point, me) > Constants.EXTENDED_SCENE_SIZE ? null
+        var local = z(point) != plane || Tiles.distance(point, me) > Constants.EXTENDED_SCENE_SIZE ? null
             : yourHouse.local(view, point);
         return local == null ? null : Perspective.localToCanvas(client, local, plane);
     }
@@ -3585,7 +3586,7 @@ public final class RouteFeature
             int plane = view.getPlane();
             // The minimap shows 20 tiles around the player (Perspective.localToMinimap).
             eachTile(route, near(), 20, (point, color, strength) -> {
-                var local = Tiles.isSea(point) || Tiles.z(point) != plane ? null : yourHouse.local(view, point);
+                var local = isSea(point) || z(point) != plane ? null : yourHouse.local(view, point);
                 Point mini = local == null ? null : Perspective.localToMinimap(client, local);
                 if (mini != null)
                 {
@@ -3644,7 +3645,7 @@ public final class RouteFeature
             g.setStroke(new BasicStroke((float) max(0.5, min(8, tileWidth))));
             // No scene, also an expanded one, reaches further.
             eachTile(route, near(), Constants.EXTENDED_SCENE_SIZE, (point, color, strength) -> {
-                var local = Tiles.z(point) != plane ? null : yourHouse.local(view, point);
+                var local = z(point) != plane ? null : yourHouse.local(view, point);
                 Polygon tile = local == null ? null : tilePoly(view, local, plane);
                 if (tile != null)
                 {
@@ -3950,9 +3951,9 @@ public final class RouteFeature
                     return "Walk " + plural(step.points.length - 1, "tile")
                         + (step.doors > 0 ? " (" + plural(step.doors, "door") + ")" : "");
                 case SAIL:
-                    return "Sail about " + (step.points.length - 1) * Tiles.CELL + " tiles";
+                    return "Sail about " + (step.points.length - 1) * CELL + " tiles";
                 case STAIRS:
-                    return step.name + " to floor " + Tiles.z(step.last());
+                    return step.name + " to floor " + z(step.last());
                 case HOUSE:
                     if (step.name != null)
                     {
@@ -4083,7 +4084,7 @@ public final class RouteFeature
                 for (int i = 0; i < points.length; i++)
                 {
                     int node = points[i];
-                    boolean sea = Tiles.isSea(node);
+                    boolean sea = isSea(node);
                     var game = worldPoint(node);
                     var shown = sea ? game : p.shown(game);
                     at[3 * i] = !p.shows(game) ? Float.NaN : sea ? Tiles.x(node) : shown.getX() + 0.5f;
@@ -4103,17 +4104,17 @@ public final class RouteFeature
         {
             var game = worldPoint(node);
             // Where the map draws it: a part drawn elsewhere (the Kalphite Lair) there, on the floor drawn.
-            return p.shows(game) && (Tiles.isSea(node) || p.shown(game).getPlane() == p.plane());
+            return p.shows(game) && (isSea(node) || p.shown(game).getPlane() == p.plane());
         }
 
         static double x(Projection p, int node)
         {
-            return p.screenX(Tiles.isSea(node) ? Tiles.x(node) : p.shown(worldPoint(node)).getX() + 0.5);
+            return p.screenX(isSea(node) ? Tiles.x(node) : p.shown(worldPoint(node)).getX() + 0.5);
         }
 
         static double y(Projection p, int node)
         {
-            return p.screenY(Tiles.isSea(node) ? Tiles.y(node) : p.shown(worldPoint(node)).getY() + 0.5);
+            return p.screenY(isSea(node) ? Tiles.y(node) : p.shown(worldPoint(node)).getY() + 0.5);
         }
     }
 }

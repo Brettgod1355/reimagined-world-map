@@ -4,6 +4,7 @@ import static com.hdmapreforged.route.Tiles.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.stream.*;
 import java.util.zip.*;
 
 /**
@@ -23,7 +24,10 @@ public final class HousePlan
     public static final int DRAWN_Y = 3000;
     static final int TILES = SIZE * SIZE;
 
-    /** Per floor, per tile (x * SIZE + y): 1 walkable, 2 wall north, 4 wall east, 8 door north, 16 door east. */
+    /**
+     * Per floor, per tile (x * SIZE + y): 1 walkable, 2 wall north, 4 wall east, 8 door north, 16 door east, 32 part of
+     * a thing west of it, 64 part of a thing south of it.
+     */
     final byte[][] tiles;
     /** What stands where (by node): the portals, jewellery box, stairs and such, by their names in the game. */
     public final Map<Integer, String> things;
@@ -96,41 +100,42 @@ public final class HousePlan
     }
 
     /**
-     * Where one stands to use a thing: the nearest walkable tile within 3 steps of it, through the thing itself but
-     * not through a wall (a portal against a wall is used from its room, not the next); -1 none.
+     * Where one stands to use a thing: on it (a glory on a wall), else each free tile beside its tiles with no wall
+     * between (a portal against a wall is used from its room, not the next); the game walks to the first its search
+     * reaches ({@link GameWalk#path}). Its tiles east and north of the first are marked 32 and 64; empty none.
      */
-    public int approach(int node)
+    public int[] approach(int node)
     {
         int z = z(node);
-        int from = (x(node) - X) * SIZE + y(node) - Y;
-        var ring = List.of(from);
-        var seen = new HashSet<Integer>(ring);
-        for (int step = 0; step <= 3 && contains(node) && z >= 0 && z < 4; step++)
+        int x0 = x(node) - X;
+        int y0 = y(node) - Y;
+        if (!contains(node) || (tiles[z][x0 * SIZE + y0] & 1) != 0)
         {
-            var next = new ArrayList<Integer>();
-            int best = -1;
-            for (int i : ring)
-            {
-                // Of the nearest free tiles one with room beyond it: the front, not a gap behind (a box before a wall).
-                if ((tiles[z][i] & 1) != 0 && (best < 0 || !beyond(z, from, best) && beyond(z, from, i)))
-                {
-                    best = i;
-                }
-                for (int n : steps(tiles[z], i))
-                {
-                    if (n >= 0 && seen.add(n))
-                    {
-                        next.add(n);
-                    }
-                }
-            }
-            if (best >= 0)
-            {
-                return pack(X + best / SIZE, Y + best % SIZE, z);
-            }
-            ring = next;
+            return contains(node) ? new int[]{node} : new int[0];
         }
-        return -1;
+        int w = 1;
+        int h = 1;
+        while (x0 + w < SIZE && (tiles[z][(x0 + w) * SIZE + y0] & 32) != 0)
+        {
+            w++;
+        }
+        while (y0 + h < SIZE && (tiles[z][x0 * SIZE + y0 + h] & 64) != 0)
+        {
+            h++;
+        }
+        var sides = IntStream.builder();
+        for (int i = 0; i < w * h; i++)
+        {
+            int at = (x0 + i / h) * SIZE + y0 + i % h;
+            for (int n : steps(tiles[z], at))
+            {
+                if (n >= 0 && (tiles[z][n] & 1) != 0)
+                {
+                    sides.add(pack(X + n / SIZE, Y + n % SIZE, z));
+                }
+            }
+        }
+        return sides.build().toArray();
     }
 
     /**
@@ -143,17 +148,6 @@ public final class HousePlan
         int y = i % SIZE;
         return new int[]{y < SIZE - 1 && (floor[i] & 2) == 0 ? i + 1 : -1, x < SIZE - 1 && (floor[i] & 4) == 0 ? i + SIZE
             : -1, y > 0 && (floor[i - 1] & 2) == 0 ? i - 1 : -1, x > 0 && (floor[i - SIZE] & 4) == 0 ? i - SIZE : -1};
-    }
-
-    /** Whether one can step on from {@code i}, away from {@code from} straight (north, east, south or west). */
-    boolean beyond(int z, int from, int i)
-    {
-        int dx = Integer.signum(i / SIZE - from / SIZE);
-        int dy = Integer.signum(i % SIZE - from % SIZE);
-        int j = i + dx * SIZE + dy;
-        boolean edge = i / SIZE + dx < 0 || i / SIZE + dx >= SIZE || i % SIZE + dy < 0 || i % SIZE + dy >= SIZE;
-        return (dx == 0) != (dy == 0) && !edge && (tiles[z][j] & 1) != 0
-            && (tiles[z][dy > 0 || dx > 0 ? i : j] & (dy != 0 ? 2 : 4)) == 0;
     }
 
     public static int node(int sceneX, int sceneY, int plane)

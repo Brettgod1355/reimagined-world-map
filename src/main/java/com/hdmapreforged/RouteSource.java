@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import static com.hdmapreforged.route.Tiles.*;
 import static java.util.Locale.ROOT;
 import static com.hdmapreforged.PoiType.*;
 import static com.hdmapreforged.RouteFeature.pack;
@@ -106,7 +107,7 @@ final class RouteSource
     RouteRequest request(int start, int target, List<Poi> pois, Unlocks unlocks, PlayerState state, Options options,
         int nodeLimit)
     {
-        if (options.sailing && !options.sailToLand && !Tiles.isSea(target) && !(start >= 0 && Tiles.isSea(start)))
+        if (options.sailing && !options.sailToLand && !isSea(target) && !(start >= 0 && isSea(start)))
         {
             // A place on land: walk; the boat only when walking does not get there.
             var walking = request(start, target, pois, unlocks, state, options.withSailing(false).withSailToLand(false),
@@ -154,7 +155,7 @@ final class RouteSource
             {
                 if (options.sailing)
                 {
-                    mooring(call, poi, unlocks, state, options, start >= 0 && Tiles.isSea(start), edges);
+                    mooring(call, poi, unlocks, state, options, start >= 0 && isSea(start), edges);
                 }
             }
             else if (isTransport(poi.type))
@@ -188,7 +189,7 @@ final class RouteSource
         }
         if (state.inHouse || options.teleports)
         {
-            house(call, pois, unlocks, state, teleportsByName, startEdges, edges);
+            house(call, pois, unlocks, state, teleportsByName, start, startEdges, edges);
         }
         if (!call.avoiding.isEmpty())
         {
@@ -207,7 +208,7 @@ final class RouteSource
             return null;
         }
         int level = options.sailing && state.sailing ? state.sailingLevel : -1;
-        if (start >= 0 && Tiles.isSea(start) && level < 0)
+        if (start >= 0 && isSea(start) && level < 0)
         {
             // On a boat without the Sailing data: still let the route sail home.
             level = Math.max(1, state.sailingLevel);
@@ -303,8 +304,8 @@ final class RouteSource
         var banks = new LinkedHashMap<Integer, List<Integer>>();
         for (var cells : Pathfinder.rows("/com/hdmapreforged/route/banks.tsv"))
         {
-            int icon = cells.length < 2 ? -1 : Tiles.parse(cells[0]);
-            int stand = icon < 0 ? -1 : Tiles.parse(cells[1]);
+            int icon = cells.length < 2 ? -1 : parse(cells[0]);
+            int stand = icon < 0 ? -1 : parse(cells[1]);
             if (stand >= 0)
             {
                 banks.computeIfAbsent(icon, k -> new ArrayList<>()).add(stand);
@@ -320,8 +321,8 @@ final class RouteSource
         var booths = new HashMap<Integer, Integer>();
         for (var cells : Pathfinder.rows("/com/hdmapreforged/route/banks.tsv"))
         {
-            int stand = cells.length < 5 ? -1 : Tiles.parse(cells[1]);
-            int booth = stand < 0 ? -1 : Tiles.parse(cells[4]);
+            int stand = cells.length < 5 ? -1 : parse(cells[1]);
+            int booth = stand < 0 ? -1 : parse(cells[4]);
             if (booth >= 0)
             {
                 booths.putIfAbsent(stand, booth);
@@ -427,10 +428,10 @@ final class RouteSource
     {
         for (var passage : SEA_PASSAGES.get())
         {
-            int from = Tiles.seaAt(passage.fromX, passage.fromY);
-            int to = Tiles.seaAt(passage.toX, passage.toY);
-            if (usable(unlocks, passage.needs) && sea.sailable(Tiles.cellX(from), Tiles.cellY(from), state.sailingLevel)
-                && sea.sailable(Tiles.cellX(to), Tiles.cellY(to), state.sailingLevel))
+            int from = seaAt(passage.fromX, passage.fromY);
+            int to = seaAt(passage.toX, passage.toY);
+            if (usable(unlocks, passage.needs) && sea.sailable(cellX(from), cellY(from), state.sailingLevel)
+                && sea.sailable(cellX(to), cellY(to), state.sailingLevel))
             {
                 // What it needs, and what the step should say besides (the boat's kind).
                 String needs = detail(call, unlocks, null, passage.needs);
@@ -510,7 +511,7 @@ final class RouteSource
         int to = snap(member.location);
         // Outside one's own house only (a friend's house tells nothing of it).
         if (to < 0 || member.name.contains("(Outside)") && (state.houseExit < 0 || state.inHouse && !state.ownHouse
-            || Tiles.distance(to, state.houseExit) > PORT_RADIUS))
+            || distance(to, state.houseExit) > PORT_RADIUS))
         {
             return;
         }
@@ -759,7 +760,7 @@ final class RouteSource
         int cost = 10;
         String summon = Arrays.stream(state.boatFocus).anyMatch(focus -> focus >= 1)
             ? boatSpell(unlocks, state, SUMMON_BOAT, "31441", "Summon boat tablet") : null;
-        if (Arrays.stream(state.boats).anyMatch(boat -> Tiles.distance(boat, land) <= BOAT_REACH))
+        if (Arrays.stream(state.boats).anyMatch(boat -> distance(boat, land) <= BOAT_REACH))
         {
             name += dockLevel(poi);
         }
@@ -769,13 +770,13 @@ final class RouteSource
             hint = summon;
             cost = 16;
         }
-        else if (Arrays.stream(options.shipwrights).anyMatch(s -> Tiles.distance(s, land) <= SHIPWRIGHT_REACH))
+        else if (Arrays.stream(options.shipwrights).anyMatch(s -> distance(s, land) <= SHIPWRIGHT_REACH))
         {
             hint = "Ask the shipwright here to bring your boat (fee)";
             cost = 60;
         }
         else if (state.boats.length == 0 && !onBoat
-            && Arrays.stream(PORTS.get()).anyMatch(port -> Tiles.distance(port, land) <= SHIPWRIGHT_REACH))
+            && Arrays.stream(PORTS.get()).anyMatch(port -> distance(port, land) <= SHIPWRIGHT_REACH))
         {
             // Where the boat lies is not known yet (not logged in): a port, where it may lie; not any dock.
             hint = "If your boat is moored here (a shipwright can bring it)";
@@ -815,7 +816,7 @@ final class RouteSource
         for (int i = 0; means != null && i < state.boats.length; i++)
         {
             int land = state.boatFocus[i] < 2 ? -1
-                : map.nearestWalkable(Tiles.x(state.boats[i]), Tiles.y(state.boats[i]), 0, 12);
+                : map.nearestWalkable(x(state.boats[i]), y(state.boats[i]), 0, 12);
             if (land >= 0)
             {
                 into.add(new Edge(Edge.ANYWHERE, land, Edge.Kind.TELEPORT, "Teleport to Boat", means, 10));
@@ -862,13 +863,13 @@ final class RouteSource
      * teleport in to its arrival; else, in the house, the route starts with them, and from outside a teleport in or
      * its portal leads to them at once.
      */
-    void house(Call call, List<Poi> pois, Unlocks unlocks, PlayerState state, Map<String, Poi> teleports,
+    void house(Call call, List<Poi> pois, Unlocks unlocks, PlayerState state, Map<String, Poi> teleports, int start,
         List<Edge> starts, List<Edge> edges)
     {
         var plan = state.inHouse && !state.ownHouse ? null : map.house();
         var into = new ArrayList<Edge>();
         var portal = state.houseExit < 0 ? null
-            : new WorldPoint(Tiles.x(state.houseExit), Tiles.y(state.houseExit), 0);
+            : new WorldPoint(x(state.houseExit), y(state.houseExit), 0);
         if (state.inHouse && portal != null && (plan == null || !plan.things.containsValue("Portal")))
         {
             addHouse(into, portal, "Leave the house by its portal", 6, null);
@@ -876,10 +877,13 @@ final class RouteSource
         var placed = new HashSet<String>();
         if (plan != null)
         {
+            // Where one clicks a thing from: where one stands in the house, else where one lands in it.
+            int from = HousePlan.contains(start) ? start : plan.arrival;
             plan.things.forEach((node, name) -> {
-                // One leaves where one came in, by the portal; another garden's exit portal from beside it.
-                int at = name.equals("Portal") && Tiles.distance(node, plan.arrival) <= 3 ? plan.arrival
-                    : plan.approach(node);
+                // The side the game walks to as it is clicked (on another floor each side: the route takes the nearest).
+                int[] at = plan.approach(node);
+                int[] walk = GameWalk.path(map, from, at);
+                at = walk == null ? at : new int[]{walk[walk.length - 1]};
                 var out = new ArrayList<Edge>();
                 List<String> features = name.startsWith(NEXUS + ": ") ? Arrays.stream(name.substring(NEXUS.length() + 2)
                     .split(", ")).map(place -> "nexus:" + place).collect(Collectors.toList())
@@ -893,7 +897,7 @@ final class RouteSource
                 // Each of several alike (two spirit trees) from where it stands: the route takes the nearest.
                 for (String feature : features)
                 {
-                    if (feature != null && at >= 0 && HouseSettings.has(state.houseFeatures, feature))
+                    if (feature != null && at.length > 0 && HouseSettings.has(state.houseFeatures, feature))
                     {
                         placed.add(feature);
                         ways(call, feature, pois, unlocks, state, teleports, out);
@@ -905,20 +909,20 @@ final class RouteSource
                 }
                 for (int dz = -1; stairs(name) && dz <= 1; dz += 2)
                 {
-                    int other = Tiles.z(node) + dz;
+                    int other = z(node) + dz;
                     // Only to a floor with stairs where these stand: they go up or down, seldom both.
-                    if (plan.things.entrySet().stream().anyMatch(t -> Tiles.z(t.getKey()) == other
-                        && Tiles.distance(t.getKey(), node) <= 3 && stairs(t.getValue())))
+                    if (plan.things.entrySet().stream().anyMatch(t -> z(t.getKey()) == other
+                        && distance(t.getKey(), node) <= 3 && stairs(t.getValue())))
                     {
-                        out.add(new Edge(Edge.ANYWHERE, map.nearestWalkable(Tiles.x(node), Tiles.y(node), other, 3),
+                        out.add(new Edge(Edge.ANYWHERE, map.nearestWalkable(x(node), y(node), other, 3),
                             Edge.Kind.STAIRS, name, null, 5));
                     }
                 }
                 for (Edge e : out)
                 {
-                    if (at >= 0 && e.to >= 0)
+                    for (int side : e.to >= 0 ? at : new int[0])
                     {
-                        edges.add(e.withFrom(at));
+                        edges.add(e.withFrom(side));
                     }
                 }
             });

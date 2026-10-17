@@ -143,11 +143,14 @@ public final class RouteController
 
     /**
      * The player went into or out of the house: the ways from here are others (its portal, box and fairy ring first), so
-     * any search runs again from here at once, without the waits of a stray.
+     * any search runs again from here at once, without the waits of a stray; only the route's own next jump from
+     * where one was (its teleport into the house, its fairy ring out), landed where it lands, keeps the route.
      */
-    public void placeChanged()
+    public void placeChanged(int player)
     {
-        if (target >= 0)
+        var next = route == null || running != null ? null
+            : route.ahead(lastPlayer).steps.stream().filter(Route.Step::isJump).findFirst().orElse(null);
+        if (target >= 0 && (next == null || player < 0 || !near(player, next.last(), STRAY)))
         {
             freshWaits();
             start(true);
