@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import static com.hdmapreforged.FriendsWidget.*;
 import static com.hdmapreforged.SearchResults.*;
 import static net.runelite.client.ui.ColorScheme.*;
 
@@ -22,7 +23,7 @@ final class MapPanel extends PluginPanel
     {
         boolean inGroup();
 
-        List<FriendsWidget.Row> rows();
+        List<Row> rows();
 
         /** The world the player is on, or 0. */
         int world();
@@ -30,12 +31,15 @@ final class MapPanel extends PluginPanel
         /** What a member last shared, or null. */
         PartyMapMembers.Gear gear(long id);
 
-        FriendsWidget.Images images();
+        Images images();
 
         boolean canRejoin();
 
         /** Rejoins the last party. */
         void join(Component from);
+
+        /** Has the maps follow a member. */
+        void follow(long id);
     }
 
     /** Text width inside the sidebar's padding. */
@@ -91,11 +95,16 @@ final class MapPanel extends PluginPanel
         top.add(content, BorderLayout.NORTH);
         add(MapScreen.scroll(top), BorderLayout.CENTER);
 
-        // Shown (its tab picked, the sidebar opened): a route that waited is built now.
+        // Shown (its tab picked, the sidebar opened): a route that waited is built now, and the party as it is (joined
+        // in RuneLite's Party panel meanwhile), not as it was when hidden.
         addHierarchyListener(e -> {
             if (waitingRoute != null && isShowing())
             {
                 showRoute(waitingRoute);
+            }
+            if (isShowing())
+            {
+                refreshFriends();
             }
         });
         showRoute(null);
@@ -207,13 +216,13 @@ final class MapPanel extends PluginPanel
             return;
         }
         boolean in = friends.inGroup();
-        List<FriendsWidget.Row> rows = in ? friends.rows() : Collections.emptyList();
+        List<Row> rows = in ? friends.rows() : Collections.emptyList();
         boolean rejoin = !in && friends.canRejoin();
         StringBuilder key = new StringBuilder(in ? "in" : rejoin ? "out, rejoin" : "out");
         String[] places = new String[rows.size()];
         for (int i = 0; i < rows.size(); i++)
         {
-            FriendsWidget.Row row = rows.get(i);
+            Row row = rows.get(i);
             places[i] = row.point == null ? null : placeName.apply(row.point);
             key.append('|').append(row.name).append(',').append(row.world).append(',').append(places[i]);
             if (row.id == openFriend)
@@ -237,7 +246,7 @@ final class MapPanel extends PluginPanel
                 friendsHolder.add(capped(join));
                 friendsHolder.add(Box.createVerticalStrut(4));
             }
-            friendsHolder.add(text("Not in a party. In one (RuneLite's Party panel), your friends show here: where "
+            friendsHolder.add(text("Not in a party. In one (RuneLite's Party panel), its members show here: where "
                 + "they are and what they carry."));
         }
         else if (rows.isEmpty())
@@ -247,7 +256,7 @@ final class MapPanel extends PluginPanel
         int me = friends.world();
         for (int i = 0; i < rows.size(); i++)
         {
-            FriendsWidget.Row row = rows.get(i);
+            Row row = rows.get(i);
             String where = row.point == null ? "Not sharing where they are"
                 : (row.world > 0 && row.world != me ? "World " + row.world + ", " : "")
                     + (places[i] != null ? places[i] : "on the map");
@@ -272,7 +281,7 @@ final class MapPanel extends PluginPanel
         refreshFriends();
     }
 
-    JComponent friend(FriendsWidget.Row row, String where)
+    JComponent friend(Row row, String where)
     {
         return entry(row.name, where, row.color != null ? row.color : MEDIUM_GRAY_COLOR,
             row.id == openFriend ? "Close" : "What " + row.name + " carries, wears and can do", () -> {
@@ -282,12 +291,15 @@ final class MapPanel extends PluginPanel
     }
 
     /** A member's details: an on-map button and their world, their orbs and one page of what they share. */
-    JComponent details(FriendsWidget.Row row, int me)
+    JComponent details(Row row, int me)
     {
         JPanel box = column();
         box.setBorder(BorderFactory.createEmptyBorder(0, 6, 8, 0));
         JPanel actions = new JPanel(new GridLayout(1, 2, 4, 0));
-        JButton show = tip(button("On map", () -> showOnMap.accept(row.point)), "Open the map where they are");
+        JButton show = tip(button("On map", () -> {
+            showOnMap.accept(row.point);
+            friends.follow(row.id);
+        }), "Open the map where they are");
         show.setEnabled(row.point != null);
         actions.add(show);
         if (row.world > 0 && me > 0 && row.world != me)
@@ -306,7 +318,7 @@ final class MapPanel extends PluginPanel
         }
         var images = friends.images();
         JPanel status = new JPanel(new GridLayout(2, 2, 4, 4));
-        int[][] orbs = FriendsWidget.orbs(shared);
+        int[][] orbs = orbs(shared);
         for (int k = 0; k < 4; k++)
         {
             status.add(orb(Orbs.Kind.values()[k], orbs[k][0], orbs[k][1], images));
@@ -314,13 +326,13 @@ final class MapPanel extends PluginPanel
         box.add(fitted(status));
         box.add(Box.createVerticalStrut(6));
         JPanel pages = new JPanel(new GridLayout(1, 3, 4, 0));
-        for (int k = 0; k < FriendsWidget.PAGES.length; k++)
+        for (int k = 0; k < PAGES.length; k++)
         {
             int page = k;
-            JButton tab = tip(button(FriendsWidget.PAGES[k], () -> {
+            JButton tab = tip(button(PAGES[k], () -> {
                 friendPage = page;
                 rebuildFriends();
-            }), FriendsWidget.PAGES[k]);
+            }), PAGES[k]);
             tab.setEnabled(k != friendPage);
             tab.setMargin(new Insets(2, 1, 2, 1));
             pages.add(tab);
@@ -340,9 +352,9 @@ final class MapPanel extends PluginPanel
         {
             grid = new JPanel(new GridLayout(5, 3, 2, 2));
             JComponent[] cells = new JComponent[15];
-            for (int k = 0; k < FriendsWidget.WORN.length; k++)
+            for (int k = 0; k < WORN.length; k++)
             {
-                var at = FriendsWidget.WORN[k];
+                var at = WORN[k];
                 if (at != null)
                 {
                     cells[at[1] * 3 + at[0]] = item(images, shared.equipment[k], 1);
@@ -359,9 +371,9 @@ final class MapPanel extends PluginPanel
             for (int k = 0; k < Math.min(HdMapPartyGear.SKILLS, Skill.values().length); k++)
             {
                 BufferedImage icon = images.skill(k);
-                JLabel skill = new JLabel(FriendsWidget.level(shared.boosted[k], shared.levels[k]),
+                JLabel skill = new JLabel(level(shared.boosted[k], shared.levels[k]),
                     icon == null ? null : new ImageIcon(icon), JLabel.LEFT);
-                skill.setForeground(FriendsWidget.levelColor(shared.boosted[k], shared.levels[k]));
+                skill.setForeground(levelColor(shared.boosted[k], shared.levels[k]));
                 skill.setToolTipText(Skill.values()[k].getName());
                 grid.add(skill);
             }
@@ -370,7 +382,7 @@ final class MapPanel extends PluginPanel
         return box;
     }
 
-    static JComponent item(FriendsWidget.Images images, int id, int quantity)
+    static JComponent item(Images images, int id, int quantity)
     {
         BufferedImage picture = id < 0 ? null : images.item(id, Math.max(1, quantity));
         JLabel label = new JLabel(picture == null ? null : new ImageIcon(picture));
@@ -379,7 +391,7 @@ final class MapPanel extends PluginPanel
         return label;
     }
 
-    static JComponent orb(Orbs.Kind kind, int value, int max, FriendsWidget.Images pictures)
+    static JComponent orb(Orbs.Kind kind, int value, int max, Images pictures)
     {
         JComponent orb = new JComponent()
         {
@@ -421,16 +433,9 @@ final class MapPanel extends PluginPanel
         line.add(texts, BorderLayout.CENTER);
         if (action != null)
         {
-            line.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            line.setToolTipText(tip);
+            clickableRow(line, action).setToolTipText(tip);
             line.addMouseListener(new MouseAdapter()
             {
-                @Override
-                public void mouseClicked(MouseEvent e)
-                {
-                    action.run();
-                }
-
                 @Override
                 public void mouseEntered(MouseEvent e)
                 {

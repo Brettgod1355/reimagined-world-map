@@ -58,14 +58,7 @@ final class HouseSettings
 
     static String box(Set<String> features)
     {
-        for (int i = BOXES.length - 1; i > 0; i--)
-        {
-            if (features.contains("box:" + BOXES[i]))
-            {
-                return BOXES[i];
-            }
-        }
-        return BOXES[0];
+        return BOXES[last(features, "box:", BOXES)];
     }
 
     static void add(Set<String> features, String prefix, String places)
@@ -82,9 +75,15 @@ final class HouseSettings
     /** Which of {@link #GARDENS}. */
     static int garden(Set<String> features)
     {
-        for (int i = GARDENS.length - 1; i > 0; i--)
+        return last(features, "", GARDENS);
+    }
+
+    /** The last of {@code choices} after the first (none) that the features have, with {@code prefix}; else 0. */
+    static int last(Set<String> features, String prefix, String[] choices)
+    {
+        for (int i = choices.length - 1; i > 0; i--)
         {
-            if (features.contains(GARDENS[i]))
+            if (features.contains(prefix + choices[i]))
             {
                 return i;
             }

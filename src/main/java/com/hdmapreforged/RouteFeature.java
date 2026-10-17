@@ -76,7 +76,7 @@ public final class RouteFeature
     static final Color WALK = new Color(255, 233, 28);
     static final Color JUMP = new Color(190, 120, 255);
     static final Set<String> LOOK_KEYS = Set.of("routeColor", "routeJumpColor", "routeTileFill",
-        "routeTileBorder", "routeTileWidth", "routeMinimap", "routeInGame", "routeHdTiles", "routeClearOnArrival",
+        "routeTileBorder", "routeTileWidth", "routeMinimap", "routeClearOnArrival",
         "routeFollowPlugins", "routeStyle", "routeLineWidth");
 
     static final Color[] LEG_COLORS = {
@@ -132,15 +132,14 @@ public final class RouteFeature
      */
     WorldPoint markerPoint(int point)
     {
+        var view = client.getTopLevelWorldView();
         if (!HousePlan.contains(point))
         {
             // In an instance copying a place: the template's tile, which HD World Markers finds in the instance.
-            var scene = client.getTopLevelWorldView();
-            var template = scene != null && scene.isInstance()
+            var template = view != null && view.isInstance()
                 ? InstanceCopies.template(Tiles.x(point), Tiles.y(point), Tiles.z(point)) : null;
             return template != null ? new WorldPoint(template[0], template[1], template[2]) : worldPoint(point);
         }
-        var view = client.getTopLevelWorldView();
         var local = view == null || !house.own() ? null : yourHouse.local(view, point);
         return local == null ? null : WorldPoint.fromLocal(view, local.getX(), local.getY(), Tiles.z(point));
     }
@@ -218,12 +217,15 @@ public final class RouteFeature
     volatile PlayerState state = PlayerState.UNKNOWN;
     /** A tile, a sea block, -1 in the house, -2 unknown. Written on the client thread. */
     volatile int start = -2;
+    /** The route ahead now, or null; {@link #drawn}: of it what the game shows (up to its next teleport). */
     volatile Route shown;
+    volatile Route drawn;
 
-    /** The route drawn now, or null. */
-    Route shownRoute()
+    void show(Route route)
     {
-        return shown;
+        // The same cut while the route stays: HD World Markers is sent its tiles again only for another.
+        drawn = route == null ? null : route == shown && drawn != null ? drawn : route.untilTeleport();
+        shown = route;
     }
     boolean bringUp;
     Boolean pandemonium;
@@ -246,6 +248,17 @@ public final class RouteFeature
         return config.routePlanner() == HdMapReforgedConfig.RoutePlanner.SHORTEST_PATH;
     }
 
+    /** Path style Lines, or Lines with arrows: the walks are drawn as lines through the tiles. */
+    boolean lines()
+    {
+        return config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES;
+    }
+
+    boolean arrows()
+    {
+        return config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS;
+    }
+
     boolean shortestPathOn()
     {
         return shortestPathName() != null;
@@ -260,14 +273,9 @@ public final class RouteFeature
     /** The first of these plugins that is on, or null. */
     String pluginOn(List<String> names)
     {
-        for (Plugin plugin : pluginManager.getPlugins())
-        {
-            if (names.contains(plugin.getName()) && pluginManager.isPluginEnabled(plugin))
-            {
-                return plugin.getName();
-            }
-        }
-        return null;
+        return pluginManager.getPlugins().stream()
+            .filter(p -> names.contains(p.getName()) && pluginManager.isPluginEnabled(p)).map(Plugin::getName).findFirst()
+            .orElse(null);
     }
 
     /** Client thread. */
@@ -369,7 +377,8 @@ public final class RouteFeature
     @Subscribe
     public void onClientTick(ClientTick event)
     {
-        if (hdTiles && fadeSteps(fading, appearing, System.currentTimeMillis()) != sentFade)
+        // Also a new cut of the route (a teleport taken: the tick's send ran before it), at the next frame.
+        if (hdTiles && (drawn != sentAhead || fadeSteps(fading, appearing, System.currentTimeMillis()) != sentFade))
         {
             updateHdTiles(sentFrom);
         }
@@ -417,7 +426,7 @@ public final class RouteFeature
             hdHome = home;
             lastHdTilesCheck = ticks;
             // Also in one's house: its tiles go as the scene's own instance tiles (markerPoint).
-            boolean on = config.routeHdTiles() && config.routeInGame() && pluginOn(List.of(TileMarkersBridge.PLUGIN_NAME)) != null;
+            boolean on = pluginOn(List.of(TileMarkersBridge.PLUGIN_NAME)) != null;
             if (!on && hdTiles)
             {
                 eventBus.post(TileMarkersBridge.clear());
@@ -431,7 +440,7 @@ public final class RouteFeature
         {
             return;
         }
-        Route route = shown;
+        Route route = drawn;
         // Moved far, or the position became known or unknown; not every tick while it stays unknown (the house).
         boolean moved = player != sentFrom && (player < 0 || sentFrom < 0 || Tiles.distance(player, sentFrom) > 16);
         // The scene loaded again (a teleport in, building mode): the house's instance tiles lie elsewhere now.
@@ -466,11 +475,11 @@ public final class RouteFeature
         tileFill = config.routeTileFill();
         tileWidth = (int) max(1, round(config.routeTileWidth()));
         // As a line: the walks go as lines, the tiles keep only the teleports' named tiles.
-        boolean asLines = config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES;
+        boolean asLines = lines();
         var lines = new ArrayList<List<WorldPoint>>();
         var lineColors = new ArrayList<Color>();
         var lineArrows = new ArrayList<Integer>();
-        int every = config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS ? ARROW_EVERY : 0;
+        int every = arrows() ? ARROW_EVERY : 0;
         if (asLines)
         {
             eachLine(route, (points, color) -> {
@@ -493,10 +502,7 @@ public final class RouteFeature
                     }
                 }
             });
-        }
-        // The pieces fading behind the player: an arrow passed keeps its own (one on its first tile).
-        if (asLines)
-        {
+            // The pieces fading behind the player: an arrow passed keeps its own (one on its first tile).
             Color walked = current();
             eachFadingPiece(route, now, (piece, alpha) -> {
                 var a = markerPoint(piece[0]);
@@ -521,7 +527,8 @@ public final class RouteFeature
         for (int index = 0; index < steps.size(); index++)
         {
             Step step = steps.get(index);
-            Color color = blocked >= 0 && index >= blocked ? CANNOT : current();
+            boolean cannot = blocked >= 0 && index >= blocked;
+            Color color = cannot ? CANNOT : current();
             if (step.kind == Kind.WALK)
             {
                 for (int point : asLines ? new int[0] : step.points)
@@ -533,18 +540,14 @@ public final class RouteFeature
                     }
                 }
             }
-            else if (step.isJump() && step.name != null && !Tiles.isSea(step.first())
-                && (step.first() != step.last() || step.kind == Kind.BANK))
+            else if (onItsTile(step))
             {
-                int at = step.first();
-                if (reach(at, player))
+                int at = namedAt(step);
+                var marked = reach(at, player) ? markerPoint(at) : null;
+                if (marked != null)
                 {
-                    var marked = markerPoint(at);
-                    if (marked != null)
-                    {
-                        tiles.add(new TileMarkersBridge.Tile(marked,
-                            blocked >= 0 && index >= blocked ? CANNOT : jump(), RouteText.said(route, step, false)));
-                    }
+                    tiles.add(new TileMarkersBridge.Tile(marked, cannot ? CANNOT : jump(),
+                        RouteText.said(whole(route), step, false)));
                 }
             }
         }
@@ -562,16 +565,12 @@ public final class RouteFeature
         for (int i = asLines ? -1 : later.size() - 1; i >= 0; i--)
         {
             Color color = legColor(later.get(i).getKey());
-            for (Step step : later.get(i).getValue().steps)
-            {
-                for (int point : step.kind == Kind.WALK ? step.points : new int[0])
+            eachWalked(later.get(i).getValue(), point -> {
+                if (reach(point, player) && taken.add(point))
                 {
-                    if (reach(point, player) && taken.add(point))
-                    {
-                        tiles.add(hdTile(point, 1, color));
-                    }
+                    tiles.add(hdTile(point, 1, color));
                 }
-            }
+            });
         }
         tiles.removeIf(Objects::isNull);
         eventBus.post(TileMarkersBridge.tiles(tiles));
@@ -705,13 +704,9 @@ public final class RouteFeature
     volatile List<int[]> spWalks = List.of();
     final AtomicInteger spAsked = new AtomicInteger();
 
-    /** Where our planner filled in what Shortest Path's route could not be walked, shown in the game; null none. */
-    volatile Route spFilled;
-
     /**
      * From the player to its first transport, between its transports, from the last to its target: walking only (no
-     * shortcut or transport of ours), as its own path walks between the transports it takes; planned by ours across
-     * transports it gives off the map (setting).
+     * shortcut or transport of ours), as its own path walks between the transports it takes.
      */
     void walkShortestPath(List<ShortestPathBridge.Jump> jumps, WorldPoint target)
     {
@@ -725,33 +720,22 @@ public final class RouteFeature
             return;
         }
         // From where our planner has the player: in one's house, on its plan.
-        var legs = legs(start >= 0 ? start : pack(from), jumps, pack(target), map, config.routeFillGaps());
+        var legs = legs(start >= 0 ? start : pack(from), jumps, pack(target), map);
         work.execute(() -> {
             var walks = new ArrayList<int[]>();
-            var filled = new ArrayList<Step>();
             for (var leg : legs)
             {
                 if (asked != spAsked.get())
                 {
                     break;
                 }
-                // Walking only; across a transport left out, planned by ours (null while its data loads).
-                var request = leg.planned ? request(leg.from, leg.to, false) : new RouteRequest(leg.from, leg.to,
-                    List.of(), List.of(), 1, true, RouteRequest.DEFAULT_NODE_LIMIT);
-                if (request == null)
-                {
-                    continue;
-                }
                 try
                 {
-                    var way = pf.find(request, () -> asked != spAsked.get());
+                    var way = pf.find(new RouteRequest(leg[0], leg[1], List.of(), List.of(), 1, true,
+                        RouteRequest.DEFAULT_NODE_LIMIT), () -> asked != spAsked.get());
                     if (way.outcome == FOUND)
                     {
                         way.steps.stream().filter(s -> s.kind == Kind.WALK).forEach(s -> walks.add(s.points));
-                        if (leg.planned)
-                        {
-                            filled.addAll(offItsMap(way.steps));
-                        }
                     }
                 }
                 catch (RuntimeException e)
@@ -762,30 +746,18 @@ public final class RouteFeature
             if (asked == spAsked.get())
             {
                 spWalks = walks;
-                int end = filled.isEmpty() ? -1 : filled.get(filled.size() - 1).last();
-                spFilled = end < 0 ? null : new Route(FOUND, filled, 0, end, end, false, false, 0);
                 invokeLater(this::repaint);
             }
         });
     }
 
-    /** A stretch of Shortest Path's route: walked, or planned by ours where it left a transport out. */
-    @RequiredArgsConstructor
-    static final class Leg
-    {
-        final int from;
-        final int to;
-        final boolean planned;
-    }
-
     /**
-     * Its route's stretches between its transports. A transport with an end off the map (its stand-in for one's house,
-     * a tile of an instance) is left out, and the stretch across it planned by ours, which knows one's house; with
-     * {@code fill} off, that stretch is left out too.
+     * Its route's stretches between its transports, each {from, to}. Across a transport with an end off the map (its
+     * stand-in for one's house, a tile of an instance) nothing is walked: Shortest Path draws that part itself.
      */
-    static List<Leg> legs(int from, List<ShortestPathBridge.Jump> jumps, int target, RouteSource map, boolean fill)
+    static List<int[]> legs(int from, List<ShortestPathBridge.Jump> jumps, int target, RouteSource map)
     {
-        var legs = new ArrayList<Leg>();
+        var legs = new ArrayList<int[]>();
         boolean leftOut = false;
         for (var j : jumps)
         {
@@ -796,35 +768,18 @@ public final class RouteFeature
                 leftOut = true;
                 continue;
             }
-            if (fill || !leftOut)
+            if (!leftOut)
             {
-                legs.add(new Leg(from, origin, leftOut));
+                legs.add(new int[]{from, origin});
             }
             from = landing;
             leftOut = false;
         }
-        if (fill || !leftOut)
+        if (!leftOut)
         {
-            legs.add(new Leg(from, target, leftOut));
+            legs.add(new int[]{from, target});
         }
         return legs;
-    }
-
-    /**
-     * Of a stretch planned by ours, the steps up to leaving ground it has no map for (one's house plan): the rest it
-     * draws in the game itself.
-     */
-    static List<Step> offItsMap(List<Step> steps)
-    {
-        int last = -1;
-        for (int i = 0; i < steps.size(); i++)
-        {
-            if (Arrays.stream(steps.get(i).points).anyMatch(point -> !Tiles.isSea(point) && HousePlan.contains(point)))
-            {
-                last = i;
-            }
-        }
-        return steps.subList(0, last + 1);
     }
 
     /**
@@ -834,33 +789,6 @@ public final class RouteFeature
     static int place(RouteSource map, WorldPoint point)
     {
         return HousePlan.contains(point.getX(), point.getY()) ? -1 : map.snap(point);
-    }
-
-    /** The filled-in route's cut last shown, and the route it was cut from. Swing. */
-    Route filledOf;
-    Route filledAhead;
-
-    /** Swing: what the game shows: our route, or with Shortest Path's what our planner filled in of it, still ahead. */
-    Route inGame(Route ours)
-    {
-        if (!config.routeInGame())
-        {
-            return null;
-        }
-        var filled = spFilled;
-        if (ours != null || filled == null)
-        {
-            return ours;
-        }
-        var now = filled.ahead(start);
-        // The same cut as last tick: kept, so HD World Markers is not sent the tiles again.
-        if (filled == filledOf && sameCut(now, filledAhead))
-        {
-            now = filledAhead;
-        }
-        filledOf = filled;
-        filledAhead = now;
-        return now;
     }
 
     /** As many steps left, and as many points left of the first: the same cut of a route as before. */
@@ -953,11 +881,6 @@ public final class RouteFeature
         return panel;
     }
 
-    void handOver(WorldPoint target)
-    {
-        handOver(target, ShortestPathBridge.path(target, Map.of()), true);
-    }
-
     /** Any thread: Shortest Path is sent {@code ask}, and its route to {@code target} is drawn. */
     void handOver(WorldPoint target, PluginMessage ask, boolean up)
     {
@@ -974,7 +897,7 @@ public final class RouteFeature
         boolean planner = shortestPathPlanner();
         if (planner || shortestPathOn())
         {
-            handOver(target);
+            handOver(target, ShortestPathBridge.path(target, Map.of()), true);
         }
         return planner;
     }
@@ -997,7 +920,6 @@ public final class RouteFeature
         handedOver = null;
         spJumps = List.of();
         spWalks = List.of();
-        spFilled = null;
         spAsked.incrementAndGet();
     }
 
@@ -1146,7 +1068,7 @@ public final class RouteFeature
         searches = null;
         background = null;
         screens = new MapScreen[0];
-        shown = null;
+        show(null);
         source = null;
         walker = null;
         yourHouse.setCollision(null);
@@ -1218,7 +1140,14 @@ public final class RouteFeature
     void tick(WorldPoint location)
     {
         ticks++;
+        var before = lastLocation;
         lastLocation = location;
+        if (closedBank)
+        {
+            closedBank = false;
+            bankClosed();
+        }
+        bankShut = false;
         Player player = client.getLocalPlayer();
         if (player == null || client.getGameState() != GameState.LOGGED_IN)
         {
@@ -1226,7 +1155,8 @@ public final class RouteFeature
         }
         var view = player.getWorldView();
         boolean onBoat = view != null && !view.isTopLevel();
-        boolean instance = client.getTopLevelWorldView() != null && client.getTopLevelWorldView().isInstance();
+        var top = client.getTopLevelWorldView();
+        boolean instance = top != null && top.isInstance();
         int node = location == null ? -1 : pack(location);
         // By a planted spirit tree's patch: whether a grown tree stands there now, kept for this account.
         if (location != null && planted.update(location.getRegionID(), client::getVarbitValue))
@@ -1239,7 +1169,7 @@ public final class RouteFeature
         returns.update(node);
         if (house.inside())
         {
-            yourHouse.placeHouse(client.getTopLevelWorldView());
+            yourHouse.placeHouse(top);
         }
         if (house.takeScan())
         {
@@ -1249,6 +1179,19 @@ public final class RouteFeature
         {
             yourHouse.writeHouse(house.features());
         }
+        // Into the house once its rooms are placed (the tile on the plan is right then); out as soon as one is.
+        if (!house.inside())
+        {
+            yourHouse.placed = false;
+        }
+        boolean inside = house.inside() && yourHouse.placed;
+        boolean entered = inside != wasInside;
+        if (entered)
+        {
+            wasInside = inside;
+            yourHouse.entered(inside ? ticks : -1);
+            state = capture();
+        }
         int from = location == null ? -2 : house.inside() ? yourHouse.inHouse()
             : onBoat ? Tiles.seaAt(location.getX(), location.getY()) : node;
         start = from;
@@ -1257,8 +1200,10 @@ public final class RouteFeature
         boolean replans = !instance || house.inside() && from >= 0
             || from >= 0 && InstanceCopies.isPlace(Tiles.x(from), Tiles.y(from));
         updateHdTiles(from);
-        // At once also on coming into (or leaving) the Rune essence mine or the Shipyard: their exits lead back.
-        if (ticks % STATE_TICKS == 0 || state == PlayerState.UNKNOWN || returns.exit() != state.returnExit)
+        // At once also on coming into (or leaving) the Rune essence mine or the Shipyard: their exits lead back; and after
+        // a teleport, which is searched from at once.
+        if (ticks % STATE_TICKS == 0 || state == PlayerState.UNKNOWN || returns.exit() != state.returnExit
+            || before != null && location != null && before.distanceTo(location) > RouteController.STRAY)
         {
             state = capture();
         }
@@ -1266,9 +1211,12 @@ public final class RouteFeature
             var c = controller;
             if (c != null)
             {
+                if (entered)
+                {
+                    c.placeChanged();
+                }
                 Running running = tour;
-                if (running != null && running.target >= 0 && (Tiles.z(from) == Tiles.z(running.target)
-                    && Tiles.distance(from, running.target) <= RouteController.ARRIVED
+                if (running != null && running.target >= 0 && (Tiles.near(from, running.target, RouteController.ARRIVED)
                     || c.target() == running.target && c.arrived(from)))
                 {
                     nextStop(from);
@@ -1285,6 +1233,9 @@ public final class RouteFeature
             }
         });
     }
+
+    /** Whether the player was in a house at the last tick. */
+    boolean wasInside;
 
     volatile Route ahead;
     /** The sidebar's "Now" box. Swing thread. */
@@ -1315,10 +1266,12 @@ public final class RouteFeature
         long t = System.currentTimeMillis();
         for (int point : tiles)
         {
-            // Fading out a moment ago: it comes back from where it was.
+            // Only one fading out a moment ago (walked back) comes back from where it was; a new tile is there at once.
             Long out = fading.remove(point);
-            float was = out == null ? 0f : fadeAlpha(out, t);
-            appearing.put(point, t - (long) (was * FADE_IN_MS));
+            if (out != null)
+            {
+                appearing.put(point, t - (long) (fadeAlpha(out, t) * FADE_IN_MS));
+            }
         }
         fadeTimer.start(); // no-op while running
     }
@@ -1390,7 +1343,7 @@ public final class RouteFeature
         var tiles = new HashSet<Integer>();
         if (route != null)
         {
-            eachWalked(route, tiles::add);
+            eachWalked(route.untilTeleport(), tiles::add);
         }
         return tiles;
     }
@@ -1465,7 +1418,7 @@ public final class RouteFeature
         aheadWalkedOf = now;
         // Not wrapped again: on Java 11 the wrappers would nest every tick until the stack overflows.
         aheadWalked = walkedNow == walkedBefore ? walkedBefore : Collections.unmodifiableSet(walkedNow);
-        shown = inGame(now);
+        show(now);
         int steps = now == null ? -1 : now.steps.size();
         int points = now == null || now.steps.isEmpty() ? -1 : now.steps.get(0).points.length;
         if (steps != lastAheadSteps && lastAheadSteps >= 0 && steps >= 0)
@@ -1499,10 +1452,7 @@ public final class RouteFeature
         var unlimited = new HashSet<Integer>();
         var inventory = client.getItemContainer(InventoryID.INV);
         boolean pouch = inventory != null && Arrays.stream(inventory.getItems()).anyMatch(i -> RUNE_POUCHES.contains(i.getId()));
-        if (inventory != null)
-        {
-            count(inventory, carried);
-        }
+        count(inventory, carried);
         var worn = client.getItemContainer(InventoryID.WORN);
         if (worn != null)
         {
@@ -1517,20 +1467,23 @@ public final class RouteFeature
                 }
             }
         }
-        if (pouch)
+        // The game keeps what the pouch holds wherever it is: carried, or taken from the bank as the pouch.
+        var held = new HashMap<Integer, Long>();
+        var runes = client.getEnum(EnumID.RUNEPOUCH_RUNE);
+        for (int i = 0; i < POUCH_TYPES.length; i++)
         {
-            var runes = client.getEnum(EnumID.RUNEPOUCH_RUNE);
-            for (int i = 0; i < POUCH_TYPES.length; i++)
+            int type = client.getVarbitValue(POUCH_TYPES[i]);
+            int amount = client.getVarbitValue(POUCH_AMOUNTS[i]);
+            int id = type > 0 && runes != null ? runes.getIntValue(type) : -1;
+            if (id > 0 && amount > 0)
             {
-                int type = client.getVarbitValue(POUCH_TYPES[i]);
-                int amount = client.getVarbitValue(POUCH_AMOUNTS[i]);
-                int id = type > 0 && runes != null ? runes.getIntValue(type) : -1;
-                if (id > 0 && amount > 0)
-                {
-                    carried.merge(id, (long) amount, Long::sum);
-                }
+                (pouch ? carried : held).merge(id, (long) amount, Long::sum);
             }
         }
+        pouchRunes = held;
+        var named = new HashMap<String, Long>();
+        held.forEach((id, n) -> named.merge(client.getItemDefinition(id).getName(), n, Long::sum));
+        pouchNamed = named;
         if (pandemonium == null || ticks - lastQuest >= QUEST_TICKS)
         {
             lastQuest = ticks;
@@ -1547,7 +1500,7 @@ public final class RouteFeature
             }
         }
         return new PlayerState(ItemSnapshot.of(carried, unlimited), client.getRealSkillLevel(Skill.SAILING),
-            pandemonium, boats.keySet().stream().mapToInt(Integer::intValue).toArray(), config.routeRunning(),
+            pandemonium, boats.keySet().stream().mapToInt(Integer::intValue).toArray(), true,
             house.inside(), house.inside() ? house.exit() : house.portal(), house.own(), house.features(),
             client.getVarbitValue(POH_TELE_TOGGLE) == 0)
             .withReturn(returns.exit()).withBoatFocus(boats.values().stream().mapToInt(Integer::intValue).toArray());
@@ -1558,11 +1511,28 @@ public final class RouteFeature
     {
         if (event.getContainerId() == InventoryID.BANK)
         {
-            rememberBank(event.getItemContainer());
+            var items = new HashMap<Integer, Long>();
+            count(event.getItemContainer(), items);
+            // Sent after all: as it is.
+            bankShut = false;
+            rememberBank(items);
             return;
         }
         var before = state;
         state = capture();
+        var carried = new HashMap<Integer, Long>();
+        count(client.getItemContainer(InventoryID.INV), carried);
+        count(client.getItemContainer(InventoryID.WORN), carried);
+        if (bankShut)
+        {
+            // Banked or taken as the bank closed: the game no longer sends the bank, so it is what left one's hands
+            // (the rune pouch put away just before the close, its runes then in the bank).
+            var bank = new HashMap<>(bankItems);
+            lastCarried.forEach((id, n) -> bank.merge(id, n, Long::sum));
+            carried.forEach((id, n) -> bank.merge(id, -n, Long::sum));
+            rememberBank(bank);
+        }
+        lastCarried = carried;
         // What a route may use changed (a staff banked, a teleport's runes or jewellery picked up): the route is looked
         // for again once the items have settled, and after the bank is closed, so it takes the quicker way, no longer
         // one without what it needs, and a bank step names only what is still to take. Other items (logs, drops) change
@@ -1576,6 +1546,11 @@ public final class RouteFeature
             if (atBank)
             {
                 changedAtBank = true;
+            }
+            else if (bankShut || closedBank)
+            {
+                // Looked at on this tick, with the bank as it is now.
+                closedBank = true;
             }
             else
             {
@@ -1613,12 +1588,96 @@ public final class RouteFeature
         if (bank(event.getGroupId()))
         {
             atBank = false;
+            bankShut = true;
             if (changedAtBank)
             {
                 changedAtBank = false;
-                rerouteSoon();
+                // Items banked or taken just before the close come with the next tick: one look then.
+                closedBank = true;
             }
         }
+    }
+
+    /** The bank closed with items changed: looked at on the next tick. Client thread, then Swing. */
+    boolean closedBank;
+    /** The bank closed since the last tick; what one carried at the last item change. Client thread. */
+    boolean bankShut;
+    Map<Integer, Long> lastCarried = Map.of();
+
+    void bankClosed()
+    {
+        if (atBank)
+        {
+            // Opened again meanwhile: looked at when it closes.
+            changedAtBank = true;
+            return;
+        }
+        // On at once when what the bank step names is all carried (the route was planned with it); else, with
+        // only part taken, the bank step stays. Either way searched again, the items having settled.
+        int at = start;
+        var names = itemNames;
+        var carried = lastCarried;
+        var kept = new HashMap<String, Long>();
+        if (names != null)
+        {
+            carried.forEach((id, n) -> kept.merge(String.valueOf(names.apply(id)).toLowerCase(ROOT), n, Long::sum));
+        }
+        boolean pouch = carried.keySet().stream().anyMatch(RUNE_POUCHES::contains);
+        invokeLater(() -> {
+            var c = controller;
+            // The whole route: the part ahead, cut at the stand, may no longer have the bank step.
+            Route whole = aheadOf;
+            Route on = allTaken(whole, kept, pouch) ? onFromBank(whole, at) : null;
+            if (c != null && on != null)
+            {
+                // All taken: the route on was planned with them, nothing to search again.
+                c.show(c.target(), at, on);
+                return;
+            }
+            settingsChanged();
+        });
+    }
+
+    /** Whether everything the route's bank step names ("Rune pouch, 3 × Air rune") is carried; false when it cannot tell. */
+    static boolean allTaken(Route route, Map<String, Long> carried, boolean pouch)
+    {
+        Step bank = route == null ? null : route.first(Kind.BANK);
+        if (bank == null || !bank.name.startsWith("Bank: "))
+        {
+            return false;
+        }
+        for (String item : bank.name.substring("Bank: ".length()).split(", "))
+        {
+            var m = Pattern.compile("(?:(\\d+) × )?(.+)").matcher(item);
+            if (!m.matches())
+            {
+                return false;
+            }
+            // "runes" or "items for …" name nothing to count.
+            boolean ok = m.group(2).equals("Rune pouch") ? pouch
+                : !m.group(2).equals("runes") && !m.group(2).startsWith("items for ")
+                && carried.getOrDefault(m.group(2).toLowerCase(ROOT), 0L) >= (m.group(1) == null ? 1
+                    : Long.parseLong(m.group(1)));
+            if (!ok)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Standing at the route's bank step: the route on from it (planned with the bank's items); else null. */
+    static Route onFromBank(Route route, int player)
+    {
+        Step bank = route == null ? null : route.first(Kind.BANK);
+        // At any of its booths, not only the one planned.
+        if (bank == null || player < 0 || !Tiles.near(player, bank.first(), RouteController.STRAY))
+        {
+            return null;
+        }
+        var on = List.copyOf(route.steps.subList(route.steps.indexOf(bank) + 1, route.steps.size()));
+        return new Route(route.outcome, on, on.stream().mapToInt(s -> s.cost).sum(), route.target, route.end,
+            route.exhausted, route.limited, route.nodes);
     }
 
     /** Milliseconds what is carried must stay the same before the route is looked for again. */
@@ -1627,9 +1686,10 @@ public final class RouteFeature
     /** Whether a tip is shown now (set on the Swing thread, read on the client thread). */
     volatile boolean tipShown;
 
+    /** None for a container not there. */
     static void count(ItemContainer container, Map<Integer, Long> into)
     {
-        for (Item item : container.getItems())
+        for (Item item : container == null ? new Item[0] : container.getItems())
         {
             if (item.getId() >= 0)
             {
@@ -1653,6 +1713,9 @@ public final class RouteFeature
             state = PlayerState.UNKNOWN;
             atBank = false;
             changedAtBank = false;
+            // A bank open at logout closes then: none of it carries over to the next account.
+            bankShut = closedBank = false;
+            lastCarried = Map.of();
         }
     }
 
@@ -1670,11 +1733,8 @@ public final class RouteFeature
     public void onConfigChanged(ConfigChanged event)
     {
         String key = event.getKey();
-        if (!GROUP.equals(event.getGroup()))
-        {
-            return;
-        }
-        if (!key.startsWith("route") || HOUSE_KEY.equals(key) || "routePlannerChosen".equals(key))
+        if (!GROUP.equals(event.getGroup()) || !key.startsWith("route") || HOUSE_KEY.equals(key)
+            || "routePlannerChosen".equals(key))
         {
             return;
         }
@@ -1709,10 +1769,6 @@ public final class RouteFeature
         if ("routeFollowPlugins".equals(key))
         {
             invokeLater(this::followAgain);
-        }
-        if ("routeFillGaps".equals(key) && handedOver != null)
-        {
-            walkShortestPath(spJumps, handedOver);
         }
         if (LOOK_KEYS.contains(key))
         {
@@ -1788,7 +1844,13 @@ public final class RouteFeature
      */
     RouteRequest withBank(RouteRequest plain, int begin, int target)
     {
-        var bank = bankItems;
+        var bank = new HashMap<>(bankItems);
+        var pouch = new HashMap<String, Long>();
+        if (bank.keySet().stream().anyMatch(RUNE_POUCHES::contains))
+        {
+            pouchRunes.forEach((id, n) -> bank.merge(id, n, Long::sum));
+            pouch.putAll(pouchNamed);
+        }
         var on = screens;
         if (plain == null || begin < -1 || bank.isEmpty() || !config.routeBankTeleports() || config.routeIgnoreItems()
             || on.length == 0)
@@ -1797,17 +1859,23 @@ public final class RouteFeature
         }
         var banks = Poi.flatten(on[0].view.pois()).stream().filter(p -> p.type == PoiType.BANK)
             .map(p -> RouteSource.bankStands(pack(p.location))).toArray(int[][]::new);
-        // On from the bank: out of the house, with the bank's items.
-        var player = state.outOfHouse();
-        var banked = banks.length == 0 ? null : request(begin, target, false, false, leftOut(), player.withBank(bank),
+        // On from the bank: out of the house, with the bank's items; not from a start on its plan, which counts as in
+        // it (no teleport back in to its fairy ring). The detour starts these ways only at the bank.
+        var player = state.inOwnHouse(false);
+        int from = HousePlan.contains(begin) ? -1 : begin;
+        var banked = banks.length == 0 ? null : request(from, target, false, false, leftOut(), player.withBank(bank),
             fromPlugin ? pluginWilderness : null);
-        return banked == null ? plain : plain.withBank(new BankDetour(banks, banked));
+        return banked == null ? plain : plain.withBank(new BankDetour(banks, banked, config.routeSaveBank(), pouch));
     }
 
     /** Per account (RS profile): the bank's items any teleport or transport needs, as last seen. */
     static final String BANK_KEY = "bankItems";
     /** This account's bank as last seen (item id to amount): only what routes may need. */
     volatile Map<Integer, Long> bankItems = Map.of();
+    /** What the rune pouch holds while not carried (item id to amount); client thread sets it. */
+    volatile Map<Integer, Long> pouchRunes = Map.of();
+    /** The same by the game's own item names, read where the pouch is (not through the item name cache). */
+    volatile Map<String, Long> pouchNamed = Map.of();
     /** The item ids any teleport or transport of the places needs; null before the places are known. */
     volatile Set<Integer> routeItemIds;
 
@@ -1827,16 +1895,15 @@ public final class RouteFeature
         bankItems = Collections.unmodifiableMap(items);
     }
 
-    /** The open bank, kept for this account when what routes may need in it changed. Client thread. */
-    void rememberBank(ItemContainer bank)
+    /** The bank as seen (item id to amount), kept for this account when what routes may need in it changed. Client thread. */
+    void rememberBank(Map<Integer, Long> bank)
     {
-        var items = new TreeMap<Integer, Long>();
-        count(bank, items);
+        var items = new TreeMap<>(bank);
         items.values().removeIf(n -> n <= 0);
         var wanted = routeItemIds;
         if (wanted != null)
         {
-            items.keySet().retainAll(wanted);
+            items.keySet().removeIf(id -> !wanted.contains(id) && !RUNE_POUCHES.contains(id));
         }
         if (items.equals(bankItems) || configManager.getRSProfileKey() == null)
         {
@@ -1924,11 +1991,8 @@ public final class RouteFeature
         var nearest = new ArrayList<WorldPoint>(new LinkedHashSet<>(places));
         if (from >= 0)
         {
-            nearest.sort(Comparator.comparingLong(p -> {
-                long dx = p.getX() - Tiles.x(from);
-                long dy = p.getY() - Tiles.y(from);
-                return dx * dx + dy * dy + (p.getPlane() == Tiles.z(from) ? 0 : 100_000_000L);
-            }));
+            var me = worldPoint(from);
+            nearest.sort(Comparator.comparingLong(p -> Tour.away(p, me)));
         }
         if (nearest.isEmpty())
         {
@@ -2033,18 +2097,8 @@ public final class RouteFeature
         {
             return true;
         }
-        if (screens.length == 0)
-        {
-            return false;
-        }
-        for (var poi : screens[0].view.pois())
-        {
-            if (poi.atSea() && poi.location.getPlane() == 0 && poi.location.distanceTo2D(point) <= 2)
-            {
-                return true;
-            }
-        }
-        return false;
+        return screens.length > 0 && screens[0].view.pois().stream()
+            .anyMatch(poi -> poi.atSea() && poi.location.getPlane() == 0 && poi.location.distanceTo2D(point) <= 2);
     }
 
     /** The user's own route: shown at once, with nothing avoided yet. */
@@ -2067,14 +2121,9 @@ public final class RouteFeature
             .setToolTipText("Your own routes with several stops: order them, let the planner find the fastest order, run");
         item(popup, "Your house...", yourHouse::openHouse)
             .setToolTipText("What your house has for routes (this account), and its plan once you have been in it");
-        if (shortestPathPlanner())
-        {
-            item(popup, "Path to here (Shortest Path)", () -> routeTo(point));
-        }
-        else
-        {
-            item(popup, c == null ? "Path to here (loading…)" : "Path to here", () -> routeTo(point)).setEnabled(c != null);
-        }
+        boolean theirs = shortestPathPlanner();
+        item(popup, theirs ? "Path to here (Shortest Path)" : c == null ? "Path to here (loading…)" : "Path to here",
+            () -> routeTo(point)).setEnabled(theirs || c != null);
         if (handedOver != null || c != null && c.target() >= 0)
         {
             item(popup, tour != null ? "Stop custom route" : "Clear path", this::clearRoute);
@@ -2468,7 +2517,7 @@ public final class RouteFeature
         Route leg = running.index > 0 && running.index < legs.length ? legs[running.index] : null;
         if (leg != null && leg.outcome == FOUND)
         {
-            c.show(running.target, leg);
+            c.show(running.target, from, leg);
             return;
         }
         c.setTarget(running.target);
@@ -2489,11 +2538,7 @@ public final class RouteFeature
 
     WorldPoint resolve(Tour.Stop stop, WorldPoint near)
     {
-        if (!stop.isKind())
-        {
-            return stop.point;
-        }
-        return Tour.nearest(screens.length == 0 ? null : screens[0].kind(stop.kind), near);
+        return !stop.isKind() ? stop.point : Tour.nearest(screens.length == 0 ? null : screens[0].kind(stop.kind), near);
     }
 
     /** "▶ My route: stop 2 of 5", its stops, Next stop and Stop route, above a running custom route's steps. */
@@ -2534,7 +2579,7 @@ public final class RouteFeature
             return;
         }
         String name = chosen.name;
-        var stops = Collections.unmodifiableList(new ArrayList<>(chosen.stops));
+        var stops = List.copyOf(chosen.stops);
         int order = orders.incrementAndGet();
         var me = from >= 0 ? worldPoint(from) : null;
         var points = new ArrayList<WorldPoint>();
@@ -2569,7 +2614,7 @@ public final class RouteFeature
                         for (int a = 0; a < n; a++)
                         {
                             Route trip = a == b ? null : between(pf, ways, points.get(a), points.get(b), outOfReach, cancelled);
-                            once[a][b] = a == b ? 0 : trip == null ? -1 : trip.cost;
+                            once[a][b] = a == b ? 0 : tripCost(trip);
                             // Without the teleport only where the trip took one.
                             cost[a][b] = trip == null || trip.steps.stream().noneMatch(RouteSource::onceOnly) ? once[a][b]
                                 : tripCost(between(pf, plainWays, points.get(a), points.get(b), plainOutOfReach, cancelled));
@@ -2731,33 +2776,40 @@ public final class RouteFeature
             return;
         }
         explaining = true;
-        if (!TileCache.execute(pool, () -> explained(c, request, pathfinder, asked)))
+        if (!TileCache.execute(pool, () -> lookUp(pathfinder, request, whyAsked, asked, "the way anyone could go",
+            found -> {
+                why = found;
+                explaining = false;
+                changed();
+            })))
         {
             explaining = false;
         }
     }
 
-    /** Extras thread; always hands back to Swing, so nothing waits on it. */
-    void explained(RouteController c, RouteRequest request, Pathfinder pathfinder, int asked)
+    /**
+     * Extras thread: the route for {@code request} (null when none, or the search failed) goes to {@code found} on
+     * Swing while {@code asked} is the current look of {@code looks}; always hands back, so nothing waits on it.
+     */
+    void lookUp(Pathfinder pathfinder, RouteRequest request, AtomicInteger looks, int asked, String what,
+        Consumer<Route> found)
     {
         Route result = null;
         try
         {
-            result = pathfinder.find(request, () -> whyAsked.get() != asked);
+            result = request == null ? null : pathfinder.find(request, () -> looks.get() != asked);
         }
         catch (Throwable e)
         {
-            log.warn("Could not look for the way anyone could go", e);
+            log.warn("Could not look for {}", what, e);
         }
         finally
         {
-            Route found = result;
+            Route route = result;
             invokeLater(() -> {
-                if (whyAsked.get() == asked)
+                if (looks.get() == asked)
                 {
-                    why = found;
-                    explaining = false;
-                    changed();
+                    found.accept(route);
                 }
             });
         }
@@ -2801,47 +2853,28 @@ public final class RouteFeature
         }
         int from = start;
         int target = c.target();
-        TileCache.execute(pool, () -> tipFound(c, route, request(from, target, false, true, leftOut()), pathfinder, asked));
-    }
-
-    /** Extras thread; always hands back to Swing. */
-    void tipFound(RouteController c, Route yours, RouteRequest request, Pathfinder pathfinder, int asked)
-    {
-        Route result = null;
-        try
-        {
-            result = request == null ? null : pathfinder.find(request, () -> tipAsked.get() != asked);
-        }
-        catch (Throwable e)
-        {
-            log.warn("Could not look for a quicker way with other items", e);
-        }
-        Route found = result;
-        Tip made = tip(yours, found);
-        invokeLater(() -> {
-            if (tipAsked.get() != asked)
-            {
-                return;
-            }
-            tip = made;
-            tipShown = made != null;
-            List<Integer> unnamed = made == null ? Collections.emptyList() : made.unnamed();
-            ItemNames names = itemNames;
-            if (!unnamed.isEmpty() && names != null)
-            {
-                // Asked of the game only now: once named, the tip is looked for again to say them.
-                // resolve() calls back on the Swing thread.
-                names.resolve(unnamed, () -> {
-                    if (tipAsked.get() == asked && controller == c)
-                    {
-                        tipFor = null;
-                        tipTarget = -1;
-                        changed();
-                    }
-                });
-            }
-            changed();
-        });
+        TileCache.execute(pool, () -> lookUp(pathfinder, request(from, target, false, true, leftOut()), tipAsked, asked,
+            "a quicker way with other items", found -> {
+                Tip made = tip(route, found);
+                tip = made;
+                tipShown = made != null;
+                List<Integer> unnamed = made == null ? Collections.emptyList() : made.unnamed();
+                ItemNames names = itemNames;
+                if (!unnamed.isEmpty() && names != null)
+                {
+                    // Asked of the game only now: once named, the tip is looked for again to say them.
+                    // resolve() calls back on the Swing thread.
+                    names.resolve(unnamed, () -> {
+                        if (tipAsked.get() == asked && controller == c)
+                        {
+                            tipFor = null;
+                            tipTarget = -1;
+                            changed();
+                        }
+                    });
+                }
+                changed();
+            }));
     }
 
     /** What to bring for a quicker way: each thing with the step that needs it, and how much sooner. */
@@ -2892,19 +2925,9 @@ public final class RouteFeature
         {
             return null;
         }
-        var bring = new ArrayList<String[]>();
-        for (Step step : withItems.steps)
-        {
-            if (RouteText.lacks(step))
-            {
-                bring.add(new String[]{RouteText.lack(step), RouteText.describe(step)});
-            }
-        }
-        if (bring.isEmpty())
-        {
-            return null;
-        }
-        return new Tip(bring, RouteText.about((saved + 1) / 2) + " sooner");
+        var bring = withItems.steps.stream().filter(RouteText::lacks)
+            .map(step -> new String[]{RouteText.lack(step), RouteText.describe(step)}).collect(Collectors.toList());
+        return bring.isEmpty() ? null : new Tip(bring, RouteText.about((saved + 1) / 2) + " sooner");
     }
 
     /** The steps that need what the player lacks. Null when nothing to say; empty when nothing nameable. */
@@ -2919,15 +2942,8 @@ public final class RouteFeature
             // Only a search that tried everything may say there is no way.
             return why.exhausted ? Collections.singletonList(NO_WAY) : null;
         }
-        var lines = new ArrayList<String>();
-        for (Step step : why.steps)
-        {
-            if (RouteText.lacks(step))
-            {
-                lines.add(RouteText.describe(step) + ": needs " + RouteText.lack(step));
-            }
-        }
-        return lines;
+        return why.steps.stream().filter(RouteText::lacks)
+            .map(step -> RouteText.describe(step) + ": needs " + RouteText.lack(step)).collect(Collectors.toList());
     }
 
     Route effective(RouteController c)
@@ -2950,15 +2966,8 @@ public final class RouteFeature
 
     static boolean closer(Route a, Route b)
     {
-        if (a.end < 0 || a.steps.isEmpty())
-        {
-            return false;
-        }
-        if (b.end < 0 || b.steps.isEmpty())
-        {
-            return true;
-        }
-        return distance(a.end, a.target) < distance(b.end, b.target);
+        return a.end >= 0 && !a.steps.isEmpty()
+            && (b.end < 0 || b.steps.isEmpty() || distance(a.end, a.target) < distance(b.end, b.target));
     }
 
     static int distance(int from, int to)
@@ -2986,7 +2995,7 @@ public final class RouteFeature
                 // The old way fades out as the new one fades in.
                 var was = walkedAhead(before);
                 var now = walkedAhead(ahead);
-                if (ahead == null && config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES)
+                if (ahead == null && lines())
                 {
                     // Gone as a whole: its lines fade as they were.
                     long t = System.currentTimeMillis();
@@ -2997,7 +3006,7 @@ public final class RouteFeature
                 fadeInTiles(minus(now, was));
             }
         }
-        shown = inGame(ahead);
+        show(ahead);
         if (hdTiles)
         {
             // A new route or look reaches HD World Markers at once, not at the next game tick.
@@ -3022,15 +3031,8 @@ public final class RouteFeature
 
     List<String> neverUsed()
     {
-        var names = new ArrayList<String>();
-        for (String line : config.routeNeverUse().split("[\\r\\n]+"))
-        {
-            if (!line.trim().isEmpty())
-            {
-                names.add(line.trim());
-            }
-        }
-        return names;
+        return Arrays.stream(config.routeNeverUse().split("[\\r\\n]+")).map(String::trim).filter(line -> !line.isEmpty())
+            .collect(Collectors.toCollection(ArrayList::new));
     }
 
     Set<String> avoided(List<String> leftOut)
@@ -3155,6 +3157,19 @@ public final class RouteFeature
         }
     }
 
+    /** Whether a step is named on its tile in the game: not a teleport, which is cast anywhere (said over the head). */
+    static boolean onItsTile(Step step)
+    {
+        return step.isJump() && step.kind != Kind.TELEPORT && step.name != null && !Tiles.isSea(step.first())
+            && (step.first() != step.last() || step.kind == Kind.BANK);
+    }
+
+    /** The tile a step is named on: a bank step's booth or chest, else where it starts. */
+    static int namedAt(Step step)
+    {
+        return step.kind == Kind.BANK ? RouteSource.booth(step.first()) : step.first();
+    }
+
     /** The step to take now: a teleport, or a transport or passage the player stands at; or null. */
     static Step nextAction(Route route, int player)
     {
@@ -3212,6 +3227,13 @@ public final class RouteFeature
         return step == null ? null : RouteText.describe(step);
     }
 
+    /** The whole route {@code cut} is the start of ({@link #drawn}): what a teleport into the house is for comes after it. */
+    Route whole(Route cut)
+    {
+        Route all = shown;
+        return all != null && cut == drawn ? all : cut;
+    }
+
     void paintNextAction(Graphics2D g, Route route, Player player)
     {
         int at = start;
@@ -3224,7 +3246,7 @@ public final class RouteFeature
         var view = client.getTopLevelWorldView();
         if (onIt && !hdTiles && view != null)
         {
-            tag(g, yourHouse.local(view, jump.first()), RouteText.said(route, jump, house.inside()),
+            tag(g, yourHouse.local(view, namedAt(jump)), RouteText.said(whole(route), jump, house.inside()),
                 RouteText.lacks(jump), 0);
         }
         String text = nextText(route, at);
@@ -3235,7 +3257,7 @@ public final class RouteFeature
         if (now != null && text.equals(RouteText.describe(now)))
         {
             // The step itself, not an obstacle on the way: into the house with what to use there.
-            text = RouteText.said(route, now, house.inside());
+            text = RouteText.said(whole(route), now, house.inside());
         }
         tag(g, player.getLocalLocation(), text, now != null && RouteText.lacks(now), player.getLogicalHeight() + 60);
     }
@@ -3306,20 +3328,15 @@ public final class RouteFeature
         }
         Color normal = current();
         long now = System.currentTimeMillis();
-        int blocked = RouteText.blockedFrom(route);
-        List<Step> steps = route == null ? List.of() : route.steps;
-        for (int index = 0; index < steps.size(); index++)
-        {
-            Step step = steps.get(index);
-            Color walk = blocked >= 0 && index >= blocked ? CANNOT : normal;
-            for (int point : step.kind == Kind.WALK ? step.points : new int[0])
+        eachWalk(route, normal, (points, walk) -> {
+            for (int point : points)
             {
                 if (Tiles.distance(point, me) <= reach && !fading.containsKey(point))
                 {
                     sink.tile(point, walk, fadeIn(point, now));
                 }
             }
-        }
+        });
         for (var entry : fading.entrySet())
         {
             float alpha = fadeAlpha(entry.getValue(), now);
@@ -3347,15 +3364,7 @@ public final class RouteFeature
                 }
             }
         }
-        int blocked = RouteText.blockedFrom(route);
-        List<Step> steps = route == null ? List.of() : route.steps;
-        for (int index = 0; index < steps.size(); index++)
-        {
-            if (steps.get(index).kind == Kind.WALK)
-            {
-                sink.accept(steps.get(index).points, blocked >= 0 && index >= blocked ? CANNOT : current());
-            }
-        }
+        eachWalk(route, current(), sink);
         long now = System.currentTimeMillis();
         for (var line : gone)
         {
@@ -3363,6 +3372,20 @@ public final class RouteFeature
             if (alpha > 0.02f)
             {
                 sink.accept(line.points, alpha(line.color, line.color.getAlpha() * alpha));
+            }
+        }
+    }
+
+    /** Each walk of the route in {@code normal}, red from the first step the player cannot take yet. */
+    static void eachWalk(Route route, Color normal, BiConsumer<int[], Color> sink)
+    {
+        int blocked = RouteText.blockedFrom(route);
+        List<Step> steps = route == null ? List.of() : route.steps;
+        for (int index = 0; index < steps.size(); index++)
+        {
+            if (steps.get(index).kind == Kind.WALK)
+            {
+                sink.accept(steps.get(index).points, blocked >= 0 && index >= blocked ? CANNOT : normal);
             }
         }
     }
@@ -3419,15 +3442,14 @@ public final class RouteFeature
     /** The route's arrows (each walk's every {@link #ARROW_EVERY}th tile from its far end), keeping those fading. */
     void markArrows(Route route)
     {
-        boolean on = config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS;
+        boolean on = arrows();
         arrowsTo.keySet().retainAll(on ? fading.keySet() : Set.of());
         for (Step step : on && route != null ? route.steps : List.<Step>of())
         {
             int[] p = step.kind == Kind.WALK ? step.points : new int[0];
             for (int i = 0; i + 1 < p.length; i++)
             {
-                if ((p.length - 1 - i) % ARROW_EVERY == ARROW_EVERY / 2 && Tiles.distance(p[i], p[i + 1]) == 1
-                    && Tiles.z(p[i]) == Tiles.z(p[i + 1]))
+                if (arrowAt(p, i))
                 {
                     arrowsTo.put(p[i], p[i + 1]);
                 }
@@ -3442,7 +3464,7 @@ public final class RouteFeature
     void paintLines(Graphics2D g, Route route, WorldView view, int plane)
     {
         int me = near();
-        boolean arrows = config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS;
+        boolean arrows = arrows();
         g.setStroke(new BasicStroke(config.routeLineWidth(), CAP_ROUND, JOIN_ROUND));
         eachLine(route, (points, color) -> {
             Path2D path = new Path2D.Float();
@@ -3462,8 +3484,7 @@ public final class RouteFeature
                 }
                 previous = at == null ? -1 : point;
                 // Counted from the walk's far end, which stays as the player walks it: the arrows stay put.
-                if (arrows && at != null && (points.length - 1 - i) % ARROW_EVERY == ARROW_EVERY / 2 && i + 1 < points.length
-                    && Tiles.distance(point, points[i + 1]) == 1 && Tiles.z(points[i + 1]) == plane)
+                if (arrows && at != null && arrowAt(points, i))
                 {
                     var on = yourHouse.local(view, point);
                     int dx = Tiles.x(points[i + 1]) - Tiles.x(point);
@@ -3490,6 +3511,13 @@ public final class RouteFeature
                 }
             }
         });
+    }
+
+    /** Whether a walk's arrowhead stands at {@code points[i]}, toward the next point (a neighbour on its floor). */
+    static boolean arrowAt(int[] points, int i)
+    {
+        return i + 1 < points.length && (points.length - 1 - i) % ARROW_EVERY == ARROW_EVERY / 2
+            && Tiles.distance(points[i], points[i + 1]) == 1 && Tiles.z(points[i]) == Tiles.z(points[i + 1]);
     }
 
     /** A route tile's centre on the canvas: on this floor, within the extended scene; else null. */
@@ -3543,13 +3571,13 @@ public final class RouteFeature
         @Override
         public Dimension render(Graphics2D g)
         {
-            Route route = shown;
+            Route route = drawn;
             if (route == null && fading.isEmpty())
             {
                 return null;
             }
             var view = client.getTopLevelWorldView();
-            if (view == null || view.isInstance() && !house.own() || client.getLocalPlayer() == null || !config.routeInGame()
+            if (view == null || view.isInstance() && !house.own() || client.getLocalPlayer() == null
                 || !config.routeMinimap())
             {
                 return null;
@@ -3583,9 +3611,9 @@ public final class RouteFeature
         @Override
         public Dimension render(Graphics2D g)
         {
-            Route route = shown;
+            Route route = drawn;
             Player player = client.getLocalPlayer();
-            if (!config.routeInGame() || player == null)
+            if (player == null)
             {
                 return null;
             }
@@ -3603,7 +3631,7 @@ public final class RouteFeature
             }
             int plane = view.getPlane();
             Stroke old = g.getStroke();
-            if (config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES)
+            if (lines())
             {
                 paintLines(g, route, view, plane);
                 g.setStroke(old);
@@ -3690,20 +3718,9 @@ public final class RouteFeature
         /** "Can't yet: 45 Sailing, Lunar Diplomacy". */
         static String cannotYet(Route route)
         {
-            var missing = new LinkedHashSet<String>();
-            for (Step step : route.steps)
-            {
-                if (lacks(step))
-                {
-                    for (String part : lack(step).split(",\\s*"))
-                    {
-                        if (!part.trim().isEmpty())
-                        {
-                            missing.add(part.trim());
-                        }
-                    }
-                }
-            }
+            var missing = route.steps.stream().filter(RouteText::lacks)
+                .flatMap(step -> Arrays.stream(lack(step).split(",\\s*"))).map(String::trim).filter(part -> !part.isEmpty())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
             return missing.isEmpty() ? "Can't yet." : "Can't yet: " + String.join(", ", missing);
         }
 
@@ -3801,14 +3818,16 @@ public final class RouteFeature
          * place, then the box's where it differs; kept as our name to the box's key and name ("burthorpe games room" to
          * "5 Burthorpe").
          */
-        static final Map<String, String> BOX = box("Emir's Arena", "Castle Wars|Castle Wars Arena",
+        static final Map<String, String> BOX = box("Emir's Arena", "Castle Wars",
             "Ferox Enclave", "Fortis Colosseum", "Burthorpe Games Room|Burthorpe", "Barbarian Assault|Barbarian Outpost",
-            "Corporeal Beast", "Tears of Guthix|Chasm of Tears", "Wintertodt Camp", "Warriors' Guild", "Champions' Guild",
-            "Edgeville Monastery", "Ranging Guild", "Fishing Guild", "Mining Guild", "Crafting Guild",
-            "Cooking Guild|Cooks' Guild", "Woodcutting Guild", "Farming Guild", "Miscellania", "Grand Exchange",
+            "Corporeal Beast", "Tears of Guthix", "Wintertodt Camp", "Warriors' Guild", "Champions' Guild",
+            "Edgeville Monastery|Monastery", "Ranging Guild", "Fishing Guild", "Mining Guild", "Crafting Guild",
+            "Cooking Guild", "Woodcutting Guild", "Farming Guild", "Miscellania", "Grand Exchange",
             "Falador Park", "Dondakan|Dondakan's Rock", "Edgeville", "Karamja", "Draynor Village", "Al-Kharid|Al Kharid");
         /** How a house step from outside joins the way in to what is used inside. */
         static final String INTO = " → ";
+        /** The same in the game, whose font has no "→". */
+        static final String THEN = " -> ";
         static final Pattern LEVEL = Pattern.compile("\\(level (\\d+)\\)");
 
         static Map<String, String> box(String... places)
@@ -3830,6 +3849,11 @@ public final class RouteFeature
          */
         static String inHouse(String name)
         {
+            String plain = BankDetour.plain(name);
+            if (plain.length() < name.length())
+            {
+                return inHouse(plain) + name.substring(plain.length());
+            }
             int arrow = name.indexOf(INTO);
             String what = arrow < 0 ? name : name.substring(arrow + INTO.length());
             int colon = what.indexOf(": ");
@@ -3843,7 +3867,7 @@ public final class RouteFeature
             if (what.startsWith("Mounted "))
             {
                 // "Mounted talisman Xeric's Heart", "Mounted pendant Lithkren".
-                return what.substring(0, what.indexOf(": ")) + " " + place;
+                return what.substring(0, colon) + " " + place;
             }
             if (what.startsWith("House obelisk: "))
             {
@@ -3861,16 +3885,42 @@ public final class RouteFeature
 
         /**
          * A step as said in the game, over the head and on its tile: a house step outside the house by the way in and
-         * what to use there ("Teleport to House, then Jewellery box 5 Burthorpe"), inside by what to use; a way into the
+         * what to use there ("Teleport to House -> Jewellery box 5 Burthorpe"), inside by what to use; a way into the
          * house with the house step after it; else as {@link #describe}.
          */
         static String said(Route route, Step step, boolean inside)
         {
+            String text = saying(route, step, inside);
+            // The game's font has no "→" (also in "… → Bank: …").
+            return (text.length() > LONG ? shortened(text) : text).replace(INTO, THEN);
+        }
+
+        /** Characters above which a text in the game is {@link #shortened}. */
+        static final int LONG = 50;
+        static final Pattern INTO_HOUSE = Pattern.compile("^(Teleport to House|Teleport to house tablet"
+            + "|Construction cape: Tele to POH|Max cape: Home)( \\(Inside\\))?(" + INTO + "|" + THEN + ")");
+        static final Pattern BOX_PLACE = Pattern.compile("Jewellery box (\\S) .*?(?=" + INTO + "|" + THEN + "|$)");
+
+        /** A long text cut short: "TP house, Jwlry box O → Bank: Dramen staff". */
+        static String shortened(String text)
+        {
+            var into = INTO_HOUSE.matcher(text);
+            if (into.find())
+            {
+                String way = into.group(1);
+                text = (way.startsWith("Construction") ? "Con cape" : way.startsWith("Max") ? "Max cape"
+                    : way.endsWith("tablet") ? "House tab" : "TP house") + ", " + text.substring(into.end());
+            }
+            return BOX_PLACE.matcher(text).replaceFirst("Jwlry box $1");
+        }
+
+        static String saying(Route route, Step step, boolean inside)
+        {
             if (step.kind == Kind.HOUSE && step.name != null)
             {
-                int arrow = step.name.indexOf(INTO);
+                int arrow = BankDetour.plain(step.name).indexOf(INTO);
                 return arrow < 0 || inside ? inHouse(step.name)
-                    : step.name.substring(0, arrow) + ", then " + inHouse(step.name);
+                    : step.name.substring(0, arrow) + THEN + inHouse(step.name);
             }
             int to = step.last();
             if (!inside && step.isJump() && to >= 0 && HousePlan.contains(to))
@@ -3881,7 +3931,7 @@ public final class RouteFeature
                     Step next = route.steps.get(i);
                     if (next.kind == Kind.HOUSE && next.name != null)
                     {
-                        return describe(step) + ", then " + inHouse(next.name);
+                        return describe(step) + THEN + inHouse(next.name);
                     }
                     if (next.kind != Kind.WALK && next.kind != Kind.STAIRS)
                     {
@@ -3897,15 +3947,19 @@ public final class RouteFeature
             switch (step.kind)
             {
                 case WALK:
-                {
-                    int tiles = step.points.length - 1;
-                    return "Walk " + plural(tiles, "tile")
+                    return "Walk " + plural(step.points.length - 1, "tile")
                         + (step.doors > 0 ? " (" + plural(step.doors, "door") + ")" : "");
-                }
                 case SAIL:
                     return "Sail about " + (step.points.length - 1) * Tiles.CELL + " tiles";
                 case STAIRS:
                     return step.name + " to floor " + Tiles.z(step.last());
+                case HOUSE:
+                    if (step.name != null)
+                    {
+                        int arrow = BankDetour.plain(step.name).indexOf(INTO);
+                        return (arrow < 0 ? "" : step.name.substring(0, arrow + INTO.length())) + inHouse(step.name);
+                    }
+                    // Falls through.
                 default:
                     return step.name != null ? step.name : step.kind.name().toLowerCase(ROOT);
             }
@@ -3934,22 +3988,19 @@ public final class RouteFeature
                 {
                     var at = drawn(p, step.points);
                     int b = 3 * (step.points.length - 1);
-                    boolean showA = shown(p, at, 0, false);
-                    boolean showB = shown(p, at, b, false);
-                    if (showA && showB && step.first() != step.last())
+                    if (shown(p, at, 0, false) && shown(p, at, b, false) && step.first() != step.last())
                     {
                         g.setStroke(dashed);
                         g.setColor(color(step, walk, jump));
                         g.draw(new Line2D.Double(p.screenX(at[0]), p.screenY(at[1]), p.screenX(at[b]), p.screenY(at[b + 1])));
                     }
                     g.setColor(jump);
-                    if (showA)
+                    for (int i : new int[]{0, b})
                     {
-                        g.fill(circle(p.screenX(at[0]), p.screenY(at[1]), 4));
-                    }
-                    if (showB)
-                    {
-                        g.fill(circle(p.screenX(at[b]), p.screenY(at[b + 1]), 4));
+                        if (shown(p, at, i, false))
+                        {
+                            g.fill(circle(p.screenX(at[i]), p.screenY(at[i + 1]), 4));
+                        }
                     }
                     continue;
                 }
@@ -4051,12 +4102,8 @@ public final class RouteFeature
         static boolean visible(Projection p, int node)
         {
             var game = worldPoint(node);
-            if (Tiles.isSea(node))
-            {
-                return p.shows(game);
-            }
             // Where the map draws it: a part drawn elsewhere (the Kalphite Lair) there, on the floor drawn.
-            return p.shown(game).getPlane() == p.plane() && p.shows(game);
+            return p.shows(game) && (Tiles.isSea(node) || p.shown(game).getPlane() == p.plane());
         }
 
         static double x(Projection p, int node)

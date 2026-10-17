@@ -23,35 +23,15 @@ public final class Fees
 
     public static Fee at(int x, int y, int plane)
     {
-        for (Fee fee : FEES.get())
-        {
-            if (fee.plane == plane && Math.abs(fee.x - x) <= NEAR && Math.abs(fee.y - y) <= NEAR)
-            {
-                return fee;
-            }
-        }
-        return null;
+        return FEES.get().stream().filter(fee -> fee.plane == plane && Math.abs(fee.x - x) <= NEAR
+            && Math.abs(fee.y - y) <= NEAR).findFirst().orElse(null);
     }
 
     static List<Fee> load()
     {
-        var fees = new ArrayList<Fee>();
-        for (var parts : Pathfinder.rows("/com/hdmapreforged/route/fees.tsv"))
-        {
-            if (parts.length < 3)
-            {
-                continue;
-            }
-            try
-            {
-                var xyz = Pathfinder.ints(parts[0]);
-                fees.add(new Fee(xyz[0], xyz[1], xyz[2], Integer.parseInt(parts[1].trim()), parts[2].trim()));
-            }
-            catch (NumberFormatException | ArrayIndexOutOfBoundsException e)
-            {
-                // Not a fee.
-            }
-        }
-        return Collections.unmodifiableList(fees);
+        return Pathfinder.table("/com/hdmapreforged/route/fees.tsv", parts -> {
+            var xyz = Pathfinder.ints(parts[0]);
+            return new Fee(xyz[0], xyz[1], xyz[2], Integer.parseInt(parts[1].trim()), parts[2].trim());
+        });
     }
 }

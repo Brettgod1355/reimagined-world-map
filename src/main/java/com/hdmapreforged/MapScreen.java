@@ -689,7 +689,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         view.rememberForBack(map);
         if (myMap() == map)
         {
-            view.showMap(map, MapView.shownOn(map, view.player()), MapView.PLAYER_ZOOM);
+            view.showMap(map, MapView.shownOn(map, view.player()), view.playerZoom());
         }
         else
         {
@@ -701,7 +701,7 @@ final class MapScreen extends JPanel implements MapView.Listener
     {
         // Broken bounds must not make the zoom infinite or NaN.
         double zoom = MapView.fit(map, max(100, view.getWidth()), max(100, view.getHeight()));
-        return Double.isFinite(zoom) ? max(MapView.MIN_ZOOM, min(2, zoom)) : MapView.PLAYER_ZOOM;
+        return Double.isFinite(zoom) ? max(MapView.MIN_ZOOM, min(2, zoom)) : view.playerZoom();
     }
 
     void updateSearchMode()
@@ -985,7 +985,6 @@ final class MapScreen extends JPanel implements MapView.Listener
     static Place place(BaseMaps baseMaps, List<Place> labels, WorldPoint point)
     {
         int level = wildernessLevel(point);
-        String wilderness = level > 0 ? ", level " + level : "";
         var map = baseMaps == null ? null : baseMaps.find(point);
         if (map != null && map.id != BaseMap.SURFACE && map.id != BaseMap.FULL)
         {
@@ -993,7 +992,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         }
         if (level > 0)
         {
-            return new Place(new WorldPoint(3168, point.getY(), point.getPlane()), "Wilderness" + wilderness,
+            return new Place(new WorldPoint(3168, point.getY(), point.getPlane()), "Wilderness, level " + level,
                 null);
         }
         // Of equals, the last the game lists.

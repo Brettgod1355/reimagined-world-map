@@ -10,7 +10,6 @@ import java.nio.charset.*;
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
-import com.hdmapreforged.route.Route.Outcome;
 
 /**
  * A* over tiles, sea blocks and jumps ({@link Edge}); costs in half ticks. The heuristic stays a lower bound by folding
@@ -132,21 +131,15 @@ public final class Pathfinder
         return shortcutPassages;
     }
 
-    /** Within a gate row's reach: the same floor, two tiles. */
-    static boolean near(int a, int b)
-    {
-        return z(a) == z(b) && distance(a, b) <= 2;
-    }
-
     /**
      * Whether a gates.tsv row (from, to) covers a passage: one going its own way, from near its start to near its end. Not
      * the way back: where a gate's two ends lie within 2 tiles of each other (Lletya's trees, Villa Lucens' entryway), the
      * passage out is near both ends too, and was taken for the gate's own (a row stands for one direction, as its closed
-     * step does).
+     * step does). Within a gate row's reach: the same floor, two tiles.
      */
     static boolean covers(int[] gate, Edge e)
     {
-        return near(e.from, gate[0]) && near(e.to, gate[1])
+        return near(e.from, gate[0], 2) && near(e.to, gate[1], 2)
             && distance(e.from, gate[0]) <= distance(e.from, gate[1])
             && distance(e.to, gate[1]) <= distance(e.to, gate[0]);
     }
@@ -179,16 +172,10 @@ public final class Pathfinder
     /** Where the game's own map links start (route/map_link_starts.tsv): x, y, plane. */
     static List<int[]> gameLinkStarts()
     {
-        var starts = new ArrayList<int[]>();
-        for (var parts : rows("/com/hdmapreforged/route/map_link_starts.tsv"))
-        {
+        return table("/com/hdmapreforged/route/map_link_starts.tsv", parts -> {
             int start = parse(parts[0]);
-            if (start >= 0)
-            {
-                starts.add(new int[]{x(start), y(start), z(start)});
-            }
-        }
-        return starts;
+            return start < 0 ? null : new int[]{x(start), y(start), z(start)};
+        });
     }
 
     /** A game map link starts within 4 tiles: where it leads is the game's word, not the cache's pairing. */
@@ -219,7 +206,7 @@ public final class Pathfinder
                 int next = pack(x, y, z(e.from));
                 if (map.walkable(x, y, z(e.from)) && open.computeIfAbsent(next, n -> reaches(map, n, at -> false)))
                 {
-                    extra.add(e.at(next));
+                    extra.add(e.withFrom(next));
                 }
             }
         }
@@ -263,28 +250,20 @@ public final class Pathfinder
 
     static boolean confirmed(List<Edge> passages, int from, int to)
     {
-        return passages.stream().anyMatch(e -> z(e.from) == z(from) && distance(e.from, from) <= 4
-            && z(e.to) == z(to) && distance(e.to, to) <= 16);
+        return passages.stream().anyMatch(e -> near(e.from, from, 4) && near(e.to, to, 16));
     }
 
     static List<Edge> links(CollisionMap map, String resource)
     {
-        var edges = new ArrayList<Edge>();
-        for (var parts : rows(resource))
-        {
+        return table(resource, parts -> {
             int a = parts.length < 3 ? -1 : parse(parts[0]);
             int b = a < 0 ? -1 : parse(parts[1]);
             int from = b < 0 ? -1 : map.nearestWalkable(x(a), y(a), z(a), 2);
             int to = from < 0 ? -1 : map.nearestWalkable(x(b), y(b), z(b), 2);
-            if (to >= 0)
-            {
-                // An optional fourth column: its cost in half ticks, where it takes longer than stairs.
-                int cost = parts.length > 3 && parts[3].trim().matches("\\d{1,4}") ? Integer.parseInt(parts[3].trim())
-                    : STAIRS;
-                edges.add(new Edge(from, to, Edge.Kind.ENTRANCE, parts[2].trim(), null, cost));
-            }
-        }
-        return edges;
+            // An optional fourth column: its cost in half ticks, where it takes longer than stairs.
+            int cost = parts.length > 3 && parts[3].trim().matches("\\d{1,4}") ? Integer.parseInt(parts[3].trim()) : STAIRS;
+            return to < 0 ? null : new Edge(from, to, Edge.Kind.ENTRANCE, parts[2].trim(), null, cost);
+        });
     }
 
     /** A bundled table's lines split at tabs, without {@code #} comments; what could be read. */
@@ -304,6 +283,28 @@ public final class Pathfinder
             }
         }
         return rows;
+    }
+
+    /** Each row of a bundled table as {@code parse} reads it; a row it cannot read (throws, gives null) is left out. */
+    public static <T> List<T> table(String resource, Function<String[], T> parse)
+    {
+        var read = new ArrayList<T>();
+        for (var cells : rows(resource))
+        {
+            try
+            {
+                T row = parse.apply(cells);
+                if (row != null)
+                {
+                    read.add(row);
+                }
+            }
+            catch (RuntimeException e)
+            {
+                // That row only.
+            }
+        }
+        return Collections.unmodifiableList(read);
     }
 
     /** Each line but {@code #} comments, split as {@code line.split("\t", limit)} does; closes {@code in}. */
@@ -522,7 +523,7 @@ public final class Pathfinder
             Route through = walkOrSail(request.throughWilderness(), cancelled, costLimit);
             if (through.outcome == FOUND)
             {
-                return through.throughWilderness();
+                return through.withThroughWilderness(true);
             }
             // Out of reach only if the search through it tried everything too.
             return through.outcome == CANCELLED || through.exhausted ? route : route.unproved();
@@ -571,7 +572,7 @@ public final class Pathfinder
             && !cancelled.getAsBoolean())
         {
             Route sailed = search(request.withBoat, cancelled, costLimit);
-            return sailed.outcome == FOUND ? sailed : sailed.keptOut && !route.keptOut ? route.keptOut()
+            return sailed.outcome == FOUND ? sailed : sailed.keptOut && !route.keptOut ? route.withKeptOut(true)
                 : route;
         }
         return route;
@@ -678,8 +679,7 @@ public final class Pathfinder
             }
             if (!isSea(node))
             {
-                long score = (long) (max(abs(x(node) - x(target)), abs(y(node) - y(target)))
-                    + (z(node) != z(target) ? 32 : 0)) << 32 | g;
+                long score = (long) (distance(node, target) + (z(node) != z(target) ? 32 : 0)) << 32 | g;
                 if (score < bestScore)
                 {
                     bestScore = score;
@@ -743,7 +743,7 @@ public final class Pathfinder
         Route route = end < 0 ? new Route(NONE, Collections.emptyList(), 0, target, -1, exhausted, limited, popped,
             reached) : new Route(found >= 0 ? FOUND : NEAREST, steps(nodes, all, startOffset, end),
             nodes.cost(end), target, end, exhausted, limited, popped, reached);
-        return keptOut ? route.keptOut() : route;
+        return keptOut ? route.withKeptOut(true) : route;
     }
 
     /** Nodes the search pops between turns of the flood back from the goal (and checks for a cancel); a power of two. */
@@ -836,11 +836,10 @@ public final class Pathfinder
                         }
                         int from = pack(px, py, z);
                         int closed = closedSteps.get(from);
-                        if (closed != MISSING && (closed & 1 << d) != 0)
+                        if (closed == MISSING || (closed & 1 << d) == 0)
                         {
-                            continue;
+                            visitFrom(from);
                         }
-                        visitFrom(from);
                     }
                 }
                 jumpsTo(passagesByDestination.get(node));

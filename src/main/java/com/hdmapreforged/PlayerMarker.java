@@ -18,13 +18,7 @@ final class PlayerMarker
         double ring = 12 + Math.max(0, Math.min(3, zoom)) * 1.5;
         if (home)
         {
-            RoundRectangle2D box = new RoundRectangle2D.Double(x - ring - 12, y - ring - 26, ring * 2 + 24, ring * 2 + 44,
-                10, 10);
-            g.setColor(SHADOW);
-            g.fill(box);
-            g.setColor(YELLOW);
-            g.setStroke(new BasicStroke(1.5f));
-            g.draw(box);
+            box(g, x, y, ring, YELLOW);
             label(g, text, "Home", x, y - ring - 16);
         }
         var dash = otherFloor ? new float[]{4f, 3f} : null;
@@ -58,6 +52,17 @@ final class PlayerMarker
         label(g, text, otherFloor ? "You (other floor)" : "You", x, y + ring + 8);
     }
 
+    /** The box round a marker in a house, at its portal: room above for its label. */
+    static void box(Graphics2D g, double x, double y, double ring, Color color)
+    {
+        var box = new RoundRectangle2D.Double(x - ring - 12, y - ring - 26, ring * 2 + 24, ring * 2 + 44, 10, 10);
+        g.setColor(SHADOW);
+        g.fill(box);
+        g.setColor(color);
+        g.setStroke(new BasicStroke(1.5f));
+        g.draw(box);
+    }
+
     /** Radius {@code r} round {@code (x, y)}; the party's markers and the route's ends draw with it too. */
     static Ellipse2D circle(double x, double y, double r)
     {
@@ -67,7 +72,7 @@ final class PlayerMarker
     /** An arrow at {@code (x, y)} pointing at {@code angle} (radians, screen coordinates). */
     static void pointer(Graphics2D g, TextSprites text, double x, double y, double angle)
     {
-        Path2D arrow = new Path2D.Double();
+        var arrow = new Path2D.Double();
         arrow.moveTo(12, 0);
         arrow.lineTo(-8, -9);
         arrow.lineTo(-4, 0);

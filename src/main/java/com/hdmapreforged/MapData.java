@@ -261,7 +261,9 @@ final class MapData
             var type = place == null ? null : value(PoiType.class, place.type);
             var at = type == null ? null : point(place.at);
             Needs needs = at == null ? null : needs(place.needs);
-            var poi = needs == null || place.name == null ? null : new Poi(type, place.name, at, map(place.map),
+            // Older map versions name the Seers option of Camelot Teleport "Bank": read as a bank step.
+            String name = "Camelot Teleport: Bank".equals(place.name) ? "Camelot Teleport: Seers" : place.name;
+            var poi = needs == null || name == null ? null : new Poi(type, name, at, map(place.map),
                 place.group, needs, place.wiki, map(place.target), place.note);
             if (depth < 2)
             {

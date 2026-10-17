@@ -6,6 +6,7 @@ import static java.awt.BasicStroke.*;
 import static com.hdmapreforged.PoiType.*;
 import static java.awt.RenderingHints.*;
 import static com.hdmapreforged.route.HousePlan.*;
+import static com.hdmapreforged.TileCache.*;
 import static java.lang.Math.*;
 
 import com.hdmapreforged.route.HousePlan;
@@ -164,7 +165,6 @@ final class MapView extends JComponent
     static final BasicStroke ICON_LINE = new BasicStroke(1.8f);
     static final BasicStroke ROUND_LINE = new BasicStroke(2.2f, CAP_ROUND, JOIN_ROUND);
     static final Font REGION_FONT = new Font(Font.SERIF, Font.BOLD, 17);
-    static final Font PLACE_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 12);
     static final Color WILDERNESS_TEXT = new Color(255, 190, 180);
     static final Color WILDERNESS_STRONG = new Color(255, 70, 50, 210);
     static final Color WILDERNESS_FAINT = new Color(255, 70, 50, 130);
@@ -224,6 +224,9 @@ final class MapView extends JComponent
     /** The player is in a house, shown where it stands. */
     boolean home;
     boolean following;
+    /** A party member followed instead of the player (their latest spot), and where they were; else null. */
+    Supplier<WorldPoint> member;
+    WorldPoint memberAt;
 
     double centerX = 3222;
     double centerY = 3218;
@@ -429,8 +432,7 @@ final class MapView extends JComponent
                     centerX -= (e.getX() - lastDrag.x) / scale;
                     centerY += (e.getY() - lastDrag.y) / scale;
                     clampCenter();
-                    targetX = centerX;
-                    targetY = centerY;
+                    targetHere();
                     targetZoom = zoom;
                     anchorScreen = null;
                     lastDrag = e.getPoint();
@@ -545,8 +547,7 @@ final class MapView extends JComponent
                 clampCenter();
                 if (!animator.isRunning())
                 {
-                    targetX = centerX;
-                    targetY = centerY;
+                    targetHere();
                 }
                 repaint();
             }
@@ -712,6 +713,7 @@ final class MapView extends JComponent
 
     void setFollowing(boolean following)
     {
+        member = following ? member : null;
         if (this.following == following)
         {
             return;
@@ -766,12 +768,13 @@ final class MapView extends JComponent
     {
         setFollowing(false);
         var target = mapOf(point);
-        if (target == null && maps != null && (map == null || map.id != FULL))
+        boolean notFull = map == null || map.id != FULL;
+        if (target == null && maps != null && notFull)
         {
             // On no map of its own (an instance): the map of everything draws it.
             target = maps.byId(FULL);
         }
-        lookAt(target != null && target != map && (map == null || map.id != FULL) ? target : null, point);
+        lookAt(target != null && target != map && notFull ? target : null, point);
     }
 
     void lookAt(BaseMap other, WorldPoint game)
@@ -806,11 +809,41 @@ final class MapView extends JComponent
         zoomAt(delta, new Point(getWidth() / 2, getHeight() / 2));
     }
 
+    /** Follows a party member as it follows the player, until the view is moved. */
+    void follow(Supplier<WorldPoint> member)
+    {
+        focus(memberAt = member.get());
+        this.member = member;
+        following = true;
+        fireViewChanged();
+    }
+
+    /** To where the member followed is now. Swing thread. */
+    void followMember()
+    {
+        var at = following && member != null ? member.get() : null;
+        if (following && member != null && at == null)
+        {
+            // The member left the party or is no longer shown: the player again.
+            member = null;
+            if (player != null)
+            {
+                follow();
+            }
+        }
+        else if (at != null && !at.equals(memberAt))
+        {
+            memberAt = at;
+            follow();
+        }
+    }
+
     void setPlayer(WorldPoint player)
     {
         boolean moved = !Objects.equals(player, this.player);
         this.player = player;
-        if (moved && following && player != null)
+        followMember();
+        if (moved && following && member == null && player != null)
         {
             follow();
         }
@@ -832,15 +865,23 @@ final class MapView extends JComponent
         repaint();
     }
 
+    /** The default zoom on the player: two to the third pixels a tile, setting 6. */
     static final double PLAYER_ZOOM = 3;
+
+    /** On the player, as set ("Default zoom": each step one press of +). */
+    double playerZoom()
+    {
+        return clampZoom(PLAYER_ZOOM + config.defaultZoom() - 6);
+    }
 
     void centerOnPlayer()
     {
         back.clear();
+        member = null;
         if (player != null)
         {
             following = false;
-            targetZoom = clampZoom(PLAYER_ZOOM);
+            targetZoom = playerZoom();
         }
         setFollowing(true);
     }
@@ -859,21 +900,23 @@ final class MapView extends JComponent
         }
         var at = shown(player);
         plane = at.getPlane();
-        jumpOrAnimate(true, at.getX() + 0.5, at.getY() + 0.5, PLAYER_ZOOM);
+        jumpOrAnimate(true, at.getX() + 0.5, at.getY() + 0.5, playerZoom());
         following = true;
+        member = null;
         fireViewChanged();
     }
 
     void follow()
     {
-        var containing = mapOf(player);
+        var who = member != null ? memberAt : player;
+        var containing = mapOf(who);
         if (containing != null && containing != map)
         {
-            var area = areaOf(containing, player);
-            showMap(containing, shownOn(containing, player), area != null ? fitZoom(area) : targetZoom);
+            var area = areaOf(containing, who);
+            showMap(containing, shownOn(containing, who), area != null ? fitZoom(area) : targetZoom);
             return;
         }
-        var at = shown(player);
+        var at = shown(who);
         if (plane != at.getPlane())
         {
             plane = at.getPlane();
@@ -914,8 +957,7 @@ final class MapView extends JComponent
             centerY = y;
             zoom = targetZoom = clampZoom(z);
             clampCenter();
-            targetX = centerX;
-            targetY = centerY;
+            targetHere();
             repaint();
         }
         else
@@ -995,6 +1037,13 @@ final class MapView extends JComponent
         centerY = clampAxis(centerY, map.minY, map.maxY);
     }
 
+    /** The view stays where it is now. */
+    void targetHere()
+    {
+        targetX = centerX;
+        targetY = centerY;
+    }
+
     /** The map's edge may come as far as the middle of the view: room to look past it, also on a small dungeon map. */
     static double clampAxis(double center, double min, double max)
     {
@@ -1047,8 +1096,7 @@ final class MapView extends JComponent
         clampCenter();
         if (anchorScreen != null || done)
         {
-            targetX = centerX;
-            targetY = centerY;
+            targetHere();
         }
         if (done)
         {
@@ -1151,11 +1199,11 @@ final class MapView extends JComponent
         double h = getHeight() / 2.0 / scale;
         // Another map's tiles draw beyond the bounds: cut at the edges of the tiles of zoom 1, not at those of the level
         // drawn, or each zoom would end it at another line (Dorgesh-Kaan South Dungeon's agility course).
-        int edge = map.tiles != map.id ? (int) TileCache.worldPerTile(1) : 1;
-        return new int[]{max(TileCache.tileIndex(x - w, level), TileCache.tileIndex(snap(map.minX, edge), level)),
-            min(TileCache.tileIndex(x + w, level), TileCache.tileIndex(snap(map.maxX + edge - 1, edge) - 1, level)),
-            max(TileCache.tileIndex(y - h, level), TileCache.tileIndex(snap(map.minY, edge), level)),
-            min(TileCache.tileIndex(y + h, level), TileCache.tileIndex(snap(map.maxY + edge - 1, edge) - 1, level))};
+        int edge = map.tiles != map.id ? (int) worldPerTile(1) : 1;
+        return new int[]{max(tileIndex(x - w, level), tileIndex(snap(map.minX, edge), level)),
+            min(tileIndex(x + w, level), tileIndex(snap(map.maxX + edge - 1, edge) - 1, level)),
+            max(tileIndex(y - h, level), tileIndex(snap(map.minY, edge), level)),
+            min(tileIndex(y + h, level), tileIndex(snap(map.maxY + edge - 1, edge) - 1, level))};
     }
 
     static int snap(int v, int edge)
@@ -1225,7 +1273,7 @@ final class MapView extends JComponent
         }
         // Not under an upper floor: the ground floor below it has no stand-ins.
         passing = endLevel < level && plane == 0;
-        double span = TileCache.worldPerTile(level);
+        double span = worldPerTile(level);
         int visible = count(range);
         tiles.beginFrame(this, end == null ? visible : max(visible, count(end)));
         // A frame after one with no tile at all, not even a stand-in (the map just opened or switched), may read some tiles
@@ -1233,9 +1281,10 @@ final class MapView extends JComponent
         int diskNow = drawnTiles == 0 ? FIRST_FRAME_DISK_TILES : 0;
         long diskUntil = System.nanoTime() + FIRST_FRAME_DISK_NANOS;
         drawnTiles = 0;
-        scaled.beginFrame(TileCache.need(visible));
+        scaled.beginFrame(need(visible));
         boolean settled = zoom == targetZoom;
-        boolean smooth = !(scale * span > TileCache.TILE_SIZE * 1.01 && config.crispPixels());
+        // Past the most detailed tiles, crisp squares: smoothing blurred them and cost a copy of each.
+        boolean smooth = scale * span <= TILE_SIZE * 1.01;
         // Smooth scaling is costly on large windows and invisible while moving.
         g.setRenderingHint(KEY_INTERPOLATION, moving || !smooth
             ? VALUE_INTERPOLATION_NEAREST_NEIGHBOR : VALUE_INTERPOLATION_BILINEAR);
@@ -1347,7 +1396,7 @@ final class MapView extends JComponent
             BufferedImage parent = tiles.peek(new TileCache.Key(map.tiles, coarser, plane, px, py));
             if (parent != null)
             {
-                int part = TileCache.TILE_SIZE / factor;
+                int part = TILE_SIZE / factor;
                 int sx = (tx - px * factor) * part;
                 int sy = (factor - 1 - (ty - py * factor)) * part;
                 g.drawImage(parent, left, top, right, bottom, sx, sy, sx + part, sy + part, null);
@@ -1452,8 +1501,8 @@ final class MapView extends JComponent
         Color color = selected.type.color;
         var links = selected.links();
         float width = links.size() > 12 ? 1.6f : 2.4f;
-        Path2D usableLines = new Path2D.Double();
-        Path2D lockedLines = new Path2D.Double();
+        var usableLines = new Path2D.Double();
+        var lockedLines = new Path2D.Double();
         var ends = new ArrayList<double[]>();
         for (var link : links)
         {
@@ -1778,7 +1827,7 @@ final class MapView extends JComponent
             {
                 continue;
             }
-            Font font = pass == 0 ? REGION_FONT : pass == 3 ? SMALL_PLACE_FONT : PLACE_FONT;
+            Font font = pass == 0 ? REGION_FONT : pass == 3 ? SMALL_PLACE_FONT : LABEL_FONT;
             g.setFont(font);
             var metrics = g.getFontMetrics();
             places:
@@ -1799,7 +1848,7 @@ final class MapView extends JComponent
                 {
                     continue;
                 }
-                Rectangle2D box = new Rectangle2D.Double(x - label.width / 2.0 - 3, top, label.width + 6, metrics.getHeight());
+                var box = new Rectangle2D.Double(x - label.width / 2.0 - 3, top, label.width + 6, metrics.getHeight());
                 for (var other : taken)
                 {
                     if (other.intersects(box))
@@ -1905,7 +1954,7 @@ final class MapView extends JComponent
         var metrics = g.getFontMetrics();
         int width = metrics.stringWidth(poi.name);
         double left = max(2, min(getWidth() - width - 12, x - width / 2.0 - 5));
-        RoundRectangle2D box = new RoundRectangle2D.Double(left, y, width + 10, metrics.getHeight() + 4, 8, 8);
+        var box = new RoundRectangle2D.Double(left, y, width + 10, metrics.getHeight() + 4, 8, 8);
         g.setColor(LABEL_BACKGROUND);
         g.fill(box);
         g.setColor(poi.type.color);
@@ -2049,13 +2098,13 @@ final class MapView extends JComponent
         y = follow.shape.getCenterY();
         g.setColor(following ? PlayerMarker.YELLOW : Color.WHITE);
         g.setStroke(ICON_LINE);
-        g.draw(new Ellipse2D.Double(x - 7, y - 7, 14, 14));
+        g.draw(PlayerMarker.circle(x, y, 7));
         for (int s = -1; s <= 1; s += 2)
         {
             line(g, x, y + s * 7, x, y + s * 11);
             line(g, x + s * 7, y, x + s * 11, y);
         }
-        g.fill(new Ellipse2D.Double(x - 2.5, y - 2.5, 5, 5));
+        g.fill(PlayerMarker.circle(x, y, 2.5));
         Control up = control(g, painted, MARGIN, bottom, CONTROL, () -> choosePlane(plane + 1), "Floor up");
         String floor = "Floor " + plane;
         int floorWidth = metrics.stringWidth(floor) + 24;
@@ -2106,7 +2155,7 @@ final class MapView extends JComponent
         int width = metrics.stringWidth(text) + 24;
         double x = max(2, (getWidth() - width) / 2.0);
         double y = getHeight() - MARGIN - 18 - CONTROL - 40;
-        RoundRectangle2D box = new RoundRectangle2D.Double(x, y, width, 26, 10, 10);
+        var box = new RoundRectangle2D.Double(x, y, width, 26, 10, 10);
         g.setColor(new Color(20, 20, 24, 225));
         g.fill(box);
         g.setColor(CONTROL_EDGE);
@@ -2196,7 +2245,7 @@ final class MapView extends JComponent
     static Path2D triangle(double x, double y, boolean up)
     {
         double d = up ? -1 : 1;
-        Path2D path = new Path2D.Double();
+        var path = new Path2D.Double();
         path.moveTo(x, y + d * 6);
         path.lineTo(x + 7, y - d * 4);
         path.lineTo(x - 7, y - d * 4);
@@ -2275,7 +2324,7 @@ final class MapView extends JComponent
         setFollowing(false);
         rememberForBack(world);
         var me = player != null && world == mapOf(player) ? shownOn(world, player) : null;
-        showMap(world, me, me != null ? PLAYER_ZOOM : min(targetZoom, 1));
+        showMap(world, me, me != null ? playerZoom() : min(targetZoom, 1));
     }
 
     void goBack()
@@ -2300,7 +2349,7 @@ final class MapView extends JComponent
                 shownOn(inside.map, inside.point).getPlane()), fitZoom(area));
             return;
         }
-        showMap(inside.map, shownOn(inside.map, inside.point), max(targetZoom, PLAYER_ZOOM));
+        showMap(inside.map, shownOn(inside.map, inside.point), max(targetZoom, playerZoom()));
     }
 
     /** Walkable area around a point as {minX, minY, maxX, maxY}; null when unknown or too large. Set by the route feature. */
@@ -2328,7 +2377,7 @@ final class MapView extends JComponent
         double w = max(100, getWidth() - 80);
         double h = max(100, getHeight() - 80);
         double fit = min(w / (area[2] - area[0] + 8), h / (area[3] - area[1] + 8));
-        return clampZoom(min(PLAYER_ZOOM, log(fit) / log(2)));
+        return clampZoom(min(playerZoom(), log(fit) / log(2)));
     }
 
     /** Where an icon leads when that is another map or another dungeon floor; null otherwise. */

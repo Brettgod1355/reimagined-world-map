@@ -52,7 +52,7 @@ public final class ShortcutPassage
 
         static boolean near(int a, int b)
         {
-            return Tiles.z(a) == Tiles.z(b) && Tiles.distance(a, b) <= RADIUS;
+            return Tiles.near(a, b, RADIUS);
         }
     }
 

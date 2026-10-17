@@ -123,7 +123,11 @@ public final class RouteHouse
         }
         houseX = west < 13 ? (west - 2) * 8 : 0;
         houseY = south < 13 ? (south - 2) * 8 : 0;
+        placed = west < 13;
     }
+
+    /** Whether the house's rooms are placed on the plan: not on the first tick after coming in, as its scene loads. */
+    boolean placed;
 
     /** The player's tile on the plan of their own house once seen; else -1 (the route starts from its ways out). */
     int inHouse()
@@ -131,7 +135,41 @@ public final class RouteHouse
         Player player = routes.client.getLocalPlayer();
         var local = player == null ? null : player.getLocalLocation();
         var view = routes.client.getTopLevelWorldView();
-        return plan == null || !house.own() || local == null || view == null ? -1 : planNode(local, view.getPlane());
+        var seen = plan;
+        int at = seen == null || !house.own() || local == null || view == null ? -1
+            : planNode(local, view.getPlane());
+        // Just in, one stands where the portal put one (its arrival), but the tile read from the scene on the first
+        // ticks is off (the scene still loading): the arrival is the tile until the reading changes (it settles, or
+        // one walks).
+        boolean settling = seen != null && enteredAt >= 0 && routes.ticks - enteredAt < SETTLE_TICKS;
+        if (!settling)
+        {
+            return at;
+        }
+        if (firstReading == NONE)
+        {
+            firstReading = at;
+        }
+        if (at == firstReading || at < 0)
+        {
+            return seen.arrival;
+        }
+        enteredAt = -1;
+        return at;
+    }
+
+    /** Ticks after coming in during which the arrival is the tile while the scene's reading has not changed. */
+    static final int SETTLE_TICKS = 10;
+    static final int NONE = Integer.MIN_VALUE;
+    /** The tick one came into the house; -1 when not in it. */
+    int enteredAt = -1;
+    /** The scene's first reading of one's tile since coming in. */
+    int firstReading = NONE;
+
+    void entered(int tick)
+    {
+        enteredAt = tick;
+        firstReading = NONE;
     }
 
     /** A scene tile of one's house on its plan. */
@@ -185,28 +223,27 @@ public final class RouteHouse
             house.scanAgain();
             return;
         }
-        int size = SIZE;
         int dx = houseX;
         int dy = houseY;
         var scene = view.getScene().getTiles();
         var collision = view.getCollisionMaps();
         // Moved to the house's own place (houseX/houseY): the scene is centred on where one stood as it loaded.
-        byte[][] placed = new byte[4][size * size];
+        byte[][] placed = new byte[4][SIZE * SIZE];
         var things = new LinkedHashMap<Integer, String>();
         var names = new ArrayList<String>();
         for (int z = 0; z < 4; z++)
         {
             var flags = collision == null || collision[z] == null ? new int[0][] : collision[z].getFlags();
-            for (int x = Math.max(0, dx); x < Math.min(size, size + dx); x++)
+            for (int x = Math.max(0, dx); x < Math.min(SIZE, SIZE + dx); x++)
             {
-                for (int y = Math.max(0, dy); y < Math.min(size, size + dy); y++)
+                for (int y = Math.max(0, dy); y < Math.min(SIZE, SIZE + dy); y++)
                 {
                     Tile tile = scene[z][x][y];
                     // No ground (the void round the house) is no floor, though the game sets no flag there.
                     int f = tile == null || tile.getSceneTilePaint() == null && tile.getSceneTileModel() == null
                         || x >= flags.length || y >= flags[x].length ? CollisionDataFlag.BLOCK_MOVEMENT_FULL : flags[x][y];
                     int node = node(x - dx, y - dy, z);
-                    placed[z][(x - dx) * size + y - dy] = (byte) (((f & CollisionDataFlag.BLOCK_MOVEMENT_FULL) == 0 ? 1 : 0)
+                    placed[z][(x - dx) * SIZE + y - dy] = (byte) (((f & CollisionDataFlag.BLOCK_MOVEMENT_FULL) == 0 ? 1 : 0)
                         | ((f & CollisionDataFlag.BLOCK_MOVEMENT_NORTH) != 0 ? 2 : 0)
                         | ((f & CollisionDataFlag.BLOCK_MOVEMENT_EAST) != 0 ? 4 : 0));
                     var standing = tile == null ? new GameObject[0] : tile.getGameObjects();
@@ -264,7 +301,7 @@ public final class RouteHouse
             {
                 int north = thing.getKey() + d;
                 int y = Tiles.y(north) - HousePlan.Y;
-                if (y < size && (placed[Tiles.z(north)][(Tiles.x(north) - HousePlan.X) * size + y] & 1) != 0)
+                if (y < SIZE && (placed[Tiles.z(north)][(Tiles.x(north) - HousePlan.X) * SIZE + y] & 1) != 0)
                 {
                     arrival = north;
                     exit = "";
@@ -272,8 +309,8 @@ public final class RouteHouse
             }
         }
         // A house may have several superior gardens: a spirit tree in one and a fairy ring in another count as both.
-        var gardens = new HashSet<String>();
-        things.values().stream().filter(RouteHouse::garden).forEach(t -> gardens.add(HouseTracker.feature(t)));
+        var gardens = things.values().stream().filter(RouteHouse::garden).map(HouseTracker::feature)
+            .collect(Collectors.toSet());
         if (!gardens.isEmpty())
         {
             boolean both = gardens.size() > 1 || gardens.contains(BOTH);

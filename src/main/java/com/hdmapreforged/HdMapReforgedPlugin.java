@@ -43,75 +43,75 @@ import okhttp3.*;
 public class HdMapReforgedPlugin extends Plugin
 {
     /** Unlocks are read at most this often while things change; quest states this often at all. */
-    private static final int UNLOCK_TICKS = 5;
-    private static final int QUEST_TICKS = 100;
+    static final int UNLOCK_TICKS = 5;
+    static final int QUEST_TICKS = 100;
 
     @Inject
-    private Client client;
+    Client client;
 
     @Inject
-    private ClientThread clientThread;
+    ClientThread clientThread;
 
     @Inject
-    private ClientToolbar clientToolbar;
+    ClientToolbar clientToolbar;
 
     @Inject
-    private OkHttpClient okHttpClient;
+    OkHttpClient okHttpClient;
 
     @Inject
     @Named("developerMode")
-    private boolean developerMode;
+    boolean developerMode;
 
     @Inject
-    private Gson gson;
+    Gson gson;
 
     @Inject
-    private ItemManager itemManager;
+    ItemManager itemManager;
 
     @Inject
-    private HdMapReforgedConfig config;
+    HdMapReforgedConfig config;
 
     @Inject
-    private KeyManager keyManager;
+    KeyManager keyManager;
 
     @Inject
-    private ConfigManager configManager;
+    ConfigManager configManager;
 
     @Inject
-    private PartyMap party;
+    PartyMap party;
 
     @Inject
-    private RouteFeature route;
+    RouteFeature route;
 
-    private ExecutorService io;
+    ExecutorService io;
     /** One task at a time so results arrive in order. */
-    private ExecutorService dataIo;
-    private final AtomicInteger dataGeneration = new AtomicInteger();
-    private final AtomicBoolean repaintPending = new AtomicBoolean();
-    private Filepath home;
-    private TileCache tiles;
+    ExecutorService dataIo;
+    final AtomicInteger dataGeneration = new AtomicInteger();
+    final AtomicBoolean repaintPending = new AtomicBoolean();
+    Filepath home;
+    TileCache tiles;
     /** The server's lists and pictures, kept once seen. */
-    private ServerCache serverCache;
+    ServerCache serverCache;
     /** The lists our map server publishes: where NPCs stand, the shops, drops and items on the ground. */
-    private volatile WorldData world = WorldData.NONE;
+    volatile WorldData world = WorldData.NONE;
     /** Its data version; null before the first download. */
-    private volatile String worldVersion;
+    volatile String worldVersion;
     /** A data version whose search.json could not be used, said once in the log. */
-    private volatile String worldRefused;
+    volatile String worldRefused;
     /** When the server was last asked for a newer version of it. */
-    private volatile long worldAsked;
+    volatile long worldAsked;
     /** Asked again at most this often, and only when the search, a card or a route uses it. */
-    private static final long WORLD_ASK_MS = 60 * 60_000L;
+    static final long WORLD_ASK_MS = 60 * 60_000L;
     /** In developer mode, against a map server on this computer. */
-    private static final long DEVELOPER_WORLD_ASK_MS = 30_000L;
-    private volatile long worldAskMs = WORLD_ASK_MS;
-    private MapServer server;
-    private MapScreen screen;
-    private MapScreen fullScreen;
-    private FullMapWindow fullMap;
-    private MapIconLayer[] gameIcons = new MapIconLayer[0];
-    private GraveMarker[] graves = new GraveMarker[0];
-    private final HotkeyListener mapKey = new HotkeyListener(() -> config.openMapKey())
+    static final long DEVELOPER_WORLD_ASK_MS = 30_000L;
+    volatile long worldAskMs = WORLD_ASK_MS;
+    MapServer server;
+    MapScreen screen;
+    MapScreen fullScreen;
+    FullMapWindow fullMap;
+    MapIconLayer[] gameIcons = new MapIconLayer[0];
+    GraveMarker[] graves = new GraveMarker[0];
+    final HotkeyListener mapKey = new HotkeyListener(() -> config.openMapKey())
     {
         @Override
         public void keyPressed(KeyEvent e)
@@ -129,13 +129,11 @@ public class HdMapReforgedPlugin extends Plugin
             toggleFullMap();
         }
     };
-    private final KeyListener escape = new KeyListener()
-    {
-        @Override
-        public void keyTyped(KeyEvent e)
-        {
-        }
+    final KeyListener escape = new Escape();
 
+    /** Escape closes the map over the game while it is open. */
+    final class Escape extends KeyAdapter implements KeyListener
+    {
         @Override
         public void keyPressed(KeyEvent e)
         {
@@ -146,35 +144,30 @@ public class HdMapReforgedPlugin extends Plugin
                 SwingUtilities.invokeLater(open::close);
             }
         }
-
-        @Override
-        public void keyReleased(KeyEvent e)
-        {
-        }
-    };
-    private MapPanel panel;
-    private MapWindow window;
-    private NavigationButton button;
-    private WorldPoint lastPlayer;
-    private boolean atHome;
+    }
+    MapPanel panel;
+    MapWindow window;
+    NavigationButton button;
+    WorldPoint lastPlayer;
+    boolean atHome;
     /** Null until a version's maps and places are shown. */
-    private volatile String currentVersion;
+    volatile String currentVersion;
     /** What the requirements of the data shown read; null before it loads. */
-    private volatile Unlocks.Watched watched;
+    volatile Unlocks.Watched watched;
     /** Each skill's real level as last seen, so only a level gained marks unlocks for a new look. Client thread. */
-    private final int[] realLevels = new int[Skill.values().length];
+    final int[] realLevels = new int[Skill.values().length];
     /** Before a map version's files, or the server's versions, are asked for again. */
-    private static final long RETRY_MS = 60_000;
+    static final long RETRY_MS = 60_000;
     /** The latest such request waiting, stopped when the plugin stops. */
-    private volatile Timer retry;
+    volatile Timer retry;
     /** Counts starts and stops, so late callbacks of an earlier run do nothing. */
-    private final AtomicInteger life = new AtomicInteger();
-    private volatile String wantedVersion;
-    private Unlocks unlocks;
-    private boolean unlocksDirty = true;
-    private int ticks;
-    private int lastUnlockTick = -UNLOCK_TICKS;
-    private int lastQuestTick = -QUEST_TICKS;
+    final AtomicInteger life = new AtomicInteger();
+    volatile String wantedVersion;
+    Unlocks unlocks;
+    boolean unlocksDirty = true;
+    int ticks;
+    int lastUnlockTick = -UNLOCK_TICKS;
+    int lastQuestTick = -QUEST_TICKS;
 
     @Provides
     HdMapReforgedConfig provideConfig(ConfigManager configManager)
@@ -205,7 +198,7 @@ public class HdMapReforgedPlugin extends Plugin
             key -> config.openMapKey().matches(key));
         keyManager.registerKeyListener(escape);
         keyManager.registerKeyListener(mapKey);
-        panel = new MapPanel(() -> fullMap.open(), this::togglePopOut, this::showOnMap, party.sidebar(),
+        panel = new MapPanel(() -> fullMap.open(), this::togglePopOut, this::showOnMap, party,
             fullScreen::placeName);
         button = NavigationButton.builder()
             .tooltip("Reimagined World Map")
@@ -241,7 +234,7 @@ public class HdMapReforgedPlugin extends Plugin
         whenGameLoaded(started, () -> GameIconSprites.load(client), PoiIcons::clearCache);
     }
 
-    private void whenGameLoaded(int started, BooleanSupplier load, Runnable after)
+    void whenGameLoaded(int started, BooleanSupplier load, Runnable after)
     {
         clientThread.invokeLater(() -> {
             if (started != life.get())
@@ -258,7 +251,7 @@ public class HdMapReforgedPlugin extends Plugin
         });
     }
 
-    private MapIconLayer gameIconLayer(MapScreen on)
+    MapIconLayer gameIconLayer(MapScreen on)
     {
         MapIconLayer layer = new MapIconLayer(on.view, config::showGameIcons, config::iconSize);
         on.view.addOverlay(layer);
@@ -267,7 +260,7 @@ public class HdMapReforgedPlugin extends Plugin
         return layer;
     }
 
-    private static Thread daemon(Runnable runnable, String name)
+    static Thread daemon(Runnable runnable, String name)
     {
         Thread thread = new Thread(runnable, name);
         thread.setDaemon(true);
@@ -344,7 +337,7 @@ public class HdMapReforgedPlugin extends Plugin
         button = null;
     }
 
-    private void screens(Consumer<MapScreen> change)
+    void screens(Consumer<MapScreen> change)
     {
         SwingUtilities.invokeLater(() -> {
             if (screen != null)
@@ -365,9 +358,11 @@ public class HdMapReforgedPlugin extends Plugin
             return;
         }
         WorldPoint location = playerLocation(player);
-        party.tick(location, ticks);
         route.tick(location);
         WorldPoint home = route.home();
+        // In a house the party sees its portal (the house's own place is a copy of the game's rooms).
+        WorldPoint door = home == null || !HousePlan.contains(home.getX(), home.getY()) ? home : route.outside();
+        party.tick(home != null ? door : location, home != null, ticks);
         WorldPoint shown = home != null ? home : location;
         // On the house's plan, or in a box at its portal while that plan is not known (a friend's house).
         boolean boxed = home != null && !HousePlan.contains(home.getX(), home.getY());
@@ -386,7 +381,7 @@ public class HdMapReforgedPlugin extends Plugin
     }
 
     /** As the game's maps show it: in instances the copied real location, on a boat the boat's main-world place. */
-    private WorldPoint playerLocation(Player player)
+    WorldPoint playerLocation(Player player)
     {
         LocalPoint local = player.getLocalLocation();
         WorldView view = player.getWorldView();
@@ -405,7 +400,7 @@ public class HdMapReforgedPlugin extends Plugin
         return place == null ? at : new WorldPoint(place[0], place[1], place[2]);
     }
 
-    private void updateUnlocks()
+    void updateUnlocks()
     {
         boolean due = unlocksDirty && ticks - lastUnlockTick >= UNLOCK_TICKS || ticks - lastUnlockTick >= QUEST_TICKS;
         Unlocks.Watched reads = watched;
@@ -456,14 +451,15 @@ public class HdMapReforgedPlugin extends Plugin
     }
 
     /** Our orb entry is in this frame's menu: the sort that follows has something to do. Client thread. */
-    private boolean ourEntryAdded;
+    boolean ourEntryAdded;
 
     /**
      * Whether the game takes typed keys as text now: an input box is open (an amount, a bank search, the world map's
-     * search) or the chat takes letters (with Key Remapping's "Press Enter to Chat" shown it takes none). Set on the
+     * search) or the chat takes letters (with Key Remapping's "Press Enter to Chat" shown it takes none), also while the
+     * chat is closed. The game's own chat key script ignores keys when a dialogue hides the chat's lines. Set on the
      * client thread each client tick; the key thread only reads it.
      */
-    private volatile boolean gameTakesText;
+    volatile boolean gameTakesText;
 
     @Subscribe
     public void onClientTick(ClientTick tick)
@@ -471,24 +467,32 @@ public class HdMapReforgedPlugin extends Plugin
         boolean text = false;
         if (client.getGameState() == GameState.LOGGED_IN)
         {
-            net.runelite.api.widgets.Widget chat = client.getWidget(InterfaceID.Chatbox.UNIVERSE);
-            net.runelite.api.widgets.Widget input = client.getWidget(InterfaceID.Chatbox.INPUT);
+            var chat = client.getWidget(InterfaceID.Chatbox.UNIVERSE);
+            var input = client.getWidget(InterfaceID.Chatbox.INPUT);
             text = client.getFocusedInputFieldWidget() != null || client.getVarcIntValue(VarClientID.MESLAYERMODE) != 0
                 || client.getVarcIntValue(VarClientID.WORLDMAP_SEARCHING) == 1
-                || chat != null && chat.getOnKeyListener() != null && input != null && !input.isHidden()
+                || chat != null && chat.getOnKeyListener() != null && input != null && shown(InterfaceID.Chatbox.CHATDISPLAY)
+                && shown(InterfaceID.Chatbox.MES_LAYER_HIDE) && client.getWidget(InterfaceID.Reportabuse.UNIVERSE) == null
                 && !String.valueOf(input.getText()).contains("Press Enter to Chat");
         }
         gameTakesText = text;
     }
 
+    /** Not hidden by itself; a closed chat hides only its parents. */
+    boolean shown(int component)
+    {
+        var w = client.getWidget(component);
+        return w != null && !w.isSelfHidden();
+    }
+
     /** Whether the game takes this key as text: it types a character (no Ctrl, Alt or Meta) while it takes text. */
-    private boolean typingInGame(KeyEvent e)
+    boolean typingInGame(KeyEvent e)
     {
         return e.getKeyChar() != KeyEvent.CHAR_UNDEFINED && !e.isControlDown() && !e.isAltDown() && !e.isMetaDown()
             && gameTakesText;
     }
 
-    private void toggleFullMap()
+    void toggleFullMap()
     {
         SwingUtilities.invokeLater(() -> {
             if (fullMap != null)
@@ -527,7 +531,7 @@ public class HdMapReforgedPlugin extends Plugin
         return option != null && Text.removeTags(option).toLowerCase(Locale.ROOT).contains("world map");
     }
 
-    private static boolean isOurEntry(MenuEntry entry)
+    static boolean isOurEntry(MenuEntry entry)
     {
         return entry.getType() == MenuAction.RUNELITE && MENU_OPTION.equals(entry.getOption()) && isOrb(entry.getParam1());
     }
@@ -581,14 +585,14 @@ public class HdMapReforgedPlugin extends Plugin
     }
 
     /** One's grave from the game: standing while GRAVESTONE_VISIBLE is not 0 (not a flag), on the tile one died on. */
-    private void checkGrave()
+    void checkGrave()
     {
         int coord = client.getVarpValue(VarPlayerID.GRAVESTONE_CREATION_DEATH_COORD);
         showGrave(client.getVarbitValue(VarbitID.GRAVESTONE_VISIBLE) != 0 && coord > 0 ? WorldPoint.fromCoord(coord)
             : null);
     }
 
-    private void showGrave(WorldPoint at)
+    void showGrave(WorldPoint at)
     {
         SwingUtilities.invokeLater(() -> {
             for (GraveMarker grave : graves)
@@ -634,7 +638,7 @@ public class HdMapReforgedPlugin extends Plugin
     public void onConfigChanged(ConfigChanged event)
     {
         // The house (per account) is written as it is seen: nothing for the map's tiles.
-        if (!HdMapReforgedConfig.GROUP.equals(event.getGroup())
+        if (!GROUP.equals(event.getGroup())
             || Set.of("fullMapBounds", RouteFeature.HOUSE_KEY, RouteFeature.PLAN_KEY, RouteFeature.BANK_KEY)
             .contains(event.getKey()))
         {
@@ -653,19 +657,16 @@ public class HdMapReforgedPlugin extends Plugin
             case "linesOff":
                 screens(s -> s.view.setLinesOff(config.linesOff()));
                 return;
-
-            default:
-                break;
         }
         refreshLater();
     }
 
-    private void configureTiles()
+    void configureTiles()
     {
-        tiles.configure(config.diskCache(), config.memoryTiles(), config.diskCacheMb());
+        tiles.configure(true, 256, config.diskCacheMb());
     }
 
-    private void tileLoaded()
+    void tileLoaded()
     {
         if (repaintPending.compareAndSet(false, true))
         {
@@ -676,12 +677,12 @@ public class HdMapReforgedPlugin extends Plugin
         }
     }
 
-    private void refreshLater()
+    void refreshLater()
     {
         SwingUtilities.invokeLater(this::refresh);
     }
 
-    private void refresh()
+    void refresh()
     {
         if (screen != null)
         {
@@ -695,7 +696,7 @@ public class HdMapReforgedPlugin extends Plugin
      * files are had. {@code now}: ask the server even when the update check is not due; {@code world}: also take its
      * newer world facts, in the same request. Data thread.
      */
-    private void resolveVersions(boolean now, boolean world)
+    void resolveVersions(boolean now, boolean world)
     {
         KnownVersion known = KnownVersion.read(home.joinSegment(KnownVersion.FILE));
         if (known != null)
@@ -705,7 +706,7 @@ public class HdMapReforgedPlugin extends Plugin
         // Against a map server of one's own (developer mode, -Dhdmap.server): a data fix published there shows at the
         // next start, not a week later.
         boolean askMap = now || known == null || developerMode && System.getProperty("hdmap.server") != null
-            || known.due(config.mapUpdateCheck(), System.currentTimeMillis());
+            || known.due(System.currentTimeMillis());
         if (!askMap && !world)
         {
             return;
@@ -739,7 +740,7 @@ public class HdMapReforgedPlugin extends Plugin
      * The world facts, for what shows them (the search, a card, a route): asks the server for a newer version when
      * {@link #WORLD_ASK_MS} have passed since it last did, so nothing is fetched while nothing uses them.
      */
-    private WorldData worldInUse()
+    WorldData worldInUse()
     {
         long now = System.currentTimeMillis();
         if (now - worldAsked >= worldAskMs)
@@ -756,7 +757,7 @@ public class HdMapReforgedPlugin extends Plugin
      * one shown; read on the data thread. Without it, the next look ({@link #worldInUse}) asks again a minute later;
      * one in another format (an older or newer map server) is not used. Either is said once in the log.
      */
-    private void loadWorld(int started, String version)
+    void loadWorld(int started, String version)
     {
         if (version == null || started != life.get() || version.equals(worldVersion))
         {
@@ -798,7 +799,7 @@ public class HdMapReforgedPlugin extends Plugin
      * its region table and its places, read here; its tiles switch with them. Until all three are usable the version
      * shown stays, and they are asked for again after {@link #RETRY_MS}. Data thread.
      */
-    private void useVersion(String version)
+    void useVersion(String version)
     {
         int started = life.get();
         wantedVersion = version;
@@ -868,7 +869,7 @@ public class HdMapReforgedPlugin extends Plugin
     }
 
     /** Runs {@code task} on the data thread after {@link #RETRY_MS} unless the plugin stopped meanwhile. */
-    private void retryLater(int started, Runnable task)
+    void retryLater(int started, Runnable task)
     {
         Timer timer = new Timer((int) RETRY_MS, e -> runData(() -> {
             if (started == life.get())
@@ -886,7 +887,7 @@ public class HdMapReforgedPlugin extends Plugin
         timer.start();
     }
 
-    private void switchVersion(String version, BaseMaps maps, MapData data, int started)
+    void switchVersion(String version, BaseMaps maps, MapData data, int started)
     {
         String current = tiles.version;
         if (current != null && !current.equals(version))
@@ -900,25 +901,28 @@ public class HdMapReforgedPlugin extends Plugin
                 }
                 if (started == life.get() && version.equals(wantedVersion))
                 {
-                    tiles.setVersion(version, true);
                     publish(version, maps, data, started);
                 }
             }));
             return;
         }
-        tiles.setVersion(version, true);
         publish(version, maps, data, started);
     }
 
-    /** A version's maps and places to the screens, the route and the requirements read. Data thread. */
-    private void publish(String version, BaseMaps maps, MapData data, int started)
+    /** A version's tiles, maps and places to the screens, the route and the requirements read. Data thread. */
+    void publish(String version, BaseMaps maps, MapData data, int started)
     {
+        tiles.setVersion(version, true);
         int generation = dataGeneration.incrementAndGet();
         currentVersion = version;
         // The places' needs and those of the bundled gates and shortcuts: a quest not watched counts as done.
-        watched = new Unlocks.Watched(Stream.concat(Poi.flatten(data.pois).stream().flatMap(poi -> Stream.concat(
+        var reads = new Unlocks.Watched(Stream.concat(Poi.flatten(data.pois).stream().flatMap(poi -> Stream.concat(
             poi.members().stream().map(member -> member.needs), poi.links().stream().map(link -> link.needs))),
             RouteSource.fixedNeeds().stream()).collect(Collectors.toList()));
+        // Quest start icons show their quest's state.
+        data.icons.stream().filter(icon -> icon.poi.type == PoiType.QUEST_START)
+            .forEach(icon -> reads.add(icon.poi.name));
+        watched = reads;
         route.setIcons(data.icons);
         clientThread.invokeLater(() -> unlocksDirty = true);
         Set<Integer> elements = data.icons.stream().filter(icon -> icon.element >= 0).map(icon -> icon.element)
@@ -940,12 +944,12 @@ public class HdMapReforgedPlugin extends Plugin
         refreshLater();
     }
 
-    private void runData(Runnable task)
+    void runData(Runnable task)
     {
         TileCache.execute(dataIo, task);
     }
 
-    private void togglePopOut()
+    void togglePopOut()
     {
         if (window != null)
         {
@@ -956,7 +960,7 @@ public class HdMapReforgedPlugin extends Plugin
         window.setVisible(true);
     }
 
-    private void dock()
+    void dock()
     {
         MapWindow closing = window;
         window = null;
@@ -966,7 +970,7 @@ public class HdMapReforgedPlugin extends Plugin
         }
     }
 
-    private void showOnMap(WorldPoint point)
+    void showOnMap(WorldPoint point)
     {
         if (fullMap == null)
         {

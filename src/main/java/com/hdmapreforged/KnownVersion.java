@@ -17,10 +17,10 @@ final class KnownVersion
     final String version;
     final long checkedAt;
 
-    /** A check time in the future (a changed clock) counts as due. */
-    boolean due(HdMapReforgedConfig.UpdateCheck check, long now)
+    /** Weekly; a check time in the future (a changed clock) counts as due. */
+    boolean due(long now)
     {
-        return check.days == 0 || check.days > 0 && (now < checkedAt || now - checkedAt >= check.days * DAY_MS);
+        return now < checkedAt || now - checkedAt >= 7 * DAY_MS;
     }
 
     /** Null when missing or unusable. */

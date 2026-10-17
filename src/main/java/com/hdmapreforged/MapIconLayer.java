@@ -222,7 +222,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
                 double sx = projection.screenX(icon.drawn.getX());
                 double sy = projection.screenY(icon.drawn.getY());
                 if (sx < -r - 2 || sy < -r - 2 || sx > projection.width() + r + 2 || sy > projection.height() + r + 2
-                    || !toggled[layer(icon).ordinal()] || !onView(icon, projection))
+                    || !toggled[layer(icon).ordinal()] || !onView(icon, projection) || hidden(icon))
                 {
                     continue;
                 }
@@ -234,6 +234,16 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
                 var c = center(icon, projection);
                 g.drawImage(sprite, (int) round(c.getX() - sprite.getWidth() / 2.0),
                     (int) round(c.getY() - sprite.getHeight() / 2.0), null);
+                Color dot = view.config.questStatus() ? quest(icon) : null;
+                if (dot != null)
+                {
+                    var spot = PlayerMarker.circle(c.getX() + drawn * 0.35, c.getY() + drawn * 0.35,
+                        max(3, drawn * 0.18));
+                    g.setColor(dot);
+                    g.fill(spot);
+                    g.setColor(Color.BLACK);
+                    g.draw(spot);
+                }
             }
         }
         if (later)
@@ -313,7 +323,19 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
 
     boolean shows(Icon icon, Projection projection)
     {
-        return showsAny(projection) && view.toggled(layer(icon)) && onView(icon, projection);
+        return showsAny(projection) && view.toggled(layer(icon)) && onView(icon, projection) && !hidden(icon);
+    }
+
+    /** A quest start icon's dot (see {@link Unlocks#questColor}), else null. */
+    Color quest(Icon icon)
+    {
+        var unlocks = view.unlocks;
+        return icon.poi.type != QUEST_START || unlocks == null ? null : unlocks.questColor(icon.poi.name);
+    }
+
+    boolean hidden(Icon icon)
+    {
+        return quest(icon) == Color.GREEN && view.config.hideCompletedQuests();
     }
 
     /** The setting a game icon follows besides its own: a bank's that of the banks; a map link the dungeon entrances. */
@@ -397,7 +419,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
                 double sx = projection.screenX(icon.drawn.getX());
                 double sy = projection.screenY(icon.drawn.getY());
                 if (abs(sx - point.x) > reach + 4 || abs(sy - point.y) > reach + 4
-                    || !toggled[layer(icon).ordinal()] || !onView(icon, projection))
+                    || !toggled[layer(icon).ordinal()] || !onView(icon, projection) || hidden(icon))
                 {
                     continue;
                 }
@@ -462,7 +484,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
             {
                 continue;
             }
-            Ellipse2D ring = new Ellipse2D.Double(c.getX() - r, c.getY() - r, r * 2, r * 2);
+            var ring = PlayerMarker.circle(c.getX(), c.getY(), r);
             g.setStroke(RING_SHADOW_STROKE);
             g.setColor(RING_SHADOW);
             g.draw(ring);

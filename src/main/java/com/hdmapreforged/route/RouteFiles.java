@@ -84,6 +84,17 @@ public final class RouteFiles
         return bytes == null ? null : new ByteArrayInputStream(bytes);
     }
 
+    /** The same, where a missing table is an error. */
+    static InputStream require(String resource) throws IOException
+    {
+        InputStream in = open(resource);
+        if (in == null)
+        {
+            throw new IOException("Missing " + resource);
+        }
+        return in;
+    }
+
     /** What is read from a table, read again once another route.zip is used. */
     @RequiredArgsConstructor
     public static final class Table<T>

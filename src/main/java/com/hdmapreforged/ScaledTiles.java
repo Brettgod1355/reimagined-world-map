@@ -18,6 +18,12 @@ final class ScaledTiles
 {
     /** Larger tiles would take a lot of memory and scale cheaply anyway. */
     static final int MAX_PIXELS = 512 * 512;
+    /**
+     * A copy is kept in strips of at most this: larger ones would pass half of a 1 MB heap region, which Java's G1 keeps
+     * "humongous" in whole regions of the old generation; at zoom 3.5 to 4 they filled a 768 MB heap and made the map
+     * stutter.
+     */
+    static final int STRIP_PIXELS = 360 * 360;
     static final long MAX_BYTES = 64L * 1024 * 1024;
     /** Copies made per frame, in pixels (about 3 ms of smooth scaling): after a zoom, all at once took 16-30 ms. */
     static final int FRAME_PIXELS = 1 << 19;
@@ -26,21 +32,30 @@ final class ScaledTiles
     {
         /** Weak, so a tile the cache dropped is not kept alive here. */
         final WeakReference<BufferedImage> source;
-        final BufferedImage scaled;
-        final boolean smooth;
+        /** Soft: the JVM drops copies before it runs out of memory; the tile is then drawn from its source, as sharp. */
+        final SoftReference<BufferedImage[]> scaled;
+        final int width;
+        final int height;
         /** The frame that last drew it; never dropped for another copy that frame, or each would be made again. */
         int frame;
 
-        Entry(BufferedImage source, BufferedImage scaled, boolean smooth)
+        Entry(BufferedImage source, int width, int height)
         {
             this.source = new WeakReference<>(source);
-            this.scaled = scaled;
-            this.smooth = smooth;
+            this.width = width;
+            this.height = height;
+            int rows = Math.max(1, STRIP_PIXELS / width);
+            var strips = new BufferedImage[(height + rows - 1) / rows];
+            for (int i = 0; i < strips.length; i++)
+            {
+                strips[i] = scale(source, width, height, i * rows, Math.min(rows, height - i * rows));
+            }
+            scaled = new SoftReference<>(strips);
         }
 
         long bytes()
         {
-            return 4L * scaled.getWidth() * scaled.getHeight();
+            return 4L * width * height;
         }
     }
 
@@ -51,7 +66,6 @@ final class ScaledTiles
         final BufferedImage source;
         final int width;
         final int height;
-        final boolean smooth;
     }
 
     final LinkedHashMap<TileCache.Key, Entry> cache = new LinkedHashMap<>(64, 0.75f, true);
@@ -86,7 +100,7 @@ final class ScaledTiles
             }
             Wanted want = wanted.get(i);
             pixels -= want.width * want.height;
-            Entry entry = new Entry(want.source, scale(want.source, want.width, want.height, want.smooth), want.smooth);
+            Entry entry = new Entry(want.source, want.width, want.height);
             entry.frame = frame;
             Entry old = cache.put(want.key, entry);
             bytes += entry.bytes() - (old == null ? 0 : old.bytes());
@@ -121,19 +135,26 @@ final class ScaledTiles
         {
             return;
         }
-        if (dw == source.getWidth() && dh == source.getHeight() || (long) dw * dh > MAX_PIXELS
+        // Crisp squares past the most detailed tiles (nearest neighbour): drawn from the source, the same pixels.
+        if (!smooth || dw == source.getWidth() && dh == source.getHeight() || (long) dw * dh > MAX_PIXELS
             || transform.getShearX() != 0 || transform.getShearY() != 0)
         {
             g.drawImage(source, x, y, width, height, null);
             return;
         }
         Entry entry = cache.get(key);
-        if (entry == null || entry.source.get() != source || entry.smooth != smooth || entry.scaled.getWidth() != dw
-            || entry.scaled.getHeight() != dh)
+        BufferedImage[] shown = entry == null || entry.source.get() != source ? null : entry.scaled.get();
+        if (shown == null && entry != null)
+        {
+            // Dropped by the JVM, or of an older tile: no longer counted against the limit.
+            cache.remove(key);
+            bytes -= entry.bytes();
+        }
+        if (shown == null || entry.width != dw || entry.height != dh)
         {
             if (settled)
             {
-                wanted.add(new Wanted(key, source, dw, dh, smooth));
+                wanted.add(new Wanted(key, source, dw, dh));
             }
             // Meanwhile scaled the fast way, as while moving.
             Object hint = g.getRenderingHint(KEY_INTERPOLATION);
@@ -146,37 +167,43 @@ final class ScaledTiles
             return;
         }
         entry.frame = frame;
-        if (device == 1)
-        {
-            g.drawImage(entry.scaled, x, y, null);
-        }
-        else
+        var copy = device == 1 ? g : (Graphics2D) g.create();
+        int left = x;
+        int top = y;
+        if (device != 1)
         {
             var place = new AffineTransform(transform);
             place.translate(x, y);
             place.scale(width / (double) dw, height / (double) dh);
-            var copy = (Graphics2D) g.create();
-            try
-            {
-                copy.setTransform(place);
-                copy.drawImage(entry.scaled, 0, 0, null);
-            }
-            finally
-            {
-                copy.dispose();
-            }
+            copy.setTransform(place);
+            left = 0;
+            top = 0;
+        }
+        for (var strip : shown)
+        {
+            copy.drawImage(strip, left, top, null);
+            top += strip.getHeight();
+        }
+        if (copy != g)
+        {
+            copy.dispose();
         }
     }
 
-    static BufferedImage scale(BufferedImage source, int width, int height, boolean smooth)
+    static BufferedImage scale(BufferedImage source, int width, int height)
     {
-        BufferedImage scaled = new BufferedImage(width, height, source.getColorModel().hasAlpha()
+        return scale(source, width, height, 0, height);
+    }
+
+    /** Rows {@code top} on of the source scaled to {@code width} x {@code height}: strips give the same pixels as one copy. */
+    static BufferedImage scale(BufferedImage source, int width, int height, int top, int rows)
+    {
+        BufferedImage scaled = new BufferedImage(width, rows, source.getColorModel().hasAlpha()
             ? BufferedImage.TYPE_INT_ARGB_PRE : BufferedImage.TYPE_INT_RGB);
         var g = scaled.createGraphics();
-        g.setRenderingHint(KEY_INTERPOLATION, smooth ? VALUE_INTERPOLATION_BILINEAR
-            : VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        g.setRenderingHint(KEY_INTERPOLATION, VALUE_INTERPOLATION_BILINEAR);
         g.setRenderingHint(KEY_RENDERING, VALUE_RENDER_QUALITY);
-        g.drawImage(source, 0, 0, width, height, null);
+        g.drawImage(source, 0, -top, width, height, null);
         g.dispose();
         return scaled;
     }

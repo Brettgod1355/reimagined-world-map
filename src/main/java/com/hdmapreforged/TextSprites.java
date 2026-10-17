@@ -2,7 +2,6 @@ package com.hdmapreforged;
 
 import com.hdmapreforged.route.*;
 import java.awt.*;
-import java.awt.geom.*;
 import java.awt.image.*;
 import java.util.*;
 import java.util.List;

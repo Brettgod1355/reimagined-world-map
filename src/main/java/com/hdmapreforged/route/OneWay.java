@@ -19,16 +19,7 @@ public final class OneWay
 
     public static OneWay load()
     {
-        var rules = new ArrayList<Rule>();
-        for (var parts : Pathfinder.rows("/com/hdmapreforged/route/one_way.tsv"))
-        {
-            Rule rule = parse(parts);
-            if (rule != null)
-            {
-                rules.add(rule);
-            }
-        }
-        return new OneWay(rules);
+        return new OneWay(Pathfinder.table("/com/hdmapreforged/route/one_way.tsv", OneWay::parse));
     }
 
     /** "x y plane <tab> x y plane <tab> radius <tab> name", split at tabs; null when not a rule. */
@@ -52,18 +43,11 @@ public final class OneWay
 
     public boolean against(int from, int to)
     {
-        for (Rule rule : rules)
-        {
-            if (near(from, rule.to, rule.radius) && near(to, rule.from, rule.radius))
-            {
-                return true;
-            }
-        }
-        return false;
+        return rules.stream().anyMatch(rule -> near(from, rule.to, rule.radius) && near(to, rule.from, rule.radius));
     }
 
     static boolean near(int a, int b, int radius)
     {
-        return !Tiles.isSea(a) && !Tiles.isSea(b) && Tiles.z(a) == Tiles.z(b) && Tiles.distance(a, b) <= radius;
+        return !Tiles.isSea(a) && !Tiles.isSea(b) && Tiles.near(a, b, radius);
     }
 }

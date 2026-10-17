@@ -172,19 +172,28 @@ public final class GameWalk
     /** Both ends included, or null. */
     public static int[] path(CollisionMap map, int from, int to)
     {
+        return path(map, from, new int[]{to});
+    }
+
+    /**
+     * The game's walk to the first of {@code goals} its search reaches (of a bank chest's sides, the one the game walks
+     * to when it is clicked), both ends included; null when none is reached.
+     */
+    public static int[] path(CollisionMap map, int from, int[] goals)
+    {
         int z = z(from);
-        if (z(to) != z)
-        {
-            return null;
-        }
         int ox = x(from) - HALF;
         int oy = y(from) - HALF;
-        int tx = x(to) - ox;
-        int ty = y(to) - oy;
         int size = HALF * 2;
-        if (tx < 0 || ty < 0 || tx >= size || ty >= size)
+        boolean[] wanted = new boolean[size * size];
+        for (int to : goals)
         {
-            return null;
+            int tx = x(to) - ox;
+            int ty = y(to) - oy;
+            if (z(to) == z && tx >= 0 && ty >= 0 && tx < size && ty < size)
+            {
+                wanted[ty * size + tx] = true;
+            }
         }
         // Direction each tile was reached from; -1 not reached.
         byte[] via = new byte[size * size];
@@ -193,8 +202,8 @@ public final class GameWalk
         via[start] = 8;
         var queue = new ArrayDeque<Integer>();
         queue.add(start);
-        int goal = ty * size + tx;
-        while (!queue.isEmpty() && via[goal] < 0)
+        int goal = wanted[start] ? start : -1;
+        while (!queue.isEmpty() && goal < 0)
         {
             int cell = queue.poll();
             int cx = cell % size;
@@ -207,36 +216,32 @@ public final class GameWalk
                 {
                     continue;
                 }
-                if (map.canStep(cx + ox, cy + oy, z, DX[d], DY[d]))
+                if (goal < 0 && map.canStep(cx + ox, cy + oy, z, DX[d], DY[d]))
                 {
                     via[ny * size + nx] = (byte) d;
                     queue.add(ny * size + nx);
+                    goal = wanted[ny * size + nx] ? ny * size + nx : -1;
                 }
             }
         }
-        if (via[goal] < 0)
+        if (goal < 0)
         {
             return null;
         }
-        int length = 0;
-        int[] back = new int[size * 2];
-        int cell = goal;
-        while (cell != start)
+        // Back from the goal, each tile put before the one after it.
+        var cells = new ArrayDeque<Integer>();
+        for (int cell = goal; cell != start; )
         {
-            if (length == back.length)
-            {
-                back = Arrays.copyOf(back, length * 2);
-            }
-            back[length++] = cell;
+            cells.push(cell);
             int d = via[cell];
             cell = (cell / size - DY[d]) * size + (cell % size - DX[d]);
         }
-        int[] path = new int[length + 1];
+        int[] path = new int[cells.size() + 1];
         path[0] = from;
-        for (int k = 0; k < length; k++)
+        int k = 1;
+        for (int c : cells)
         {
-            int c = back[length - 1 - k];
-            path[k + 1] = pack(c % size + ox, c / size + oy, z);
+            path[k++] = pack(c % size + ox, c / size + oy, z);
         }
         return path;
     }

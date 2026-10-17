@@ -91,12 +91,7 @@ final class MapServer
     /** The changes of {@code version}; null when the server has none (its first version, or not reachable). */
     void changes(String version, Consumer<Changes> callback)
     {
-        if (!isSafeVersion(version))
-        {
-            callback.accept(null);
-            return;
-        }
-        get(url("tiles", version, "changed.json"), body -> {
+        get(isSafeVersion(version) ? url("tiles", version, "changed.json") : null, body -> {
             JsonObject o = gson.fromJson(text(body), JsonObject.class);
             String from = o != null && o.has("from") ? o.get("from").getAsString() : null;
             return isSafeVersion(from) ? new Changes(from, paths(o, "changed"), paths(o, "removed")) : null;
@@ -136,12 +131,7 @@ final class MapServer
     /** An NPC's picture as the server's PNG bytes, for keeping; null when there is none. Calls back on any thread. */
     void npcPictureBytes(String version, int id, Consumer<byte[]> callback)
     {
-        if (!isSafeVersion(version) || id < 0)
-        {
-            callback.accept(null);
-            return;
-        }
-        get(url("npcs", version, id + ".png"), body -> body, callback, null, MAX_PICTURE_BYTES);
+        get(isSafeVersion(version) && id >= 0 ? url("npcs", version, id + ".png") : null, body -> body, callback, null, MAX_PICTURE_BYTES);
     }
 
     static final int MAX_PICTURE_BYTES = 256 * 1024;
@@ -175,20 +165,20 @@ final class MapServer
     /** One of {@link #MAP_FILES} of a map version, as sent; null when it cannot be had. Calls back on any thread. */
     void mapFile(String version, String name, Consumer<byte[]> callback)
     {
-        if (!isSafeVersion(version) || !MAP_FILES.contains(name))
-        {
-            callback.accept(null);
-            return;
-        }
-        get(url("maps", version, name), body -> body, callback, null, MAX_BODY_BYTES);
+        get(isSafeVersion(version) && MAP_FILES.contains(name) ? url("maps", version, name) : null, body -> body, callback, null, MAX_BODY_BYTES);
     }
 
     /**
      * Calls back once: with the parsed answer, or with {@code fallback} when there is none; an answer over {@code max}
-     * bytes is none.
+     * bytes is none. A null {@code url} (no version or file to ask for) calls back with {@code fallback} at once.
      */
     <T> void get(HttpUrl url, Function<byte[], T> parse, Consumer<T> callback, T fallback, int max)
     {
+        if (url == null)
+        {
+            callback.accept(fallback);
+            return;
+        }
         http.newCall(new Request.Builder().url(url).build()).enqueue(new Callback()
         {
             @Override

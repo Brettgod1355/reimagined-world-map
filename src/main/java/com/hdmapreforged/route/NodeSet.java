@@ -1,8 +1,13 @@
 package com.hdmapreforged.route;
 
 import java.util.*;
+import lombok.*;
 
-/** A set of nodes as bits per {@link NodeTable#block}, made as blocks are touched: a flood of the world takes 1 MB. */
+/**
+ * A set of nodes as bits per {@link NodeTable#block}, made as blocks are touched: a flood of the world takes 1 MB. Also
+ * over blocks made elsewhere ({@link NodeTable#reached}): {@code bits[b]} holds block {@code b}'s 4,096 nodes.
+ */
+@AllArgsConstructor
 final class NodeSet
 {
     final IntMap blocks;
@@ -12,14 +17,6 @@ final class NodeSet
     NodeSet()
     {
         this(new IntMap(1 << 10), new long[64][], 0);
-    }
-
-    /** Over blocks made elsewhere ({@link NodeTable#reached}): {@code bits[b]} holds block {@code b}'s 4,096 nodes. */
-    NodeSet(IntMap blocks, long[][] bits, int count)
-    {
-        this.blocks = blocks;
-        this.bits = bits;
-        this.count = count;
     }
 
     /** Whether the node was not in the set before. */

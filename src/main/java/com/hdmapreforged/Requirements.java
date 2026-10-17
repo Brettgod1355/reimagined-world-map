@@ -5,6 +5,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.*;
 import java.util.regex.*;
+import java.util.stream.*;
 import lombok.*;
 
 /** Turns requirement columns ({@link Needs}) into readable lines. */
@@ -75,11 +76,8 @@ final class Requirements
     /** {@code "556=3&&554=1"}: all needed; {@code "1706=1||1708=1"}: alternatives. {@code itemNames} may return null. */
     static List<String> items(String column, IntFunction<String> itemNames)
     {
+        // A blank column has no alternatives: no lines.
         var lines = new ArrayList<String>();
-        if (column.trim().isEmpty())
-        {
-            return lines;
-        }
         for (String all : ItemSnapshot.ALL.split(column))
         {
             var alternatives = new LinkedHashSet<String>();
@@ -127,16 +125,8 @@ final class Requirements
 
     static List<Integer> itemIds(String column)
     {
-        var ids = new ArrayList<Integer>();
-        for (String token : column.split("&&|\\|\\|"))
-        {
-            String id = token.split("=")[0].trim();
-            if (isNumber(id))
-            {
-                ids.add(Integer.parseInt(id));
-            }
-        }
-        return ids;
+        return Arrays.stream(column.split("&&|\\|\\|")).map(token -> token.split("=")[0].trim())
+            .filter(Requirements::isNumber).map(Integer::parseInt).collect(Collectors.toList());
     }
 
     static boolean isNumber(String text)

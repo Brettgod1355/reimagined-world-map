@@ -2,7 +2,6 @@ package com.hdmapreforged;
 
 import java.awt.Color;
 import java.util.*;
-import java.util.List;
 import lombok.*;
 import net.runelite.api.coords.*;
 

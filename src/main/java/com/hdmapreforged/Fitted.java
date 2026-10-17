@@ -7,7 +7,7 @@ import javax.swing.*;
 class Fitted extends JPanel implements Scrollable
 {
     /** What a page's scroll keeps in view of the page before. */
-    private final int overlap;
+    final int overlap;
 
     Fitted(LayoutManager layout, int overlap)
     {

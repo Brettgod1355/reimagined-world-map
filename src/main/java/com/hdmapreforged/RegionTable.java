@@ -12,16 +12,16 @@ import java.util.function.*;
  */
 class RegionTable
 {
-    private static final int[] NONE = new int[0];
+    static final int[] NONE = new int[0];
 
     static final int ZONES = 8;
     static final int ZONE = 8;
     /** A zone's owners as a bit mask over the region's owner list, one character (up to 6 owners). */
-    private static final String MASKS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-";
+    static final String MASKS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-";
 
-    private final Map<Integer, int[]> owners = new ConcurrentHashMap<>();
+    final Map<Integer, int[]> owners = new ConcurrentHashMap<>();
     /** 64 mask characters, zone (x, y) at index x * 8 + y. */
-    private final Map<Integer, String> zones = new ConcurrentHashMap<>();
+    final Map<Integer, String> zones = new ConcurrentHashMap<>();
     /**
      * Per region, by zone and floor ({@code (zone * 4 + floor)}): the map and floor drawing that floor's ground where the
      * zone's own map does not, packed as {@code (map id + 2) << 2 | floor}; 0 where the zone's map draws it.
@@ -169,7 +169,7 @@ class RegionTable
         return this;
     }
 
-    private void readLine(String line)
+    void readLine(String line)
     {
         var cells = line.split("\t", -1);
         var ids = NONE;
@@ -204,7 +204,7 @@ class RegionTable
     static final String TILE_FLOOR_LINE = "T\t";
 
     /** {@code T <tab> region <tab> x.y.floor=map/floor,...} (x, y within the region); entries out of range are skipped. */
-    private void readTileFloors(String line)
+    void readTileFloors(String line)
     {
         readEntries(line, 5, (region, p) -> {
             int x = p[0], y = p[1], floor = p[2], map = p[3], drawn = p[4];
@@ -216,7 +216,7 @@ class RegionTable
     }
 
     /** {@code F <tab> region <tab> zone.floor=map/floor,...}; entries out of range are skipped. */
-    private void readFloors(String line)
+    void readFloors(String line)
     {
         readEntries(line, 4, (region, p) -> {
             int zone = p[0], floor = p[1], map = p[2], drawn = p[3];
@@ -232,7 +232,7 @@ class RegionTable
      * numbers, passed with the region to {@code use}. The whole line is skipped where the region is unreadable or
      * {@code cells} too short; one bad or short entry skips only itself.
      */
-    private void readEntries(String line, int fields, BiConsumer<Integer, int[]> use)
+    void readEntries(String line, int fields, BiConsumer<Integer, int[]> use)
     {
         var cells = line.split("\t");
         int region = Integer.parseInt(cells[1].trim());

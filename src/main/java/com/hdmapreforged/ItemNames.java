@@ -6,7 +6,6 @@ import java.util.concurrent.*;
 import java.util.function.*;
 import javax.swing.*;
 import lombok.*;
-import net.runelite.api.*;
 import net.runelite.client.callback.*;
 import net.runelite.client.game.*;
 import net.runelite.client.util.*;

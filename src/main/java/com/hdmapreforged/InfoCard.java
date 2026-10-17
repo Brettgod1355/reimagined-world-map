@@ -1,6 +1,7 @@
 package com.hdmapreforged;
 
-import static com.hdmapreforged.PoiType.TELEPORT;
+import static com.hdmapreforged.PoiType.*;
+import static com.hdmapreforged.SearchResults.*;
 
 import java.awt.*;
 import java.util.*;
@@ -19,7 +20,6 @@ final class InfoCard extends Fitted
     static final int MAX_LINKS = 60;
     static final Color MET = new Color(110, 200, 110);
     static final Color MISSING = new Color(230, 110, 100);
-    static final Color LINK = ColorScheme.GRAND_EXCHANGE_LIMIT;
 
     final MapView map;
     final Supplier<WorldData> world;
@@ -183,8 +183,8 @@ final class InfoCard extends Fitted
 
     IntFunction<JComponent> extra;
     /** The extra and the route shown each in a holder of its own, so one can change without the other. */
-    final JPanel extraHolder = SearchResults.column();
-    final JPanel routeHolder = SearchResults.column();
+    final JPanel extraHolder = column();
+    final JPanel routeHolder = column();
 
     /** {@code holder} holding {@code section} alone, at the card's text width. */
     JPanel fill(JPanel holder, IntFunction<JComponent> section)
@@ -235,7 +235,7 @@ final class InfoCard extends Fitted
             removeAll();
             if (poi != null)
             {
-                JLabel title = SearchResults.bold(plain(poi.name));
+                JLabel title = bold(plain(poi.name));
                 title.setForeground(Color.WHITE);
                 title.setAlignmentX(Component.LEFT_ALIGNMENT);
                 add(title);
@@ -319,31 +319,34 @@ final class InfoCard extends Fitted
         add(title);
         String where = poi.type.displayName + (poi.map != null ? " · " + poi.map.name : "")
             + (poi.location.getPlane() > 0 ? " · floor " + poi.location.getPlane() : "");
+        var dot = poi.type == QUEST_START && map.unlocks != null ? map.unlocks.questColor(poi.name) : null;
+        where += dot == null ? "" : dot == Color.GREEN ? " · Finished" : dot == Color.YELLOW ? " · Started"
+            : " · Not started";
         add(grey(where));
 
         var buttons = new ArrayList<JButton>();
         var inside = MapView.mapBelow(poi);
         if (inside != null)
         {
-            buttons.add(SearchResults.button(MapView.goInText(inside), () -> map.goIn(inside)));
+            buttons.add(button(MapView.goInText(inside), () -> map.goIn(inside)));
         }
         var target = poi;
         if (router != null)
         {
-            buttons.add(SearchResults.tip(SearchResults.button("Route", () -> router.accept(target.location)),
+            buttons.add(tip(button("Route", () -> router.accept(target.location)),
                 "A route from where you are to here"));
         }
         if (stopAdder != null)
         {
-            buttons.add(SearchResults.tip(SearchResults.button("+ Stop", () -> stopAdder.accept(Tour.Stop.place(
+            buttons.add(tip(button("+ Stop", () -> stopAdder.accept(Tour.Stop.place(
                 target.name, target.location))), "Add to your custom route (right-click the map, Custom routes...)"));
         }
-        buttons.add(SearchResults.button("Wiki", () -> LinkBrowser.browse(
+        buttons.add(button("Wiki", () -> LinkBrowser.browse(
             Wiki.searchUrl(poi.wikiQuery != null ? poi.wikiQuery : poi.name))));
         // Slimmer than usual, so more share a row.
         buttons.forEach(button -> button.setMargin(new Insets(2, 6, 2, 6)));
         add(Box.createVerticalStrut(6));
-        add(SearchResults.wrapLabels(buttons, 4, textWidth + 70));
+        add(wrapLabels(buttons, 4, textWidth + 70));
         if (extra != null)
         {
             add(Box.createVerticalStrut(4));
@@ -468,12 +471,12 @@ final class InfoCard extends Fitted
         }
         if (shop != null && shop.npc >= 0)
         {
-            JLabel keeper = SearchResults.pictureIcon(NpcPictures.LARGE);
+            JLabel keeper = pictureIcon(NpcPictures.LARGE);
             npcPictures.show(shop.npc, keeper);
-            add(SearchResults.pictureRow(keeper, grey(shop.name)));
+            add(pictureRow(keeper, grey(shop.name)));
         }
         heading("Sells (" + wares.size() + ")");
-        add(SearchResults.choice(new String[][]{{"shop", "Shop order"}, {"stock", "Stock"}, {"name", "Name"},
+        add(choice(new String[][]{{"shop", "Shop order"}, {"stock", "Stock"}, {"name", "Name"},
             {"price", "Price"}}, wareSort, sort -> {
                 wareSort = sort;
                 refresh();
@@ -482,22 +485,22 @@ final class InfoCard extends Fitted
         sorted.sort(ItemSources.wareOrder(wareSort, itemNames::price));
         for (ItemSources.Ware ware : sorted)
         {
-            JLabel icon = SearchResults.pictureIcon(SearchResults.PICTURE);
+            JLabel icon = pictureIcon(PICTURE);
             itemNames.picture(ware.itemId, icon);
             // The name, like a drop's in the search panel, looks the item up in the plugin: where else it comes from.
             Runnable wiki = () -> LinkBrowser.browse(Wiki.pageUrl(ware.item));
             Runnable open = itemSearch != null ? () -> itemSearch.accept(ware.item) : wiki;
             String onWiki = "Open " + ware.item + " on the wiki";
-            JComponent name = SearchResults.tip(SearchResults.bold(link(ware.item, open)),
+            JComponent name = tip(bold(link(ware.item, open)),
                 itemSearch != null ? "Where else to get " + ware.item : onWiki);
             int price = itemNames.price(ware.itemId);
-            JPanel line = SearchResults.panel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-            line.add(SearchResults.tip(grey(SearchResults.dotted(ItemSources.stockText(ware.stock),
-                price >= 0 ? "GE " + SearchResults.gp(price) : null) + " · "),
+            JPanel line = panel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            line.add(tip(grey(dotted(ItemSources.stockText(ware.stock),
+                price >= 0 ? "GE " + gp(price) : null) + " · "),
                 "How many the shop keeps when no one has bought any, and the Grand Exchange price"));
-            line.add(SearchResults.tip(link("Wiki", wiki), onWiki));
+            line.add(tip(link("Wiki", wiki), onWiki));
             add(Box.createVerticalStrut(3));
-            add(SearchResults.clickableRow(SearchResults.pictureRow(icon, name, line), open));
+            add(clickableRow(pictureRow(icon, name, line), open));
         }
     }
 
@@ -575,7 +578,7 @@ final class InfoCard extends Fitted
 
     JLabel grey(String text)
     {
-        return text(text, SearchResults.SOFT, false);
+        return text(text, SOFT, false);
     }
 
     /** As the search panel's, without the space between lines of a list. */
@@ -586,7 +589,7 @@ final class InfoCard extends Fitted
 
     JLabel link(String text, Runnable action)
     {
-        return SearchResults.clickable(text(text, LINK, false), action, true);
+        return clickable(text(text, LINK, false), action, true);
     }
 
     static String escape(String text)

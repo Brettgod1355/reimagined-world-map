@@ -144,12 +144,18 @@ final class WorldData
                         rows(in, o -> {
                             int map = number(o.get("map"), -1, MAX_ID);
                             var points = map == BAD ? null : points(o.get("at"));
-                            (points == null ? Collections.<WorldPoint>emptyList() : points).forEach(p -> maps.put(p, map));
+                            if (points != null)
+                            {
+                                points.forEach(p -> maps.put(p, map));
+                            }
                         });
                         break;
                     case "undrawn":
                         var points = points(value(in));
-                        (points == null ? Collections.<WorldPoint>emptyList() : points).forEach(p -> maps.put(p, null));
+                        if (points != null)
+                        {
+                            points.forEach(p -> maps.put(p, null));
+                        }
                         break;
                     default:
                         in.skipValue();

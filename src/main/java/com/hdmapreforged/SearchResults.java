@@ -371,8 +371,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         entries:
         for (var entry : kind.entries)
         {
-            String place = placeName.apply(entry.point);
-            place = place == null ? "" : place;
+            String place = Objects.requireNonNullElse(placeName.apply(entry.point), "");
             String name = kind.type == null && !place.isEmpty() ? place : entry.name;
             for (var group : groups)
             {
@@ -756,7 +755,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
 
     static Path2D arrow(double x, double y, double r)
     {
-        Path2D arrow = new Path2D.Double();
+        var arrow = new Path2D.Double();
         arrow.moveTo(x, y);
         for (var corner : ARROW)
         {
@@ -824,7 +823,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             }, width));
             header.add(Box.createVerticalStrut(4));
         }
-        var title = text(result.title, Color.WHITE, true, width - 70);
+        var title = heading(result.title, width - 70);
         if (result.picture >= 0)
         {
             header.add(pictureRow(pictureLabel(result.picture, NpcPictures.LARGE), title));
@@ -856,9 +855,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         for (var t : tabs)
         {
             boolean active = t[0].equals(shown);
-            JLabel label = new JLabel(t[1]);
-            label.setForeground(active ? Color.WHITE : LINK);
-            label.setFont(label.getFont().deriveFont(active ? Font.BOLD : Font.PLAIN));
+            JLabel label = optionLabel(t[1], active);
             label.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, active ? Color.WHITE : new Color(0, 0, 0, 0)));
             labels.add(clickable(label, () -> {
                 tab = t[0];
@@ -1010,11 +1007,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
                 }, width));
             groups.sort(shopOrder(sort, view.near(), result.title));
         }
-        boolean first = true;
-        for (var group : groups)
+        for (int i = 0; i < groups.size(); i++)
         {
-            add(body, first ? 4 : 3, place(group, width));
-            first = false;
+            add(body, i == 0 ? 4 : 3, place(groups.get(i), width));
         }
     }
 
@@ -1252,12 +1247,19 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         for (var option : options)
         {
             boolean active = option[0].equals(chosen);
-            JLabel label = new JLabel(option[1]);
-            label.setForeground(active ? Color.WHITE : LINK);
-            label.setFont(label.getFont().deriveFont(active ? Font.BOLD : Font.PLAIN));
+            JLabel label = optionLabel(option[1], active);
             parts.add(active ? label : clickable(label, () -> pick.accept(option[0]), true));
         }
         return wrapLabels(parts, 10, width);
+    }
+
+    /** A tab or a choice, white and bold while it is the one shown. */
+    static JLabel optionLabel(String text, boolean active)
+    {
+        JLabel label = new JLabel(text);
+        label.setForeground(active ? Color.WHITE : LINK);
+        label.setFont(label.getFont().deriveFont(active ? Font.BOLD : Font.PLAIN));
+        return label;
     }
 
     static final Color LIT = new Color(255, 255, 255, 18);
@@ -1605,7 +1607,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return PoiIcons.sprite(width + 2, height + 2, device, g -> {
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g.setFont(LABEL_FONT);
-            RoundRectangle2D box = new RoundRectangle2D.Double(1, 1, width, height, 8, 8);
+            var box = new RoundRectangle2D.Double(1, 1, width, height, 8, 8);
             g.setColor(LABEL_BACKGROUND);
             g.fill(box);
             g.setColor(color);

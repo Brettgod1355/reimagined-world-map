@@ -17,9 +17,12 @@ public class HdMapPartyLocation extends PartyMemberMessage
     /** World, 0 when unknown. */
     private final int w;
     private final String n;
+    /** In a house (the point is its portal); else left out, as null. */
+    private final Boolean h;
 
-    HdMapPartyLocation(WorldPoint point, int world, String name)
+    HdMapPartyLocation(WorldPoint point, int world, String name, boolean house)
     {
+        h = house ? true : null;
         x = point == null ? -1 : point.getX();
         y = point == null ? -1 : point.getY();
         p = point == null ? 0 : point.getPlane();
@@ -29,7 +32,7 @@ public class HdMapPartyLocation extends PartyMemberMessage
 
     static HdMapPartyLocation offline(String name)
     {
-        return new HdMapPartyLocation(null, 0, name);
+        return new HdMapPartyLocation(null, 0, name, false);
     }
 
     WorldPoint point()
@@ -45,6 +48,11 @@ public class HdMapPartyLocation extends PartyMemberMessage
     private static boolean plausible(int x, int y, int plane)
     {
         return x >= 0 && y >= 0 && x <= MAX_COORDINATE && y <= MAX_COORDINATE && plane >= 0 && plane <= 3;
+    }
+
+    boolean house()
+    {
+        return Boolean.TRUE.equals(h);
     }
 
     int world()

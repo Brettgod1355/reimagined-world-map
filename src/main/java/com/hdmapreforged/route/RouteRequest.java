@@ -31,7 +31,8 @@ public final class RouteRequest
     public final boolean avoidWilderness;
     /** The same with their boat, searched when this one (left without it) does not arrive; else null. */
     public final RouteRequest withBoat;
-    /** A way past a bank first, for what is kept there (setting); else null. */
+    /** A way past a bank first, for what is kept there (setting); else null. {@code withBank}: the same with one. */
+    @With
     public final BankDetour bank;
 
     public RouteRequest(int start, int target, List<Edge> startEdges, List<Edge> edges, int sailingLevel, boolean running,
@@ -59,13 +60,6 @@ public final class RouteRequest
     {
         return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, false,
             withBoat == null ? null : withBoat.throughWilderness(), bank);
-    }
-
-    /** The same, with a way past a bank to weigh. */
-    public RouteRequest withBank(BankDetour detour)
-    {
-        return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, avoidWilderness,
-            withBoat, detour);
     }
 
     /** Whether a search may use the same ways as with {@code other} (jumps and sea): what it reaches differs by start only. */

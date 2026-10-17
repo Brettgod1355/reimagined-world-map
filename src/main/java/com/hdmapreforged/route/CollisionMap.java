@@ -46,12 +46,7 @@ public final class CollisionMap
 
     public static CollisionMap load() throws IOException
     {
-        InputStream in = RouteFiles.open(RESOURCE);
-        if (in == null)
-        {
-            throw new IOException("Missing " + RESOURCE);
-        }
-        try (in)
+        try (InputStream in = RouteFiles.require(RESOURCE))
         {
             return read(in);
         }
@@ -232,9 +227,7 @@ public final class CollisionMap
 
     public boolean canStep(int x, int y, int z, int dx, int dy)
     {
-        int nx = x + dx;
-        int ny = y + dy;
-        if (!walkable(nx, ny, z))
+        if (!walkable(x + dx, y + dy, z))
         {
             return false;
         }

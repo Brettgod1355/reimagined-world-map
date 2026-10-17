@@ -38,12 +38,7 @@ public final class SeaMap
 
     public static SeaMap build(CollisionMap collision) throws IOException
     {
-        InputStream in = RouteFiles.open(AREAS);
-        if (in == null)
-        {
-            throw new IOException("Missing " + AREAS);
-        }
-        return build(collision, readAreas(in));
+        return build(collision, readAreas(RouteFiles.require(AREAS)));
     }
 
     /** The seas {@code in} lists; closes it. */

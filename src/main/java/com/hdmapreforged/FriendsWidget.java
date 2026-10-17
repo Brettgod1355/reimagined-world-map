@@ -14,7 +14,7 @@ import lombok.*;
 import net.runelite.api.coords.*;
 
 /** The friends button at the map's bottom left, opening into the party list and a member's details. Swing thread only. */
-final class FriendsWidget implements MapView.Widget
+final class FriendsWidget implements Widget
 {
     @RequiredArgsConstructor
     static final class Member
@@ -49,7 +49,6 @@ final class FriendsWidget implements MapView.Widget
     static final Color OTHER_WORLD = new Color(255, 190, 120);
     static final Color FRIEND = new Color(150, 150, 160);
     static final Color WORLD = new Color(190, 190, 195);
-    static final Font TITLE = new Font(Font.SANS_SERIF, Font.BOLD, 13);
     static final Font ROW = new Font(Font.SANS_SERIF, Font.PLAIN, 13);
     static final int WIDTH = 256;
     static final int LEFT = 12;
@@ -61,7 +60,7 @@ final class FriendsWidget implements MapView.Widget
     final BooleanSupplier inGroup;
     final IntSupplier myWorld;
     final Supplier<Boolean> enabled;
-    final Consumer<WorldPoint> focus;
+    final Consumer<Row> focus;
     final Runnable repaint;
     final PartyMapOverlay.Ticker ticker;
     boolean dropsMoving;
@@ -91,7 +90,7 @@ final class FriendsWidget implements MapView.Widget
 
     FriendsWidget(Supplier<List<PartyMapMembers.Marker>> party, Supplier<List<Member>> group,
         BooleanSupplier inGroup, IntSupplier myWorld, Supplier<Boolean> enabled,
-        Consumer<WorldPoint> focus, Runnable repaint)
+        Consumer<Row> focus, Runnable repaint)
     {
         this.party = party;
         this.group = group;
@@ -134,7 +133,7 @@ final class FriendsWidget implements MapView.Widget
     }
 
     @Override
-    public void paint(Graphics2D g, int width, int height, int bottom, MapView.Clicks clicks)
+    public void paint(Graphics2D g, int width, int height, int bottom, Clicks clicks)
     {
         dropsMoving = false;
         try
@@ -160,7 +159,7 @@ final class FriendsWidget implements MapView.Widget
         }
     }
 
-    void paintWidget(Graphics2D g, int width, int bottom, MapView.Clicks clicks)
+    void paintWidget(Graphics2D g, int width, int bottom, Clicks clicks)
     {
         if (!enabled.get())
         {
@@ -176,7 +175,7 @@ final class FriendsWidget implements MapView.Widget
             return;
         }
         int w = Math.min(WIDTH, width - 24);
-        var tab = tab(g, bottom, clicks, "Friends · " + rows.size() + (open ? "  ▾" : "  ▴"));
+        var tab = tab(g, bottom, clicks, "Party · " + rows.size() + (open ? "  ▾" : "  ▴"));
         double tabTop = tab.getY();
         clicks.add(tab, () -> {
             open = !open;
@@ -189,34 +188,30 @@ final class FriendsWidget implements MapView.Widget
         Row chosen = null;
         for (Row row : rows)
         {
-            chosen = row.id == selected && selected >= 0 ? row : chosen;
+            chosen = row.id == selected && selected >= 0 && images != null ? row : chosen;
         }
-        if (chosen != null && images != null)
-        {
-            paintDetails(g, chosen, LEFT, w, tabTop - 4, clicks);
-            return;
-        }
-        selected = -1;
+        selected = chosen != null ? selected : -1;
         if (rows.isEmpty())
         {
             String text = "No one else in your party yet";
             g.setFont(ROW);
             double boxWidth = Math.max(w, g.getFontMetrics().stringWidth(text) + 20);
-            RoundRectangle2D alone = new RoundRectangle2D.Double(LEFT, tabTop - 4 - ROW_HEIGHT - 6, boxWidth,
+            var alone = new RoundRectangle2D.Double(LEFT, tabTop - 4 - ROW_HEIGHT - 6, boxWidth,
                 ROW_HEIGHT + 6, 10, 10);
-            MapView.box(g, alone, CONTROL_FILL, CONTROL_EDGE);
+            box(g, alone, CONTROL_FILL, CONTROL_EDGE);
             g.setColor(FRIEND);
             g.drawString(text, LEFT + 10, middle(alone.getCenterY(), g.getFontMetrics()));
             return;
         }
-        // Opens upwards, as many rows as fit; the last line then says how many more.
-        int fit = Math.max(1, (int) ((tabTop - 60) / ROW_HEIGHT));
+        // Opens upwards, as many rows as fit (with room for a chosen one's folded details above, so one can switch
+        // between them); the last line then says how many more.
+        int fit = Math.max(1, (int) ((tabTop - 60 - (chosen != null ? 34 + STATUS_H : 0)) / ROW_HEIGHT));
         var shown = rows.size() > fit ? rows.subList(0, Math.max(1, fit - 1)) : rows;
         int more = rows.size() - shown.size();
         int lines = shown.size() + (more > 0 ? 1 : 0);
         double listTop = tabTop - 4 - lines * ROW_HEIGHT - 6;
-        RoundRectangle2D list = new RoundRectangle2D.Double(LEFT, listTop, w, lines * ROW_HEIGHT + 6, 10, 10);
-        MapView.box(g, list, CONTROL_FILL, CONTROL_EDGE);
+        var list = new RoundRectangle2D.Double(LEFT, listTop, w, lines * ROW_HEIGHT + 6, 10, 10);
+        box(g, list, CONTROL_FILL, CONTROL_EDGE);
         g.setFont(ROW);
         var metrics = g.getFontMetrics();
         int mine = myWorld.getAsInt();
@@ -224,10 +219,10 @@ final class FriendsWidget implements MapView.Widget
         {
             Row row = shown.get(i);
             double top = listTop + 3 + i * ROW_HEIGHT;
-            RoundRectangle2D area = new RoundRectangle2D.Double(LEFT + 3, top, w - 6, ROW_HEIGHT, 8, 8);
+            var area = new RoundRectangle2D.Double(LEFT + 3, top, w - 6, ROW_HEIGHT, 8, 8);
             if (row.point != null || row.id >= 0)
             {
-                if (clicks.hovered(area))
+                if (clicks.hovered(area) || row == chosen)
                 {
                     g.setColor(CONTROL_HOVER);
                     g.fill(area);
@@ -235,7 +230,7 @@ final class FriendsWidget implements MapView.Widget
                 clicks.add(area, () -> {
                     if (row.point != null)
                     {
-                        focus.accept(row.point);
+                        focus.accept(row);
                     }
                     if (row.id >= 0)
                     {
@@ -260,6 +255,10 @@ final class FriendsWidget implements MapView.Widget
             g.setColor(FRIEND);
             g.drawString("+" + more + " more", LEFT + 24, middle(cy, metrics));
         }
+        if (chosen != null)
+        {
+            paintDetails(g, chosen, LEFT, w, listTop - 4, clicks);
+        }
     }
 
     /** A member's pages, here and in the sidebar. */
@@ -277,7 +276,7 @@ final class FriendsWidget implements MapView.Widget
     static final int[][] WORN = {{1, 0}, {0, 1}, {1, 1}, {0, 2}, {1, 2}, {2, 2}, null, {1, 3}, null, {0, 4},
         {1, 4}, null, {2, 4}, {2, 1}};
 
-    void paintDetails(Graphics2D g, Row row, double x0, int w, double bottomY, MapView.Clicks clicks)
+    void paintDetails(Graphics2D g, Row row, double x0, int w, double bottomY, Clicks clicks)
     {
         var shared = gear.apply(row.id);
         int panelW = Math.max(w, 4 * Orbs.WIDTH + 3 * 4 + 16);
@@ -287,10 +286,21 @@ final class FriendsWidget implements MapView.Widget
         boolean compact = folded || cramped;
         int height = compact ? 30 + STATUS_H + 4 : full;
         double top = bottomY - height;
-        RoundRectangle2D panel = new RoundRectangle2D.Double(x0, top, panelW, height, 12, 12);
-        MapView.box(g, panel, CONTROL_FILL, CONTROL_EDGE);
-        g.setFont(TITLE);
+        var panel = new RoundRectangle2D.Double(x0, top, panelW, height, 12, 12);
+        box(g, panel, CONTROL_FILL, CONTROL_EDGE);
+        g.setFont(CONTROL_FONT);
         var title = g.getFontMetrics();
+        if (row.point != null)
+        {
+            // The name looks at them again, as the panel stays open after one looks elsewhere.
+            var name = new RoundRectangle2D.Double(x0 + 4, top + 4, panelW - (cramped ? 32 : 54), 22, 8, 8);
+            if (clicks.hovered(name))
+            {
+                g.setColor(CONTROL_HOVER);
+                g.fill(name);
+            }
+            clicks.add(name, () -> focus.accept(row), "Follow " + row.name);
+        }
         dot(g, row.color, x0 + 12, top + 11);
         g.setColor(Color.WHITE);
         g.drawString(fit(row.name, title, panelW - 130), (float) (x0 + 26), (float) (top + 19));
@@ -308,7 +318,7 @@ final class FriendsWidget implements MapView.Widget
         titleButton(g, clicks, title, x0 + panelW - 26, top, "×", () -> {
             selected = -1;
             repaint.run();
-        }, "Back to the list");
+        }, "Close");
         if (!cramped)
         {
             titleButton(g, clicks, title, x0 + panelW - 48, top, folded ? "+" : "\u2013", () -> {
@@ -327,7 +337,7 @@ final class FriendsWidget implements MapView.Widget
         var metrics = g.getFontMetrics();
         for (int k = 0; k < PAGES.length; k++)
         {
-            RoundRectangle2D tabShape = new RoundRectangle2D.Double(x0 + 8 + k * tabW, top + 30, tabW - 4, 20, 8, 8);
+            var tabShape = new RoundRectangle2D.Double(x0 + 8 + k * tabW, top + 30, tabW - 4, 20, 8, 8);
             g.setColor(k == page ? new Color(70, 76, 88, 235) : clicks.hovered(tabShape) ? CONTROL_HOVER : new Color(40, 43, 50, 220));
             g.fill(tabShape);
             g.setColor(k == page ? Color.WHITE : new Color(180, 180, 186));
@@ -390,14 +400,14 @@ final class FriendsWidget implements MapView.Widget
         paintDrops(g, row.id, x0, top + 110, panelW);
     }
 
-    static RoundRectangle2D tab(Graphics2D g, int bottom, MapView.Clicks clicks, String label)
+    static RoundRectangle2D tab(Graphics2D g, int bottom, Clicks clicks, String label)
     {
         g.setFont(CONTROL_FONT);
         var metrics = g.getFontMetrics();
-        int tabWidth = MapView.floorGroupWidth(metrics);
+        int tabWidth = floorGroupWidth(metrics);
         double tabTop = bottom - 2 * CONTROL - 6;
-        RoundRectangle2D tab = new RoundRectangle2D.Double(LEFT, tabTop, tabWidth, CONTROL, 10, 10);
-        MapView.box(g, tab, clicks.hovered(tab) ? CONTROL_HOVER : CONTROL_FILL, CONTROL_EDGE);
+        var tab = new RoundRectangle2D.Double(LEFT, tabTop, tabWidth, CONTROL, 10, 10);
+        box(g, tab, clicks.hovered(tab) ? CONTROL_HOVER : CONTROL_FILL, CONTROL_EDGE);
         g.setColor(Color.WHITE);
         g.drawString(label, (float) (LEFT + (tabWidth - metrics.stringWidth(label)) / 2.0),
             middle(tabTop + CONTROL / 2.0, metrics));
@@ -437,7 +447,7 @@ final class FriendsWidget implements MapView.Widget
             return;
         }
         long now = System.currentTimeMillis();
-        g.setFont(TITLE);
+        g.setFont(CONTROL_FONT);
         var metrics = g.getFontMetrics();
         for (int k = 0; k < showing.size(); k++)
         {
@@ -484,17 +494,17 @@ final class FriendsWidget implements MapView.Widget
         g.fill(new Ellipse2D.Double(x, y, 8, 8));
     }
 
-    static void titleButton(Graphics2D g, MapView.Clicks clicks, FontMetrics title, double x, double top,
+    static void titleButton(Graphics2D g, Clicks clicks, FontMetrics title, double x, double top,
         String mark, Runnable action, String tip)
     {
-        RoundRectangle2D button = new RoundRectangle2D.Double(x, top + 5, 20, 20, 8, 8);
+        var button = new RoundRectangle2D.Double(x, top + 5, 20, 20, 8, 8);
         if (clicks.hovered(button))
         {
             g.setColor(CONTROL_HOVER);
             g.fill(button);
         }
         g.setColor(new Color(200, 200, 205));
-        g.setFont(TITLE);
+        g.setFont(CONTROL_FONT);
         g.drawString(mark, (float) (button.getCenterX() - title.stringWidth(mark) / 2.0), (float) (top + 20));
         clicks.add(button, action, tip);
     }

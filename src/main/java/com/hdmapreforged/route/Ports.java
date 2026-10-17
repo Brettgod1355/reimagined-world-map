@@ -11,11 +11,7 @@ public final class Ports
     /** Port id → packed tile of the boat. */
     public static Map<Integer, Integer> load() throws IOException
     {
-        InputStream in = RouteFiles.open(RESOURCE);
-        if (in == null)
-        {
-            throw new IOException("Missing " + RESOURCE);
-        }
+        InputStream in = RouteFiles.require(RESOURCE);
         var ports = new HashMap<Integer, Integer>();
         Pathfinder.rows(in, 0, c -> {
             try

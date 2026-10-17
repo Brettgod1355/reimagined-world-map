@@ -3,6 +3,7 @@ package com.hdmapreforged;
 import java.awt.*;
 import java.awt.image.*;
 import java.io.*;
+import java.lang.ref.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.List;
@@ -37,8 +38,8 @@ final class TileCache
     static final long RETRY_AFTER_MS = 30_000;
     static final long MB = 1024 * 1024;
     /**
-     * 128 MB: past it the views draw a coarser level, a quarter of the tiles (a 4K window's upper floor would need 2,000
-     * tiles, 500 MB, just above a whole zoom). A higher memory setting raises it.
+     * 128 MB of tiles in view: past it the views draw a coarser level, a quarter of the tiles (a 4K window's upper floor
+     * would need 2,000 tiles, 500 MB, just above a whole zoom). A higher memory setting raises it.
      */
     static final int MAX_TILES = 512;
     /** Kept while no map is open, for the next opening. */
@@ -80,7 +81,13 @@ final class TileCache
     final Filepath cacheRoot;
     final Runnable onLoaded;
 
+    /** The tiles the open views need (in view and some to spare), or a few with no map open. */
     final LinkedHashMap<Key, BufferedImage> memory = new LinkedHashMap<>(256, 0.75f, true);
+    /**
+     * Older tiles past those, up to the memory setting, held softly: a large heap keeps them, and the JVM drops them
+     * before it runs out of memory, so they never crash the client (plugins may not read the heap's size).
+     */
+    final LinkedHashMap<Key, SoftReference<BufferedImage>> spare = new LinkedHashMap<>();
     final Set<Key> missing = new HashSet<>();
     final Map<Key, Long> failed = new HashMap<>();
     /** Previous-version tiles shown while this version's are fetched. */
@@ -357,13 +364,19 @@ final class TileCache
 
     synchronized BufferedImage peek(Key key)
     {
+        var ref = spare.remove(key);
+        var image = ref == null ? null : ref.get();
+        if (image != null)
+        {
+            memory.putIfAbsent(key, image);
+        }
         return memory.get(key);
     }
 
     /** Queue tiles farthest from the middle first. */
     synchronized BufferedImage get(Key key)
     {
-        BufferedImage image = memory.get(key);
+        BufferedImage image = peek(key);
         Long failedAt = failed.get(key);
         if (!(image != null && !stale.contains(key) || version == null || missing.contains(key) || loading.contains(key)
             || queued.contains(key) || failedAt != null && System.currentTimeMillis() - failedAt < RETRY_AFTER_MS))
@@ -408,6 +421,7 @@ final class TileCache
     {
         generation++;
         memory.clear();
+        spare.clear();
         stale.clear();
         queue.clear();
         queued.clear();
@@ -653,6 +667,7 @@ final class TileCache
         if (started == generation)
         {
             memory.remove(key);
+            spare.remove(key);
             stale.remove(key);
         }
     }
@@ -705,12 +720,23 @@ final class TileCache
 
     void trim()
     {
-        int limit = needs.isEmpty() ? Math.min(memoryLimit, CLOSED_TILES) : Math.max(memoryLimit, frameNeed);
+        boolean open = !needs.isEmpty();
+        // Never fewer than a closed map keeps, so closing keeps the latest.
+        int limit = Math.max(open ? frameNeed : 0, Math.min(memoryLimit, CLOSED_TILES));
         while (memory.size() > limit)
         {
             Key oldest = memory.keySet().iterator().next();
-            memory.remove(oldest);
-            stale.remove(oldest);
+            var image = memory.remove(oldest);
+            // An older version's tile shown meanwhile is not kept.
+            if (!stale.remove(oldest) && open)
+            {
+                spare.put(oldest, new SoftReference<>(image));
+            }
+        }
+        for (var it = spare.keySet().iterator(); it.hasNext() && spare.size() > (open ? memoryLimit : 0); )
+        {
+            it.next();
+            it.remove();
         }
     }
 

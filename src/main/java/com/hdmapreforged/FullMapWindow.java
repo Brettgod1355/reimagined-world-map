@@ -427,7 +427,7 @@ final class FullMapWindow implements MapView.WindowControls
     }
 
     /** A mouse drag that moves or resizes the map; saved once let go. */
-    private abstract class Drag extends MouseAdapter
+    abstract class Drag extends MouseAdapter
     {
         Point grab;
         Rectangle start;
@@ -454,7 +454,7 @@ final class FullMapWindow implements MapView.WindowControls
         Grip()
         {
             setPreferredSize(new Dimension(100, GRIP_HEIGHT));
-            setCursor(Cursor.getPredefinedCursor(MOVE_CURSOR));
+            setCursor(getPredefinedCursor(MOVE_CURSOR));
             setToolTipText("Drag to move; double-click to fill the game view");
             Drag mouse = new Drag()
             {
@@ -544,7 +544,7 @@ final class FullMapWindow implements MapView.WindowControls
         public void mouseMoved(MouseEvent e)
         {
             int at = edgesAt(e.getPoint());
-            root.setCursor(Cursor.getPredefinedCursor(at < CURSORS.length ? CURSORS[at] : DEFAULT_CURSOR));
+            root.setCursor(getPredefinedCursor(at < CURSORS.length ? CURSORS[at] : DEFAULT_CURSOR));
         }
 
         @Override
@@ -552,7 +552,7 @@ final class FullMapWindow implements MapView.WindowControls
         {
             if (grab == null)
             {
-                root.setCursor(Cursor.getDefaultCursor());
+                root.setCursor(getDefaultCursor());
             }
         }
 

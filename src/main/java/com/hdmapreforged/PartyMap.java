@@ -10,7 +10,7 @@ import java.awt.image.*;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.stream.*;
+import java.util.function.*;
 import javax.inject.*;
 import javax.swing.*;
 import javax.swing.Timer;
@@ -38,7 +38,7 @@ import net.runelite.client.util.*;
  */
 @Slf4j
 @RequiredArgsConstructor(onConstructor_ = @Inject)
-public final class PartyMap
+public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
 {
     static final String LAST_KEY = "partyLast";
     static final List<Class<? extends WebsocketMessage>> MESSAGES =
@@ -59,20 +59,18 @@ public final class PartyMap
     final PartyMapMembers members = new PartyMapMembers();
     final PartyMapRules.Throttle throttle = new PartyMapRules.Throttle();
     // Initializers may read later or constructor-set fields only through "this" or "PartyMap.this".
-    final PartyMapOverlay overlay = new PartyMapOverlay(this::markers, () -> this.favourites,
-        () -> PartyMap.this.config.partyOnlyFavourites(), () -> this.myWorld);
+    final PartyMapOverlay overlay = new PartyMapOverlay(this::markers, () -> this.myWorld);
 
     {
         overlay.selected = id -> this.widgets.values().stream().anyMatch(w -> w.selected() == id);
         overlay.hovered = id -> id == this.hoveredMember;
-        overlay.setLoot(id -> members.loot(id, System.currentTimeMillis()), this::itemImage, this::repaint);
+        overlay.setLoot(id -> members.loot(id, System.currentTimeMillis()), this::item, this::repaint);
     }
 
     /** Swing thread only; each view's value undoes what {@link #start} added to it. */
     final Map<MapView, Runnable> views = new LinkedHashMap<>();
     final Map<MapView, FriendsWidget> widgets = new LinkedHashMap<>();
     volatile int myWorld;
-    volatile Set<String> favourites = Collections.emptySet();
     /** The party this plugin joined for the user, or null. */
     volatile String joinedCode;
     volatile long lastChange = Long.MIN_VALUE / 2;
@@ -97,7 +95,6 @@ public final class PartyMap
                 repaint();
             });
         }
-        readFavourites();
         loggedOutSince = client.getGameState() == GameState.LOGGED_IN ? null : System.currentTimeMillis();
         SwingUtilities.invokeLater(() -> {
             for (MapView view : maps)
@@ -106,11 +103,11 @@ public final class PartyMap
                 view.addOverlay(overlay);
                 view.menuContributors.add(menu);
                 FriendsWidget widget = new FriendsWidget(this::markers, this::groupMembers, party::isInParty,
-                    () -> myWorld, config::partyFriendsTab, view::focus, view::repaint);
+                    () -> myWorld, config::partyFriendsTab, row -> follow(view, row.id), view::repaint);
                 widget.setDrops(id -> members.drops(id, System.currentTimeMillis()));
                 widget.canJoin = () -> !party.isInParty() && lastParty() != null;
                 widget.join = () -> join(view);
-                MapView.ClickCatcher catcher = (at, projection) -> clickedMember(widget, at, projection);
+                MapView.ClickCatcher catcher = (at, projection) -> clickedMember(view, widget, at, projection);
                 view.clickCatchers.add(catcher);
                 MouseAdapter pointing = new MouseAdapter()
                 {
@@ -138,7 +135,7 @@ public final class PartyMap
                 view.addMouseMotionListener(pointing);
                 view.addMouseListener(pointing);
                 widget.gear = members::gear;
-                widget.images = sidebarImages;
+                widget.images = this;
                 widgets.put(view, widget);
                 view.addWidget(widget);
                 views.put(view, () -> {
@@ -191,7 +188,7 @@ public final class PartyMap
 
     volatile long hoveredMember = -1;
 
-    boolean clickedMember(FriendsWidget widget, Point at, MapView.Projection projection)
+    boolean clickedMember(MapView view, FriendsWidget widget, Point at, MapView.Projection projection)
     {
         long best = memberAt(at, projection);
         if (best < 0)
@@ -199,6 +196,7 @@ public final class PartyMap
             return false;
         }
         widget.show(best);
+        follow(view, best);
         repaint();
         return true;
     }
@@ -226,75 +224,73 @@ public final class PartyMap
     }
 
     final Map<Integer, BufferedImage> sprites = new ConcurrentHashMap<>();
-    final FriendsWidget.Images sidebarImages = new FriendsWidget.Images()
+    /** The sidebar's and the map's pictures of what members share. */
+    @Override
+    public BufferedImage skill(int ordinal)
     {
-        @Override
-        public BufferedImage item(int id, int quantity)
-        {
-            return itemImage(id, quantity);
-        }
+        Skill[] skills = Skill.values();
+        return ordinal < 0 || ordinal >= Math.min(SKILLS, skills.length) ? null
+            : skillIcons.getSkillImage(skills[ordinal], true);
+    }
 
-        @Override
-        public BufferedImage skill(int ordinal)
-        {
-            Skill[] skills = Skill.values();
-            return ordinal < 0 || ordinal >= Math.min(SKILLS, skills.length) ? null
-                : skillIcons.getSkillImage(skills[ordinal], true);
-        }
-
-        @Override
-        public BufferedImage sprite(int id)
-        {
-            return sprites.get(id);
-        }
-    };
-
-    MapPanel.Friends sidebar()
+    @Override
+    public BufferedImage sprite(int id)
     {
-        return new MapPanel.Friends()
+        return sprites.get(id);
+    }
+
+    /** The sidebar's party list. */
+    @Override
+    public boolean inGroup()
+    {
+        return party.isInParty();
+    }
+
+    @Override
+    public List<FriendsWidget.Row> rows()
+    {
+        return FriendsWidget.rows(markers(), groupMembers());
+    }
+
+    @Override
+    public int world()
+    {
+        return myWorld;
+    }
+
+    @Override
+    public PartyMapMembers.Gear gear(long id)
+    {
+        return members.gear(id);
+    }
+
+    @Override
+    public FriendsWidget.Images images()
+    {
+        return this;
+    }
+
+    @Override
+    public boolean canRejoin()
+    {
+        return lastParty() != null;
+    }
+
+    @Override
+    public void follow(long id)
+    {
+        views.keySet().forEach(view -> follow(view, id));
+    }
+
+    /** Follows a member clicked: the map keeps them in view as they move. Swing thread. */
+    void follow(MapView view, long id)
+    {
+        Supplier<WorldPoint> at = () -> markers().stream().filter(m -> m.id == id).map(m -> m.point).findFirst()
+            .orElse(null);
+        if (at.get() != null)
         {
-            @Override
-            public boolean inGroup()
-            {
-                return party.isInParty();
-            }
-
-            @Override
-            public List<FriendsWidget.Row> rows()
-            {
-                return FriendsWidget.rows(markers(), groupMembers());
-            }
-
-            @Override
-            public int world()
-            {
-                return myWorld;
-            }
-
-            @Override
-            public PartyMapMembers.Gear gear(long id)
-            {
-                return members.gear(id);
-            }
-
-            @Override
-            public FriendsWidget.Images images()
-            {
-                return sidebarImages;
-            }
-
-            @Override
-            public boolean canRejoin()
-            {
-                return lastParty() != null;
-            }
-
-            @Override
-            public void join(Component from)
-            {
-                PartyMap.this.join(from);
-            }
-        };
+            view.follow(at);
+        }
     }
 
     List<FriendsWidget.Member> groupMembers()
@@ -333,7 +329,7 @@ public final class PartyMap
         return config.partyShowMembers() ? members.markers(System.currentTimeMillis()) : Collections.emptyList();
     }
 
-    void tick(WorldPoint location, int tick)
+    void tick(WorldPoint location, boolean house, int tick)
     {
         if (!members.isEmpty() && tick % 5 == 0)
         {
@@ -350,7 +346,7 @@ public final class PartyMap
         }
         if (party.isInParty() && config.partyShareLocation() && throttle.shouldSend(location, tick))
         {
-            party.send(new HdMapPartyLocation(location, client.getWorld(), localName()));
+            party.send(new HdMapPartyLocation(location, client.getWorld(), localName(), house));
             sentOnline = true;
         }
     }
@@ -398,11 +394,10 @@ public final class PartyMap
     @Subscribe
     public void onConfigChanged(ConfigChanged event)
     {
-        if (!HdMapReforgedConfig.GROUP.equals(event.getGroup()) || !event.getKey().startsWith("party"))
+        if (!GROUP.equals(event.getGroup()) || !event.getKey().startsWith("party"))
         {
             return;
         }
-        readFavourites();
         if ("partyShareLocation".equals(event.getKey()) && !config.partyShareLocation() && party.isInParty()
             && client.getGameState() == GameState.LOGGED_IN)
         {
@@ -411,12 +406,6 @@ public final class PartyMap
         }
         throttle.force();
         repaint();
-    }
-
-    void readFavourites()
-    {
-        favourites = Collections.unmodifiableSet(Text.fromCSV(config.partyFavourites()).stream()
-            .map(PartyMapOverlay::nameKey).filter(key -> !key.isEmpty()).collect(Collectors.toSet()));
     }
 
     // Party events arrive on the websocket thread.
@@ -429,7 +418,7 @@ public final class PartyMap
             return;
         }
         members.update(message.getMemberId(), message.point(), message.world(), message.name(),
-            System.currentTimeMillis());
+            message.house(), System.currentTimeMillis());
         memberDetails(message.getMemberId());
         repaint();
     }
@@ -502,6 +491,8 @@ public final class PartyMap
 
     void shareDrops(Collection<ItemStack> items)
     {
+        // Untradeables go only with drop sharing on: turned off, nothing is shared.
+        boolean untradeables = config.partyShareUntradeables();
         if (!party.isInParty() || !config.partyShareDrops())
         {
             return;
@@ -511,7 +502,8 @@ public final class PartyMap
         {
             long value = itemManager.getItemPriceWithSource(stack.getId(), false) * stack.getQuantity();
             // A lower value saved before the setting had its minimum still reads back as it was.
-            if (value >= Math.max(MIN_DROP_VALUE, config.partyDropValue()))
+            if (value >= Math.max(MIN_DROP_VALUE, config.partyDropValue())
+                || untradeables && !tradeable(stack.getId()))
             {
                 valuable.add(new HdMapPartyDrop(stack.getId(), stack.getQuantity(), value));
             }
@@ -522,6 +514,11 @@ public final class PartyMap
         {
             party.send(drop);
         }
+    }
+
+    boolean tradeable(int item)
+    {
+        return itemManager.getItemComposition(itemManager.canonicalize(item)).isTradeable();
     }
 
     @Subscribe
@@ -537,8 +534,10 @@ public final class PartyMap
             if (item < client.getItemCount())
             {
                 long value = itemManager.getItemPriceWithSource(item, false) * message.quantity();
+                // An untradeable one shows by name, as it has no price.
+                String name = tradeable(item) ? null : itemManager.getItemComposition(item).getName();
                 members.loot(message.getMemberId(), new PartyMapMembers.Loot(item, message.quantity(), value,
-                    System.currentTimeMillis()));
+                    System.currentTimeMillis(), name));
                 repaint();
             }
         });
@@ -578,7 +577,8 @@ public final class PartyMap
         return ids;
     }
 
-    BufferedImage itemImage(int id, int quantity)
+    @Override
+    public BufferedImage item(int id, int quantity)
     {
         long key = (long) id << 32 | quantity;
         if (itemImages.size() > 512 && !itemImages.containsKey(key))
@@ -664,6 +664,7 @@ public final class PartyMap
         SwingUtilities.invokeLater(() -> {
             for (MapView view : views.keySet())
             {
+                view.followMember();
                 view.repaint();
             }
         });
@@ -671,7 +672,7 @@ public final class PartyMap
 
     void contribute(JPopupMenu popup, MapView view)
     {
-        JMenu friends = new JMenu("Friends");
+        JMenu friends = new JMenu("Party");
         String current = party.getPartyPassphrase();
         for (PartyMapMembers.Marker marker : markers())
         {
@@ -683,13 +684,13 @@ public final class PartyMap
         {
             friends.addSeparator();
         }
-        if (current == null && lastParty() != null)
-        {
-            friends.add("Rejoin party").addActionListener(a -> join(view));
-        }
         if (current != null)
         {
             friends.add("Leave party").addActionListener(a -> leave());
+        }
+        else if (lastParty() != null)
+        {
+            friends.add("Rejoin party").addActionListener(a -> join(view));
         }
         if (friends.getMenuComponentCount() == 0)
         {
@@ -705,7 +706,8 @@ public final class PartyMap
         return last == null || last.trim().isEmpty() ? null : last.trim();
     }
 
-    void join(Component view)
+    @Override
+    public void join(Component view)
     {
         String code = lastParty();
         if (code == null)

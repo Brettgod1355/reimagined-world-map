@@ -73,7 +73,7 @@ final class PlantedSpiritTrees
                     {
                         next.remove(name);
                     }
-                    grown = Collections.unmodifiableSet(new LinkedHashSet<>(next));
+                    grown = Collections.unmodifiableSet(next);
                     return true;
                 }
             }

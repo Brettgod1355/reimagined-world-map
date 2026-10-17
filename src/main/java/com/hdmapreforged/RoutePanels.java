@@ -28,7 +28,7 @@ final class RoutePanels
         int inner = Math.max(80, width - 47);
         box.add(text("Now", LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner));
         Step now = left.steps.get(0);
-        JLabel doing = text(RouteText.describe(now), color(now, walk, jump), Font.BOLD, 3, inner);
+        JLabel doing = text(RouteText.saying(left, now, false), color(now, walk, jump), Font.BOLD, 3, inner);
         box.add(doing);
         if (now.detail != null && !RouteText.unsure(now.detail))
         {
@@ -37,7 +37,7 @@ final class RoutePanels
         for (int i = 1; i < Math.min(3, left.steps.size()); i++)
         {
             Step then = left.steps.get(i);
-            add(box, 4, text((i == 1 ? "Then: " : "After that: ") + RouteText.describe(then), color(then, walk, jump),
+            add(box, 4, text((i == 1 ? "Then: " : "After that: ") + RouteText.saying(left, then, false), color(then, walk, jump),
                 Font.PLAIN, 0, inner));
         }
         JLabel remaining = text(RouteText.duration(left) + " left", LIGHT_GRAY_COLOR, Font.PLAIN, 0, inner);
@@ -92,7 +92,7 @@ final class RoutePanels
     static void updateNow(JComponent box, Route left)
     {
         int inner = (Integer) box.getClientProperty("width");
-        setText((JLabel) box.getClientProperty("doing"), RouteText.describe(left.steps.get(0)), inner);
+        setText((JLabel) box.getClientProperty("doing"), RouteText.saying(left, left.steps.get(0), false), inner);
         setText((JLabel) box.getClientProperty("left"), RouteText.duration(left) + " left", inner);
     }
 
@@ -154,7 +154,7 @@ final class RoutePanels
                 boolean leads = step.isJump() && !Tiles.isSea(step.last()) && step.first() != step.last();
                 int point = leads ? step.last() : step.first();
                 JButton row = flat("<html><body style='width:" + Math.max(80, width - 40) + "px'>" + number++ + ". "
-                    + RouteText.escape(RouteText.describe(step))
+                    + RouteText.escape(RouteText.saying(route, step, false))
                     + (detail != null ? "<br><span style='color:" + (cannot ? "#ff7070" : "#a0a0a0") + "'>"
                         + RouteText.escape(detail) + "</span>" : "")
                     + "</body></html>", leads ? "Show where this leads on the map" : "Show on the map",
@@ -164,7 +164,7 @@ final class RoutePanels
                 row.setMargin(new Insets(1, 0, 1, 0));
                 boolean choice = step.name != null && (step.kind == Kind.TELEPORT
                     || step.kind == Kind.TRANSPORT || step.kind == Kind.SHIP
-                    || step.kind == Kind.ENTRANCE && step.category != null);
+                    || (step.kind == Kind.ENTRANCE || step.kind == Kind.HOUSE) && step.category != null);
                 if (actions == null || !choice)
                 {
                     panel.add(row);
@@ -181,24 +181,14 @@ final class RoutePanels
                 more.addActionListener(a -> {
                     var menu = new JPopupMenu();
                     String running = actions.runningTour();
-                    if (running != null)
+                    // With a custom route running: saved with it, left out whenever it runs.
+                    Consumer<String> leave = running != null ? actions::avoidInRoute : actions::avoid;
+                    String verb = running != null ? "Leave" : "Avoid";
+                    String scope = running != null ? " out of \"" + running + "\"" : " for this route";
+                    item(menu, verb + scope, () -> leave.accept(name));
+                    if (category != null)
                     {
-                        // Saved with the custom route: left out whenever it runs.
-                        item(menu, "Leave out of \"" + running + "\"", () -> actions.avoidInRoute(name));
-                        if (category != null)
-                        {
-                            item(menu, "Leave every " + category + " out of \"" + running + "\"",
-                                () -> actions.avoidInRoute(RouteSource.TYPE + category));
-                        }
-                    }
-                    else
-                    {
-                        item(menu, "Avoid for this route", () -> actions.avoid(name));
-                        if (category != null)
-                        {
-                            item(menu, "Avoid every " + category + " for this route",
-                                () -> actions.avoid(RouteSource.TYPE + category));
-                        }
+                        item(menu, verb + " every " + category + scope, () -> leave.accept(RouteSource.TYPE + category));
                     }
                     menu.addSeparator();
                     item(menu, "Never use \"" + name + "\"", () -> actions.never(name));

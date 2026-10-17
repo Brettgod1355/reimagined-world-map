@@ -28,7 +28,7 @@ final class EdgeIndex
     static EdgeIndex of(List<Edge> edges, int offset, boolean byDestination)
     {
         var slots = new IntMap(edges.size());
-        var lists = new ArrayList<int[]>();
+        int count = 0;
         int[] counts = new int[edges.size()];
         for (Edge e : edges)
         {
@@ -40,13 +40,12 @@ final class EdgeIndex
             int slot = slots.get(key);
             if (slot == IntMap.MISSING)
             {
-                slot = lists.size();
+                slot = count++;
                 slots.put(key, slot);
-                lists.add(null);
             }
             counts[slot]++;
         }
-        int[][] made = new int[lists.size()][];
+        int[][] made = new int[count][];
         for (int i = 0; i < made.length; i++)
         {
             made[i] = new int[counts[i]];

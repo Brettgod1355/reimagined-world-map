@@ -40,12 +40,8 @@ final class TileMarkersBridge
     static PluginMessage tiles(List<Tile> tiles)
     {
         var list = new ArrayList<Map<String, Object>>();
-        for (Tile tile : tiles)
+        for (Tile tile : tiles.subList(0, Math.min(MAX_TILES, tiles.size())))
         {
-            if (list.size() >= MAX_TILES)
-            {
-                break;
-            }
             var entry = new HashMap<String, Object>();
             entry.put("point", tile.point);
             entry.put("color", tile.color);

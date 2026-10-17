@@ -1,6 +1,7 @@
 package com.hdmapreforged;
 
 import java.util.*;
+import java.util.stream.*;
 import lombok.*;
 import net.runelite.api.coords.*;
 import net.runelite.client.events.*;
@@ -68,8 +69,6 @@ final class ShortestPathBridge
         return value instanceof Boolean ? (Boolean) value : null;
     }
 
-    static final String TRANSPORTS = "transports";
-
     /** A transport or teleport of Shortest Path's route. */
     @RequiredArgsConstructor
     static final class Jump
@@ -121,20 +120,8 @@ final class ShortestPathBridge
     {
         var data = message.getData();
         Object target = data == null ? null : data.get(TARGET);
-        var points = new ArrayList<WorldPoint>();
-        for (Object one : target instanceof Collection<?> ? (Collection<?>) target : Collections.singletonList(target))
-        {
-            if (points.size() >= MAX_POINTS)
-            {
-                break;
-            }
-            var point = point(one);
-            if (point != null)
-            {
-                points.add(point);
-            }
-        }
-        return points.isEmpty() ? Collections.emptyList() : points;
+        return (target instanceof Collection<?> ? ((Collection<?>) target).stream() : Stream.of(target))
+            .map(ShortestPathBridge::point).filter(Objects::nonNull).limit(MAX_POINTS).collect(Collectors.toList());
     }
 
     /** A WorldPoint, or packed as x | y << 15 | plane << 30 (-1 none); null outside the game world. */
@@ -147,11 +134,8 @@ final class ShortestPathBridge
         }
         else if (value instanceof Integer)
         {
+            // -1 unpacks off the game world.
             int packed = (Integer) value;
-            if (packed == -1)
-            {
-                return null;
-            }
             point = new WorldPoint(packed & 0x7FFF, (packed >>> 15) & 0x7FFF, (packed >>> 30) & 0x3);
         }
         return HdMapPartyLocation.plausible(point) ? point : null;
@@ -164,8 +148,7 @@ final class ShortestPathBridge
         int bestDistance = Integer.MAX_VALUE;
         for (var target : targets)
         {
-            int d = from == null ? 0 : target.getPlane() == from.getPlane() ? target.distanceTo2D(from)
-                : target.distanceTo2D(from) + 1000;
+            int d = from == null ? 0 : target.distanceTo2D(from) + (target.getPlane() == from.getPlane() ? 0 : 1000);
             if (best == null || d < bestDistance)
             {
                 best = target;

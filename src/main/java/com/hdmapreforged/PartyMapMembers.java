@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import com.hdmapreforged.route.*;
 import java.awt.image.*;
 import java.util.*;
 import java.util.function.*;
@@ -28,6 +29,8 @@ final class PartyMapMembers
         final BufferedImage avatar;
         final long ageMillis;
         final float alpha;
+        /** In a house, at its portal. */
+        final boolean house;
 
         boolean stale()
         {
@@ -39,6 +42,7 @@ final class PartyMapMembers
     {
         String name;
         WorldPoint point;
+        boolean house;
         int world;
         BufferedImage avatar;
         long updated;
@@ -118,6 +122,8 @@ final class PartyMapMembers
         final int quantity;
         final long value;
         final long at;
+        /** An untradeable drop's name, else null. */
+        final String name;
     }
 
     static final long LOOT_MS = 3500;
@@ -163,10 +169,13 @@ final class PartyMapMembers
     }
 
     /** A location from our own message; a null point means they left the game. */
-    synchronized void update(long id, WorldPoint point, int world, String name, long now)
+    synchronized void update(long id, WorldPoint point, int world, String name, boolean house, long now)
     {
         Member member = members.computeIfAbsent(id, k -> new Member());
-        member.point = point;
+        // From a version that sent the house's room template (far off any map): its last spot outside, in a house.
+        boolean template = point != null && HouseTracker.isTemplate(point.getX(), point.getY());
+        member.point = template ? member.point : point;
+        member.house = house || template;
         member.world = world;
         if (name != null)
         {
@@ -185,6 +194,7 @@ final class PartyMapMembers
             return false;
         }
         member.point = point;
+        member.house = false;
         member.updated = now;
         return true;
     }
@@ -242,7 +252,8 @@ final class PartyMapMembers
             {
                 continue;
             }
-            markers.add(new Marker(entry.getKey(), member.name, member.point, member.world, member.avatar, age, alpha(age)));
+            markers.add(new Marker(entry.getKey(), member.name, member.point, member.world, member.avatar, age, alpha(age),
+                member.house));
         }
         markers.sort((a, b) -> Long.compare(b.ageMillis, a.ageMillis));
         return Collections.unmodifiableList(markers);

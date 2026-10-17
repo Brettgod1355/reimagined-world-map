@@ -37,37 +37,20 @@ public final class ReturnAreas
     /** The area holding the tile, or null. */
     public static Area at(int node)
     {
-        for (Area area : AREAS.get())
-        {
-            if (area.contains(node))
-            {
-                return area;
-            }
-        }
-        return null;
+        return AREAS.get().stream().filter(area -> area.contains(node)).findFirst().orElse(null);
     }
 
     static List<Area> read()
     {
-        var areas = new ArrayList<Area>();
-        for (var cells : Pathfinder.rows(RESOURCE))
-        {
-            try
+        return Pathfinder.table(RESOURCE, cells -> {
+            var box = Pathfinder.ints(cells[1]);
+            var tiles = cells[2].trim().split(";");
+            int[] exits = new int[tiles.length];
+            for (int i = 0; i < tiles.length; i++)
             {
-                var box = Pathfinder.ints(cells[1]);
-                var tiles = cells[2].trim().split(";");
-                int[] exits = new int[tiles.length];
-                for (int i = 0; i < tiles.length; i++)
-                {
-                    exits[i] = Tiles.parse(tiles[i].trim());
-                }
-                areas.add(new Area(cells[0].trim(), box[0], box[1], box[2], box[3], box[4], exits, cells[3].trim()));
+                exits[i] = Tiles.parse(tiles[i].trim());
             }
-            catch (RuntimeException e)
-            {
-                // That row only.
-            }
-        }
-        return Collections.unmodifiableList(areas);
+            return new Area(cells[0].trim(), box[0], box[1], box[2], box[3], box[4], exits, cells[3].trim());
+        });
     }
 }

@@ -38,7 +38,9 @@ public final class Route
         public final Kind kind;
         /** Packed: all tiles walked or sea blocks sailed, or the two ends of a jump. */
         public final int[] points;
+        @With(AccessLevel.PACKAGE)
         public final String name;
+        @With(AccessLevel.PACKAGE)
         public final String detail;
         public final int cost;
         public final int doors;
@@ -63,19 +65,24 @@ public final class Route
     }
 
     public final Outcome outcome;
+    @With(AccessLevel.PACKAGE)
     public final List<Step> steps;
     /** Half ticks. */
     public final int cost;
     public final int target;
     public final int end;
+    @With(AccessLevel.PACKAGE)
     public final boolean exhausted;
     public final boolean limited;
     public final int nodes;
     /** Where a search that proved the target out of reach proved it out of reach from; else null. */
+    @With(AccessLevel.PACKAGE)
     final Reached reached;
     /** Through the Wilderness though the player keeps out of it: no way around it gets there. */
+    @With(AccessLevel.PACKAGE)
     public final boolean throughWilderness;
     /** The search left out a step or jump into the Wilderness (kept out of it): through it, it may get further. */
+    @With(AccessLevel.PACKAGE)
     final boolean keptOut;
 
     /** Without the extra weight of teleports kept for longer trips. */
@@ -97,23 +104,11 @@ public final class Route
             false);
     }
 
-    /** This route, found through the Wilderness because no way around it gets there. */
-    Route throughWilderness()
-    {
-        return new Route(outcome, steps, cost, target, end, exhausted, limited, nodes, reached, true, keptOut);
-    }
-
     /** This route, ending near the target of {@code shut}, which proved it out of reach. */
     Route near(Route shut)
     {
         return new Route(Outcome.NEAREST, steps, cost, shut.target, end, shut.exhausted, limited, nodes, shut.reached,
             throughWilderness, keptOut);
-    }
-
-    /** This route, of a search that left out ways into the Wilderness. */
-    Route keptOut()
-    {
-        return new Route(outcome, steps, cost, target, end, exhausted, limited, nodes, reached, throughWilderness, true);
     }
 
     /**
@@ -122,10 +117,27 @@ public final class Route
      */
     Route unproved()
     {
-        return new Route(outcome, steps, cost, target, end, false, limited, nodes, null, throughWilderness, keptOut);
+        return withExhausted(false).withReached(null);
     }
 
     public static final int NEAR = 12;
+
+    /**
+     * Up to its first teleport (or way of one's house): what comes after is drawn in the game once it is taken, so a
+     * route out of the house and back in (to its fairy ring) does not draw both visits at once.
+     */
+    public Route untilTeleport()
+    {
+        for (int s = 0; s < steps.size() - 1; s++)
+        {
+            var kind = steps.get(s).kind;
+            if (kind == Step.Kind.TELEPORT || kind == Step.Kind.HOUSE)
+            {
+                return withSteps(steps.subList(0, s + 1));
+            }
+        }
+        return this;
+    }
 
     /** What is still ahead of the player, like a navigation app; the route itself when the player is not near it. */
     public Route ahead(int player)
@@ -216,8 +228,7 @@ public final class Route
             }
             left.add(step);
         }
-        return new Route(outcome, Collections.unmodifiableList(left), cost, target, end, exhausted, limited, nodes, null,
-            throughWilderness, keptOut);
+        return withSteps(Collections.unmodifiableList(left)).withReached(null);
     }
 
     static boolean sameLevel(int a, int b)

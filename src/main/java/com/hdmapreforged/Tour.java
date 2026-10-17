@@ -154,7 +154,7 @@ final class Tour
         long bestDistance = Long.MAX_VALUE;
         for (var entry : kind.entries)
         {
-            long d = SearchResults.distance(entry.point, near) + (entry.point.getPlane() == near.getPlane() ? 0 : 100_000_000L);
+            long d = away(entry.point, near);
             if (d < bestDistance)
             {
                 best = entry.point;
@@ -162,6 +162,12 @@ final class Tour
             }
         }
         return best;
+    }
+
+    /** How far {@code p} is from {@code near} for "nearest": squared, as the crow flies, any on the same floor first. */
+    static long away(WorldPoint p, WorldPoint near)
+    {
+        return SearchResults.distance(p, near) + (p.getPlane() == near.getPlane() ? 0 : 100_000_000L);
     }
 
     /**

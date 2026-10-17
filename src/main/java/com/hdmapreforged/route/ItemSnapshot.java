@@ -45,18 +45,8 @@ public final class ItemSnapshot
     /** Whether {@code other} carries the same of these items (and the same staff's runes). */
     public boolean sameFor(ItemSnapshot other, Set<Integer> ids)
     {
-        if (other == null || !unlimited.equals(other.unlimited))
-        {
-            return false;
-        }
-        for (int id : ids)
-        {
-            if (!carried.getOrDefault(id, 0L).equals(other.carried.getOrDefault(id, 0L)))
-            {
-                return false;
-            }
-        }
-        return true;
+        return other != null && unlimited.equals(other.unlimited)
+            && ids.stream().allMatch(id -> carried.getOrDefault(id, 0L).equals(other.carried.getOrDefault(id, 0L)));
     }
 
     public static ItemSnapshot of(Map<Integer, Long> carried, Set<Integer> unlimited)

@@ -9,26 +9,12 @@ public final class InstanceCopies
 
     static List<int[]> load()
     {
-        var copies = new ArrayList<int[]>();
-        for (var parts : Pathfinder.rows("/com/hdmapreforged/route/instance_copies.tsv"))
-        {
-            if (parts.length < 3)
-            {
-                continue;
-            }
-            try
-            {
-                var min = Pathfinder.ints(parts[0]);
-                var max = Pathfinder.ints(parts[1]);
-                var by = Pathfinder.ints(parts[2]);
-                copies.add(new int[]{min[0], min[1], max[0], max[1], by[0], by[1]});
-            }
-            catch (RuntimeException e)
-            {
-                // A row that cannot be read is left out.
-            }
-        }
-        return Collections.unmodifiableList(copies);
+        return Pathfinder.table("/com/hdmapreforged/route/instance_copies.tsv", parts -> {
+            var min = Pathfinder.ints(parts[0]);
+            var max = Pathfinder.ints(parts[1]);
+            var by = Pathfinder.ints(parts[2]);
+            return new int[]{min[0], min[1], max[0], max[1], by[0], by[1]};
+        });
     }
 
     /** The place's tile for a template tile ({@code x y plane}), or null when no known copy holds it. */

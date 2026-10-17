@@ -2,8 +2,8 @@ package com.hdmapreforged;
 
 import com.hdmapreforged.route.*;
 import java.util.*;
-import java.util.List;
 import java.util.regex.*;
+import lombok.*;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.gameval.*;
@@ -14,6 +14,7 @@ import net.runelite.client.eventbus.*;
  * The route's next fairy ring in the ring's travel log, as Shortest Path shows its own: its code in green, scrolled to.
  * Only the log's look changes; nothing is dialled or clicked.
  */
+@RequiredArgsConstructor
 final class FairyRingLog
 {
     static final int GREEN = 0x00FF00;
@@ -23,11 +24,6 @@ final class FairyRingLog
 
     final RouteFeature routes;
     boolean open;
-
-    FairyRingLog(RouteFeature routes)
-    {
-        this.routes = routes;
-    }
 
     /** The codes of the route's first fairy ring step, in the order dialled; empty without one. */
     static List<String> codes(Route route)
@@ -55,7 +51,6 @@ final class FairyRingLog
         if (event.getGroupId() == InterfaceID.FAIRYRINGS_LOG)
         {
             open = true;
-            scrolledTo = null;
         }
     }
 
@@ -65,14 +60,14 @@ final class FairyRingLog
         open &= event.getGroupId() != InterfaceID.FAIRYRINGS_LOG;
     }
 
-    /** The code the log was scrolled to since it opened: once, so the player can scroll it themselves after. */
-    String scrolledTo;
-
-    /** Every frame while the log is open: the game draws its list again as one searches or sorts it. */
+    /**
+     * Every frame while the log is open, as Shortest Path does: the game draws its list again (on opening, searching,
+     * sorting) and puts back the scroll it keeps itself.
+     */
     @Subscribe
     public void onPostClientTick(PostClientTick event)
     {
-        List<String> codes = open ? codes(routes.shownRoute()) : List.of();
+        List<String> codes = open ? codes(routes.shown) : List.of();
         if (codes.isEmpty())
         {
             return;
@@ -83,11 +78,10 @@ final class FairyRingLog
         Widget faves = client.getWidget(InterfaceID.FairyringsLog.FAVES);
         mark(faves == null ? null : faves.getStaticChildren(), codes);
         Widget first = mark(contents == null ? null : contents.getDynamicChildren(), codes);
-        if (first == null || codes.get(0).equals(scrolledTo))
+        if (first == null)
         {
             return;
         }
-        scrolledTo = codes.get(0);
         int scroll = Math.max(0, Math.min(first.getRelativeY(), contents.getScrollHeight() - contents.getHeight()));
         // No client script for the scrollbar's thumb: reviewers flag running them.
         contents.setScrollY(scroll);
@@ -100,7 +94,8 @@ final class FairyRingLog
         Widget first = null;
         for (Widget widget : widgets == null ? new Widget[0] : widgets)
         {
-            int at = widget == null ? -1 : codes.indexOf(widget.getText());
+            // The game writes the codes spaced out: "B K R".
+            int at = widget == null ? -1 : codes.indexOf(String.valueOf(widget.getText()).replace(" ", ""));
             if (at >= 0)
             {
                 widget.setTextColor(GREEN);

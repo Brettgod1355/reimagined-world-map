@@ -67,8 +67,7 @@ public final class HousePlan
         var queue = new ArrayDeque<Integer>();
         for (int node : from)
         {
-            boolean in = contains(node);
-            reach(tiles, reached, queue, in ? (x(node) - X) * SIZE + y(node) - Y : -1, z(node));
+            reach(tiles, reached, queue, contains(node) ? (x(node) - X) * SIZE + y(node) - Y : -1, z(node));
         }
         while (!queue.isEmpty())
         {

@@ -8,7 +8,6 @@ import java.awt.image.*;
 import java.util.*;
 import java.util.List;
 import java.util.function.*;
-import javax.swing.*;
 import javax.swing.Timer;
 import lombok.*;
 import net.runelite.api.coords.*;
@@ -29,14 +28,11 @@ final class PartyMapOverlay implements MapView.Overlay
         new Color(255, 90, 90),
         new Color(200, 230, 80),
     };
-    static final Color FAVOURITE = new Color(255, 214, 64);
     static final Color LABEL_BACKGROUND = new Color(20, 20, 24, 200);
     static final Font NAME_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 11);
     static final Font SMALL_FONT = new Font(Font.SANS_SERIF, Font.PLAIN, 10);
 
     final Supplier<List<Marker>> markers;
-    final Supplier<Set<String>> favourites;
-    final Supplier<Boolean> onlyFavourites;
     final IntSupplier myWorld;
     /** Only the clicked member and the one under the mouse show a name. */
     LongPredicate selected = id -> false;
@@ -116,29 +112,24 @@ final class PartyMapOverlay implements MapView.Overlay
             return;
         }
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        var favs = favourites.get();
-        boolean onlyFavs = onlyFavourites.get();
         boolean rising = false;
-        // Favourites last so they are on top.
-        for (int pass = 0; pass < 2; pass++)
+        for (var marker : all)
         {
-            for (var marker : all)
+            if (!projection.shows(marker.point))
             {
-                boolean favourite = marker.name != null && favs.contains(nameKey(marker.name));
-                if (favourite != (pass == 1) || onlyFavs && !favourite || !projection.shows(marker.point))
-                {
-                    continue;
-                }
-                var at = projection.shown(marker.point);
-                double x = projection.screenX(at.getX() + 0.5);
-                double y = projection.screenY(at.getY() + 0.5);
-                paintMarker(g, projection, marker, at, x, y, favourite, myWorld.getAsInt(), selected.test(marker.id),
-                    hovered.test(marker.id));
-                rising |= paintLoot(g, projection, marker, x, y);
+                continue;
             }
+            var at = projection.shown(marker.point);
+            double x = projection.screenX(at.getX() + 0.5);
+            double y = projection.screenY(at.getY() + 0.5);
+            paintMarker(g, projection, marker, at, x, y, myWorld.getAsInt(), selected.test(marker.id),
+                hovered.test(marker.id));
+            rising |= paintLoot(g, projection, marker, x, y);
         }
         ticker.painted(rising);
     }
+
+    static final Color UNTRADEABLE = new Color(240, 210, 120);
 
     /** Ground Items' colours for a value: medium, high, insane. */
     static Color lootColor(long value)
@@ -188,7 +179,7 @@ final class PartyMapOverlay implements MapView.Overlay
                 float alpha = (float) (t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25);
                 layer.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0, alpha)));
                 double top = y - 22 - (showing.size() - 1 - k) * 22 - rise * 50;
-                String text = shortValue(drop.value);
+                String text = drop.name != null ? drop.name : shortValue(drop.value);
                 BufferedImage icon = itemImage.apply(drop.item, drop.quantity);
                 int iconW = icon == null ? 0 : 26;
                 double width = iconW + metrics.stringWidth(text) + 10;
@@ -201,7 +192,7 @@ final class PartyMapOverlay implements MapView.Overlay
                 }
                 layer.setColor(Color.BLACK);
                 layer.drawString(text, (float) (left + iconW + 6), (float) top + 4);
-                layer.setColor(lootColor(drop.value));
+                layer.setColor(drop.name != null ? UNTRADEABLE : lootColor(drop.value));
                 layer.drawString(text, (float) (left + iconW + 5), (float) top + 3);
             }
         }
@@ -213,7 +204,7 @@ final class PartyMapOverlay implements MapView.Overlay
     }
 
     static void paintMarker(Graphics2D g, MapView.Projection projection, Marker marker, WorldPoint at, double x,
-        double y, boolean favourite, int myWorld, boolean chosen, boolean hover)
+        double y, int myWorld, boolean chosen, boolean hover)
     {
         if (x < -40 || y < -40 || x > projection.width() + 40 || y > projection.height() + 40)
         {
@@ -230,8 +221,15 @@ final class PartyMapOverlay implements MapView.Overlay
         {
             layer.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
             Color color = color(marker.id);
-            double r = favourite ? 9 : 7.5;
+            double r = 7.5;
             var disc = circle(x, y, r);
+            if (marker.house)
+            {
+                PlayerMarker.box(layer, x, y, r, color);
+                layer.setFont(NAME_FONT);
+                layer.drawString("House", (float) (x - layer.getFontMetrics().stringWidth("House") / 2.0),
+                    (float) (y - r - 12));
+            }
             layer.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 60));
             layer.fill(circle(x, y, r + 5));
             if (marker.avatar != null)
@@ -254,8 +252,8 @@ final class PartyMapOverlay implements MapView.Overlay
                 layer.drawString(initial, (float) (x - metrics.stringWidth(initial) / 2.0),
                     (float) (y + metrics.getAscent() / 2.0 - 1.5));
             }
-            // White even for favourites: gold would read as the local player's yellow marker.
-            ring(layer, disc, favourite ? 3f : 2f, Color.WHITE);
+            // White: gold would read as the local player's yellow marker.
+            ring(layer, disc, 2f, Color.WHITE);
             ring(layer, circle(x, y, r + 2), 1f, color);
             if (chosen)
             {
@@ -264,7 +262,7 @@ final class PartyMapOverlay implements MapView.Overlay
             }
             if (chosen || hover)
             {
-                paintLabel(layer, marker, x, y + r + 4, color, favourite, otherFloor, otherWorld(marker, myWorld));
+                paintLabel(layer, marker, x, y + r + 4, color, otherFloor, otherWorld(marker, myWorld));
             }
         }
         finally
@@ -281,36 +279,30 @@ final class PartyMapOverlay implements MapView.Overlay
     }
 
     static void paintLabel(Graphics2D g, Marker marker, double x, double top, Color color,
-        boolean favourite, boolean otherFloor, boolean otherWorld)
+        boolean otherFloor, boolean otherWorld)
     {
         String name = marker.name != null ? marker.name : "Party member";
         String detail = detail(marker, otherFloor, otherWorld);
         g.setFont(NAME_FONT);
         var nameMetrics = g.getFontMetrics();
-        int starWidth = favourite ? 11 : 0;
-        int nameWidth = nameMetrics.stringWidth(name) + starWidth;
+        int nameWidth = nameMetrics.stringWidth(name);
         var smallMetrics = g.getFontMetrics(SMALL_FONT);
         int detailWidth = detail == null ? 0 : smallMetrics.stringWidth(detail);
         int width = Math.max(nameWidth, detailWidth) + 10;
         int height = nameMetrics.getHeight() + (detail == null ? 0 : smallMetrics.getHeight()) + 2;
         double left = x - width / 2.0;
-        RoundRectangle2D box = new RoundRectangle2D.Double(left, top, width, height, 8, 8);
+        var box = new RoundRectangle2D.Double(left, top, width, height, 8, 8);
         g.setColor(LABEL_BACKGROUND);
         g.fill(box);
         ring(g, box, 1f, color);
         double textLeft = x - nameWidth / 2.0;
         float baseline = (float) (top + 1 + nameMetrics.getAscent());
-        if (favourite)
-        {
-            g.setColor(FAVOURITE);
-            g.fill(star(textLeft + 4.5, baseline - nameMetrics.getAscent() / 2.0 + 1, 4.5));
-        }
         g.setColor(Color.WHITE);
-        g.drawString(name, (float) (textLeft + starWidth), baseline);
+        g.drawString(name, (float) textLeft, baseline);
         if (detail != null)
         {
             g.setFont(SMALL_FONT);
-            g.setColor(otherWorld ? new Color(255, 190, 120) : new Color(200, 200, 205));
+            g.setColor(otherWorld ? FriendsWidget.OTHER_WORLD : new Color(200, 200, 205));
             g.drawString(detail, (float) (x - detailWidth / 2.0),
                 (float) (top + 1 + nameMetrics.getHeight() + smallMetrics.getAscent()));
         }
@@ -344,27 +336,5 @@ final class PartyMapOverlay implements MapView.Overlay
     {
         long minutes = millis / 60_000;
         return minutes < 1 ? (millis / 1000) + " s ago" : minutes + " min ago";
-    }
-
-    static Shape star(double cx, double cy, double r)
-    {
-        var path = new Path2D.Double();
-        for (int i = 0; i < 10; i++)
-        {
-            double radius = i % 2 == 0 ? r : r * 0.45;
-            double angle = -Math.PI / 2 + i * Math.PI / 5;
-            double px = cx + Math.cos(angle) * radius;
-            double py = cy + Math.sin(angle) * radius;
-            if (i == 0)
-            {
-                path.moveTo(px, py);
-            }
-            else
-            {
-                path.lineTo(px, py);
-            }
-        }
-        path.closePath();
-        return path;
     }
 }

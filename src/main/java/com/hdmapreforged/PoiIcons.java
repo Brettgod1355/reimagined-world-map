@@ -96,7 +96,7 @@ final class PoiIcons
         long key = (1L << 62) | ((long) (rim.getRGB() & 0xffffffffL) << 8) | (int) round(device * 10);
         double extent = 13;
         blit(g, SPRITES.computeIfAbsent(key, k -> sprite(extent, extent, device, sg -> {
-            Ellipse2D dot = new Ellipse2D.Double(extent / 2 - 4.5, extent / 2 - 4.5, 9, 9);
+            var dot = new Ellipse2D.Double(extent / 2 - 4.5, extent / 2 - 4.5, 9, 9);
             sg.setColor(Color.WHITE);
             sg.fill(dot);
             sg.setColor(rim);
@@ -139,7 +139,7 @@ final class PoiIcons
             return;
         }
         double r = size / 2;
-        Ellipse2D badge = new Ellipse2D.Double(cx - r, cy - r, size, size);
+        var badge = PlayerMarker.circle(cx, cy, r);
         if (emphasised)
         {
             g.setColor(new Color(255, 255, 255, 200));
@@ -170,7 +170,7 @@ final class PoiIcons
             double r = max(w, h) / 2 + size * 0.18;
             g.setColor(new Color(255, 255, 255, 210));
             g.setStroke(new BasicStroke((float) max(1.5, size * 0.12)));
-            g.draw(new Ellipse2D.Double(cx - r, cy - r, r * 2, r * 2));
+            g.draw(PlayerMarker.circle(cx, cy, r));
         }
         var copy = (Graphics2D) g.create();
         copy.setRenderingHint(KEY_INTERPOLATION, scale >= 1
@@ -252,7 +252,7 @@ final class PoiIcons
                     g.fill(new RoundRectangle2D.Double(px, py, w, h, s * a[5], s * a[5]));
                     break;
                 case "c":
-                    g.fill(new Ellipse2D.Double(px - w, py - w, w * 2, w * 2));
+                    g.fill(PlayerMarker.circle(px, py, w));
                     break;
                 case "C":
                     g.setColor(OUTLINE);

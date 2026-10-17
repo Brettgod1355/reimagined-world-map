@@ -118,11 +118,8 @@ public final class Tiles
         }
         int x = x(node);
         int y = y(node);
-        if (x < 2944 || x > 3391 || !(y >= 3520 && y <= 3967 || y >= 9920 && y <= 10367))
-        {
-            return false;
-        }
-        return !within(Zones.SAFE, x, y) && !within(Zones.OUTSIDE, x, y);
+        return x >= 2944 && x <= 3391 && (y >= 3520 && y <= 3967 || y >= 9920 && y <= 10367)
+            && !within(Zones.SAFE, x, y) && !within(Zones.OUTSIDE, x, y);
     }
 
     static boolean within(int[][] zones, int x, int y)
@@ -135,6 +132,12 @@ public final class Tiles
             }
         }
         return false;
+    }
+
+    /** On the same floor (the sea's is 0) and within {@code radius} tiles. */
+    public static boolean near(int a, int b, int radius)
+    {
+        return z(a) == z(b) && distance(a, b) <= radius;
     }
 
     /** Chebyshev distance in tiles, ignoring floors. */

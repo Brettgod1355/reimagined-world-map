@@ -2,12 +2,12 @@ package com.hdmapreforged;
 
 import static net.runelite.api.gameval.VarPlayerID.*;
 
+import java.awt.Color;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.*;
 import java.util.regex.*;
 import net.runelite.api.*;
-import net.runelite.api.gameval.*;
 
 /**
  * The player's levels, finished quests, varbits and varps, taken on the client thread, read from any. What it cannot
@@ -36,7 +36,7 @@ final class Unlocks
     /** The quests, varbits and varps the loaded requirements name, worked out once per data load. */
     static final class Watched
     {
-        final List<Quest> quests = new ArrayList<>();
+        final Set<Quest> quests = new LinkedHashSet<>();
         /** Sorted. */
         final int[] varbits;
         final int[] varps;
@@ -56,15 +56,20 @@ final class Unlocks
             }
             // Not named by any table: fairy rings without a staff (RouteSource.carried).
             ids.add(LUMBRIDGE_ELITE);
+            names.forEach(this::add);
+            varbits = ids.stream().mapToInt(Integer::intValue).toArray();
+            varps = varpIds.stream().mapToInt(Integer::intValue).toArray();
+        }
+
+        void add(String name)
+        {
             for (Quest quest : Quest.values())
             {
-                if (names.contains(quest.getName().toLowerCase(Locale.ROOT)))
+                if (quest.getName().equalsIgnoreCase(name))
                 {
                     quests.add(quest);
                 }
             }
-            varbits = ids.stream().mapToInt(Integer::intValue).toArray();
-            varps = varpIds.stream().mapToInt(Integer::intValue).toArray();
         }
 
         /** Whether this varbit changing can change what is usable. */
@@ -212,6 +217,15 @@ final class Unlocks
     }
 
     /** False only when a requirement is certainly not met. */
+    /** A quest start icon's dot: green finished, yellow started, red not; null when not read. */
+    Color questColor(String name)
+    {
+        String key = name.toLowerCase(Locale.ROOT);
+        Boolean done = quests.get(key);
+        return done == null ? null : done ? Color.GREEN : Boolean.TRUE.equals(started.get(key)) ? Color.YELLOW
+            : Color.RED;
+    }
+
     boolean usable(Needs needs)
     {
         if (needs.isEmpty())

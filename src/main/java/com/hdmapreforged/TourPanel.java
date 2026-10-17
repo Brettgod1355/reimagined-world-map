@@ -152,12 +152,7 @@ final class TourPanel
             panel.add(Box.createVerticalStrut(4));
         }
 
-        JPanel pick = row();
-        var which = new JComboBox<String>();
-        for (Tour t : tours)
-        {
-            which.addItem(t.name);
-        }
+        var which = new JComboBox<String>(tours.stream().map(t -> t.name).toArray(String[]::new));
         which.setSelectedItem(current.name);
         which.addActionListener(e -> {
             Object chosen = which.getSelectedItem();
@@ -168,18 +163,14 @@ final class TourPanel
             }
         });
         which.setMaximumSize(new Dimension(Math.max(100, width - 60), which.getPreferredSize().height));
-        pick.add(which);
-        pick.add(Box.createHorizontalStrut(4));
-        pick.add(button("New", () -> {
+        panel.add(row(which, button("New", () -> {
             if (tours.size() < Tour.MAX_TOURS)
             {
                 String name = Tour.unique(tours, "Route " + (tours.size() + 1));
                 tours.add(new Tour(name, new ArrayList<>()));
                 save(tours, name);
             }
-        }));
-        panel.add(pick);
-        JPanel naming = row();
+        })));
         JTextField name = new JTextField(current.name, 14);
         name.setToolTipText("The route's name: type and press Enter");
         FullMapWindow.typable(name);
@@ -197,16 +188,13 @@ final class TourPanel
         // The fastest order's answer finds its route by name: renaming meanwhile would drop it.
         name.setEnabled(!ordering);
         name.setMaximumSize(new Dimension(Math.max(100, width - 60), name.getPreferredSize().height));
-        naming.add(name);
-        naming.add(Box.createHorizontalStrut(4));
         JButton delete = button("Delete", () -> {
             tours.remove(current);
             save(tours, tours.isEmpty() ? "My route" : tours.get(0).name);
         });
         // Not while the fastest order is worked out; moving or removing stops neither.
         delete.setEnabled(!ordering);
-        naming.add(delete);
-        add(panel, 4, naming);
+        add(panel, 4, row(name, delete));
         panel.add(Box.createVerticalStrut(8));
 
         if (current.stops.isEmpty())
@@ -266,31 +254,25 @@ final class TourPanel
         add(panel, 8, go);
         if (current.stops.size() > 1)
         {
-            JPanel ordering = row();
-            JButton withItems = button(this.ordering ? "Working it out…" : "Order with current items",
+            JButton withItems = button(ordering ? "Working it out…" : "Order with current items",
                 () -> order(current, false));
-            withItems.setEnabled(!this.ordering);
-            ordering.add(tip(withItems, "Put the stops in the quickest order from where you are, with the teleports, "
-                + "transport and items you have now; a home or minigame teleport is used once at most"));
-            ordering.add(Box.createHorizontalStrut(4));
+            withItems.setEnabled(!ordering);
             JButton fastest = button("Order fastest", () -> order(current, true));
-            fastest.setEnabled(!this.ordering);
-            ordering.add(tip(fastest, "The quickest order with every teleport and transport in the game, whatever you "
-                + "have; a home or minigame teleport is used once at most"));
-            add(panel, 4, ordering);
+            fastest.setEnabled(!ordering);
+            add(panel, 4, row(tip(withItems, "Put the stops in the quickest order from where you are, with the teleports, "
+                + "transport and items you have now; a home or minigame teleport is used once at most"),
+                tip(fastest, "The quickest order with every teleport and transport in the game, whatever you "
+                + "have; a home or minigame teleport is used once at most")));
         }
-        JPanel share = row();
         JButton export = choice("Export", what -> {
             item(what, "This route", () -> copy(Tour.share(List.of(current)), "\"" + current.name + "\""));
             item(what, "All routes", () -> copy(Tour.share(tours), tours.size() + " routes"));
         });
         export.setEnabled(!current.stops.isEmpty());
-        share.add(tip(export, "Copy the route as text, to keep or to share"));
-        share.add(Box.createHorizontalStrut(4));
         JButton doImport = button("Import", () -> importRoutes(tours));
         doImport.setEnabled(!ordering);
-        share.add(tip(doImport, "Add the routes on the clipboard, as Export copies them"));
-        add(panel, 4, share);
+        add(panel, 4, row(tip(export, "Copy the route as text, to keep or to share"),
+            tip(doImport, "Add the routes on the clipboard, as Export copies them")));
 
         if (!current.avoid.isEmpty())
         {
@@ -395,10 +377,19 @@ final class TourPanel
         refresh();
     }
 
-    static JPanel row()
+    /** A row of {@code parts}, 4 pixels apart. */
+    static JPanel row(JComponent... parts)
     {
         JPanel row = panel(null);
         row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        for (var part : parts)
+        {
+            if (row.getComponentCount() > 0)
+            {
+                row.add(Box.createHorizontalStrut(4));
+            }
+            row.add(part);
+        }
         return row;
     }
 

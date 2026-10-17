@@ -121,8 +121,8 @@ final class NpcPictures
         {
             missing.remove(npc);
             // Drawn smoothly: far quicker than Image.SCALE_SMOOTH, and halving is exact.
-            BufferedImage large = ScaledTiles.scale(image, LARGE, LARGE, true);
-            Icon[] both = {new ImageIcon(ScaledTiles.scale(large, SMALL, SMALL, true)), new ImageIcon(large)};
+            BufferedImage large = ScaledTiles.scale(image, LARGE, LARGE);
+            Icon[] both = {new ImageIcon(ScaledTiles.scale(large, SMALL, SMALL)), new ImageIcon(large)};
             icons.put(npc, both);
             labels.forEach(label -> put(both, label));
         }
