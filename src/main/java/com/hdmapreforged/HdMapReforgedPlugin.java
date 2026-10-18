@@ -223,7 +223,7 @@ public class HdMapReforgedPlugin extends Plugin
         for (MapScreen on : new MapScreen[]{screen, fullScreen})
         {
             on.view.linesChoice = value -> configManager.setConfiguration(GROUP, "linesOff", value);
-            on.view.checkForMap = () -> runData(() -> resolveVersions(true, false));
+            on.view.checkForMap = () -> runData(this::checkForMap);
             on.setNpcPictures(pictures);
         }
 
@@ -648,7 +648,7 @@ public class HdMapReforgedPlugin extends Plugin
         {
             case "checkMapNow":
                 // Every click: RuneLite's settings panel would not show the box unticking itself.
-                runData(() -> resolveVersions(true, false));
+                runData(this::checkForMap);
                 break;
             case "followPlayer":
                 screens(s -> s.view.setFollowing(config.followPlayer()));
@@ -879,6 +879,19 @@ public class HdMapReforgedPlugin extends Plugin
             switchVersion(version, maps, data, started);
             route.loadPlanner();
         }));
+    }
+
+    /**
+     * A player's "Check for a new map": asks the server now. After failures the backoff starts over, so a click while
+     * the server is down does not push the next retry further away. Data thread.
+     */
+    void checkForMap()
+    {
+        if (failedMaps > 0)
+        {
+            failedMaps = 1;
+        }
+        resolveVersions(true, false);
     }
 
     /**
