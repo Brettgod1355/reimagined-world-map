@@ -729,7 +729,12 @@ public class HdMapReforgedPlugin extends Plugin
                     // The first start, and no answer: nothing to show until the server answers.
                     retryLater(started, () -> resolveVersions(false, world));
                 }
-                else if (currentVersion == null)
+                else if (failedMaps > 0)
+                {
+                    // A failed version's retry, and no answer: asked again, further apart.
+                    retryMap(started, wantedVersion);
+                }
+                if (wantedVersion != null && currentVersion == null)
                 {
                     screens(s -> s.view.setMapUnavailable(true));
                 }
@@ -801,7 +806,7 @@ public class HdMapReforgedPlugin extends Plugin
     /**
      * Shows a map version once its three files are had (kept on disk once seen, else the server's): its map list with
      * its region table and its places, read here; its tiles switch with them. Until all three are usable the version
-     * shown stays, and they are asked for again after {@link #RETRY_MS}. Data thread.
+     * shown stays, and the server is asked again ({@link #retryMap}). Data thread.
      */
     void useVersion(String version)
     {
@@ -849,22 +854,14 @@ public class HdMapReforgedPlugin extends Plugin
                 log.debug("Map version {} incomplete; showing {}", version, currentVersion);
                 if (list != null && regions != null && places != null)
                 {
-                    // Complete but unusable: deleted, or every retry would read the same copy from disk.
-                    serverCache.forget("maps", version);
+                    // Complete but unusable: the kept copies are passed over once, or every retry would read them.
+                    serverCache.refetch("maps", version, MapServer.MAP_FILES);
                 }
                 if (currentVersion == null)
                 {
                     screens(s -> s.view.setMapUnavailable(true));
                 }
-                // The server is asked, as it may have replaced this version: at once, then 1, 2, 4... minutes apart.
-                long gap = failedMaps == 0 ? 0 : Math.min(MAX_RETRY_MS, RETRY_MS << Math.min(failedMaps - 1, 5));
-                failedMaps++;
-                retryLater(started, gap, () -> {
-                    if (version.equals(wantedVersion))
-                    {
-                        resolveVersions(true, false);
-                    }
-                });
+                retryMap(started, version);
                 return;
             }
             if (routeData != null)
@@ -882,6 +879,22 @@ public class HdMapReforgedPlugin extends Plugin
             switchVersion(version, maps, data, started);
             route.loadPlanner();
         }));
+    }
+
+    /**
+     * Asks the server for its versions after an unusable {@code version}, as it may have replaced it: at once, then
+     * 1, 2, 4... minutes apart, up to {@link #MAX_RETRY_MS}. Data thread.
+     */
+    void retryMap(int started, String version)
+    {
+        long gap = failedMaps == 0 ? 0 : Math.min(MAX_RETRY_MS, RETRY_MS << Math.min(failedMaps - 1, 5));
+        failedMaps++;
+        retryLater(started, gap, () -> {
+            if (version.equals(wantedVersion))
+            {
+                resolveVersions(true, false);
+            }
+        });
     }
 
     /** Runs {@code task} on the data thread after {@link #RETRY_MS} unless the plugin stopped meanwhile. */

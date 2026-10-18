@@ -27,6 +27,8 @@ final class ServerCache
     final ExecutorService io;
     /** Each kind's version in use, whose folder alone is kept. */
     final Map<String, String> inUse = new ConcurrentHashMap<>();
+    /** Files (kind/version/name) whose kept copy is passed over until the server sends its own. */
+    final Set<String> stale = ConcurrentHashMap.newKeySet();
 
     /**
      * A file's bytes: from disk when seen before, else from {@code fetch}, which asks the server and hands the bytes
@@ -37,7 +39,8 @@ final class ServerCache
     {
         var file = file(kind, version, name);
         if (file == null || !later(() -> {
-            var kept = read(file);
+            String key = kind + "/" + version + "/" + name;
+            var kept = stale.contains(key) ? null : read(file);
             if (kept != null)
             {
                 done.accept(kept);
@@ -47,6 +50,8 @@ final class ServerCache
             fetch.accept(bytes -> {
                 if (bytes != null)
                 {
+                    // Passed over until the server's copy comes, so a version is never half old copies, half new.
+                    stale.remove(key);
                     later(() -> keep(kind, version, file, bytes));
                 }
                 done.accept(bytes);
@@ -57,13 +62,13 @@ final class ServerCache
         }
     }
 
-    /** A version's kept files deleted, so they are fetched again. On the calling thread. */
-    void forget(String kind, String version)
+    /**
+     * A version's kept files passed over until the server sends its own, which overwrite them; left on disk while it
+     * does not answer. Any thread.
+     */
+    void refetch(String kind, String version, Collection<String> names)
     {
-        if (KIND.matcher(kind).matches() && MapServer.isSafeVersion(version))
-        {
-            TileCache.deleteTree(root.joinSegment(kind).joinSegment(version));
-        }
+        names.forEach(name -> stale.add(kind + "/" + version + "/" + name));
     }
 
     /** Null for a name that could leave the folder. */
