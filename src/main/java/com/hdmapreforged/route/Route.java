@@ -1,13 +1,14 @@
 package com.hdmapreforged.route;
 
 import static com.hdmapreforged.route.Tiles.*;
+import static lombok.AccessLevel.*;
 
 import java.util.*;
 import java.util.stream.*;
 import lombok.*;
 
 /** The result of a search: the steps, and how the target was reached (or why not). */
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@AllArgsConstructor(access = PRIVATE)
 public final class Route
 {
     public enum Outcome
@@ -38,9 +39,9 @@ public final class Route
         public final Kind kind;
         /** Packed: all tiles walked or sea blocks sailed, or the two ends of a jump. */
         public final int[] points;
-        @With(AccessLevel.PACKAGE)
+        @With(PACKAGE)
         public final String name;
-        @With(AccessLevel.PACKAGE)
+        @With(PACKAGE)
         public final String detail;
         public final int cost;
         public final int doors;
@@ -65,24 +66,24 @@ public final class Route
     }
 
     public final Outcome outcome;
-    @With(AccessLevel.PACKAGE)
+    @With(PACKAGE)
     public final List<Step> steps;
     /** Half ticks. */
     public final int cost;
     public final int target;
     public final int end;
-    @With(AccessLevel.PACKAGE)
+    @With(PACKAGE)
     public final boolean exhausted;
     public final boolean limited;
     public final int nodes;
     /** Where a search that proved the target out of reach proved it out of reach from; else null. */
-    @With(AccessLevel.PACKAGE)
+    @With(PACKAGE)
     final Reached reached;
     /** Through the Wilderness though the player keeps out of it: no way around it gets there. */
-    @With(AccessLevel.PACKAGE)
+    @With(PACKAGE)
     public final boolean throughWilderness;
     /** The search left out a step or jump into the Wilderness (kept out of it): through it, it may get further. */
-    @With(AccessLevel.PACKAGE)
+    @With(PACKAGE)
     final boolean keptOut;
 
     /** Without the extra weight of teleports kept for longer trips. */

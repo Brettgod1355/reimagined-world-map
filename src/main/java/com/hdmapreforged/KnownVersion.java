@@ -12,7 +12,6 @@ import net.runelite.client.util.*;
 final class KnownVersion
 {
     static final String FILE = "server-map-version.txt";
-    static final long DAY_MS = 24L * 60 * 60 * 1000;
 
     final String version;
     final long checkedAt;
@@ -20,7 +19,8 @@ final class KnownVersion
     /** Weekly; a check time in the future (a changed clock) counts as due. */
     boolean due(long now)
     {
-        return now < checkedAt || now - checkedAt >= 7 * DAY_MS;
+        // Seven days.
+        return now < checkedAt || now - checkedAt >= 7 * 24L * 60 * 60 * 1000;
     }
 
     /** Null when missing or unusable. */
@@ -32,7 +32,7 @@ final class KnownVersion
         }
         try
         {
-            String[] lines = new String(TileCache.read(file), StandardCharsets.UTF_8).split("\n");
+            var lines = new String(TileCache.read(file), StandardCharsets.UTF_8).split("\n");
             String version = lines[0].trim();
             return lines.length < 2 || !MapServer.isSafeVersion(version) ? null
                 : new KnownVersion(version, Long.parseLong(lines[1].trim()));

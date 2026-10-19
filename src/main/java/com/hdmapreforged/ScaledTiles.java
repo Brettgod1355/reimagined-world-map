@@ -16,14 +16,6 @@ import lombok.*;
  */
 final class ScaledTiles
 {
-    /** Larger tiles would take a lot of memory and scale cheaply anyway. */
-    static final int MAX_PIXELS = 512 * 512;
-    /**
-     * A copy is kept in strips of at most this: larger ones would pass half of a 1 MB heap region, which Java's G1 keeps
-     * "humongous" in whole regions of the old generation; at zoom 3.5 to 4 they filled a 768 MB heap and made the map
-     * stutter.
-     */
-    static final int STRIP_PIXELS = 360 * 360;
     static final long MAX_BYTES = 64L * 1024 * 1024;
     /** Copies made per frame, in pixels (about 3 ms of smooth scaling): after a zoom, all at once took 16-30 ms. */
     static final int FRAME_PIXELS = 1 << 19;
@@ -44,7 +36,10 @@ final class ScaledTiles
             this.source = new WeakReference<>(source);
             this.width = width;
             this.height = height;
-            int rows = Math.max(1, STRIP_PIXELS / width);
+            // A copy is kept in strips of at most 360 × 360 pixels: larger ones would pass half of a 1 MB heap region,
+            // which Java's G1 keeps "humongous" in whole regions of the old generation; at zoom 3.5 to 4 they filled a
+            // 768 MB heap and made the map stutter.
+            int rows = Math.max(1, 360 * 360 / width);
             var strips = new BufferedImage[(height + rows - 1) / rows];
             for (int i = 0; i < strips.length; i++)
             {
@@ -136,14 +131,15 @@ final class ScaledTiles
             return;
         }
         // Crisp squares past the most detailed tiles (nearest neighbour): drawn from the source, the same pixels.
-        if (!smooth || dw == source.getWidth() && dh == source.getHeight() || (long) dw * dh > MAX_PIXELS
+        // Larger than 512 × 512 would take a lot of memory and scales cheaply anyway.
+        if (!smooth || dw == source.getWidth() && dh == source.getHeight() || (long) dw * dh > 512 * 512
             || transform.getShearX() != 0 || transform.getShearY() != 0)
         {
             g.drawImage(source, x, y, width, height, null);
             return;
         }
         Entry entry = cache.get(key);
-        BufferedImage[] shown = entry == null || entry.source.get() != source ? null : entry.scaled.get();
+        var shown = entry == null || entry.source.get() != source ? null : entry.scaled.get();
         if (shown == null && entry != null)
         {
             // Dropped by the JVM, or of an older tile: no longer counted against the limit.

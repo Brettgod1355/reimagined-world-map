@@ -12,6 +12,8 @@ import lombok.*;
  */
 public final class RouteFiles
 {
+    /** Where the route tables lie on the classpath; a route.zip holds them by their file names alone. */
+    public static final String DIR = "/com/hdmapreforged/route/";
     static final int MAX_FILE_BYTES = 16 * 1024 * 1024;
     static final int MAX_TOTAL_BYTES = 32 * 1024 * 1024;
     static final int MAX_FILES = 100;

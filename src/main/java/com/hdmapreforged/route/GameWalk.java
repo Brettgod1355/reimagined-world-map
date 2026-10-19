@@ -1,5 +1,6 @@
 package com.hdmapreforged.route;
 
+import static java.lang.Math.*;
 import static com.hdmapreforged.route.Tiles.*;
 
 import java.util.*;
@@ -61,7 +62,7 @@ public final class GameWalk
      * straight along the longer axis first, then diagonally; never diagonally first. Not through a door or onto an
      * obstacle the walk kept clear of.
      */
-    public static int[] straighten(CollisionMap map, int[] points)
+    static int[] straighten(CollisionMap map, int[] points)
     {
         if (points.length < 3 || isSea(points[0]))
         {
@@ -75,7 +76,7 @@ public final class GameWalk
         {
             int[] best = null;
             int to = i + 1;
-            for (int j = Math.min(points.length - 1, i + RUN); j > i + 1 && best == null; j--)
+            for (int j = min(points.length - 1, i + RUN); j > i + 1 && best == null; j--)
             {
                 best = runs(map, points, i, j);
                 to = j;
@@ -105,17 +106,17 @@ public final class GameWalk
         int z = z(from);
         int dx = x(to) - x(from);
         int dy = y(to) - y(from);
-        int steps = Math.max(Math.abs(dx), Math.abs(dy));
+        int steps = max(abs(dx), abs(dy));
         if (z(to) != z || steps != j - i)
         {
             return null;
         }
-        int diagonal = Math.min(Math.abs(dx), Math.abs(dy));
+        int diagonal = min(abs(dx), abs(dy));
         int sx = Integer.signum(dx);
         int sy = Integer.signum(dy);
         // The straight run goes along the longer axis.
-        int ax = Math.abs(dx) > Math.abs(dy) ? sx : 0;
-        int ay = Math.abs(dx) > Math.abs(dy) ? 0 : sy;
+        int ax = abs(dx) > abs(dy) ? sx : 0;
+        int ay = abs(dx) > abs(dy) ? 0 : sy;
         int[] path = new int[steps + 1];
         path[0] = from;
         int x = x(from);

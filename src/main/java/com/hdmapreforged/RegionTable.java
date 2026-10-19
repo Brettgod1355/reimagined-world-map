@@ -82,7 +82,7 @@ class RegionTable
             }
         }
         int count = Integer.bitCount(mask & ((1 << Math.min(6, ids.length)) - 1));
-        int[] found = new int[count];
+        var found = new int[count];
         int n = 0;
         for (int i = 0; i < ids.length && i < 6; i++)
         {
@@ -249,7 +249,7 @@ class RegionTable
             }
             try
             {
-                int[] p = new int[fields];
+                var p = new int[fields];
                 for (int i = 0; i < fields; i++)
                 {
                     p[i] = Integer.parseInt(parts[i]);

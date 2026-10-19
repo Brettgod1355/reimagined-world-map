@@ -106,13 +106,13 @@ final class WorldData
      */
     static WorldData parse(byte[] file)
     {
-        Object[] format = new Object[2];
+        var format = new Object[2];
         var npcs = new HashMap<String, NpcSpawns>();
         var items = new HashMap<String, ItemSources>();
         var shops = new ArrayList<Shop>();
         var names = new ArrayList<String[]>(Arrays.asList(new String[0], new String[0]));
         var maps = new HashMap<WorldPoint, Integer>();
-        try (JsonReader in = new JsonReader(MapServer.text(file)))
+        try (var in = new JsonReader(MapServer.text(file)))
         {
             in.beginObject();
             while (in.hasNext())
@@ -458,10 +458,10 @@ final class WorldData
         return value(in, 0);
     }
 
-    /** Nesting deeper than {@link #MAX_DEPTH} is skipped, so no answer can run the stack out. */
+    /** Nesting deeper than 32 is skipped, so no answer can run the stack out. */
     static Object value(JsonReader in, int depth) throws IOException
     {
-        switch (depth > MAX_DEPTH ? JsonToken.NULL : in.peek())
+        switch (depth > 32 ? JsonToken.NULL : in.peek())
         {
             case NUMBER:
                 return in.nextDouble();
@@ -490,8 +490,6 @@ final class WorldData
                 return null;
         }
     }
-
-    static final int MAX_DEPTH = 32;
 
     static Map<?, ?> map(Object e)
     {

@@ -52,7 +52,7 @@ final class GraveMarker implements MapView.Overlay, MapView.HitLayer
         {
             boolean selected = view.selected() == grave;
             double size = view.iconSize(p.zoom()) * (selected ? 1.25 : 1.1);
-            PoiIcons.paintCached(g, PoiType.GRAVE, center.x, center.y, size, selected);
+            PoiIcons.paintCached(g, PoiType.GRAVE, center.x, center.y, size, selected, false);
         }
     }
 

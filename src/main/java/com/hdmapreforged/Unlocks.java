@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import static java.util.Locale.ROOT;
 import static net.runelite.api.gameval.VarPlayerID.*;
 
 import java.awt.Color;
@@ -50,7 +51,7 @@ final class Unlocks
             {
                 for (String quest : need.quests.split(";"))
                 {
-                    names.add(quest.trim().toLowerCase(Locale.ROOT).replace(STARTED, ""));
+                    names.add(quest.trim().toLowerCase(ROOT).replace(STARTED, ""));
                 }
                 ids(need.varbits, ids, varpIds);
             }
@@ -92,7 +93,7 @@ final class Unlocks
         {
             if (!"Overall".equals(skill.getName()))
             {
-                unlocks.levels.put(skill.getName().toLowerCase(Locale.ROOT), client.getRealSkillLevel(skill));
+                unlocks.levels.put(skill.getName().toLowerCase(ROOT), client.getRealSkillLevel(skill));
             }
         }
         unlocks.levels.put("total", client.getTotalLevel());
@@ -108,7 +109,7 @@ final class Unlocks
             for (Quest quest : watched.quests)
             {
                 var state = quest.getState(client);
-                String name = quest.getName().toLowerCase(Locale.ROOT);
+                String name = quest.getName().toLowerCase(ROOT);
                 unlocks.quests.put(name, state == QuestState.FINISHED);
                 unlocks.started.put(name, state != QuestState.NOT_STARTED);
             }
@@ -177,7 +178,7 @@ final class Unlocks
     /** Whether a home or minigame teleport still waits out its cooldown at this minute (since 1970). */
     boolean waiting(String name, String group, long nowMinutes)
     {
-        boolean home = name.toLowerCase(Locale.ROOT).contains("home teleport");
+        boolean home = name.toLowerCase(ROOT).contains("home teleport");
         boolean minigame = "Minigame teleports".equals(group);
         return home && lastHome > 0 && nowMinutes - lastHome < HOME_WAIT
             || minigame && lastMinigame > 0 && nowMinutes - lastMinigame < MINIGAME_WAIT;
@@ -192,7 +193,7 @@ final class Unlocks
             int sum = 0;
             for (String skill : line.skill.split("\\+"))
             {
-                Integer level = levels.get(skill.trim().toLowerCase(Locale.ROOT));
+                Integer level = levels.get(skill.trim().toLowerCase(ROOT));
                 if (level == null)
                 {
                     return null;
@@ -203,7 +204,7 @@ final class Unlocks
         }
         if (line.quest != null)
         {
-            String quest = line.quest.toLowerCase(Locale.ROOT);
+            String quest = line.quest.toLowerCase(ROOT);
             if (quest.endsWith(STARTED))
             {
                 String name = quest.substring(0, quest.length() - STARTED.length());
@@ -220,7 +221,7 @@ final class Unlocks
     /** A quest start icon's dot: green finished, yellow started, red not; null when not read. */
     Color questColor(String name)
     {
-        String key = name.toLowerCase(Locale.ROOT);
+        String key = name.toLowerCase(ROOT);
         Boolean done = quests.get(key);
         return done == null ? null : done ? Color.GREEN : Boolean.TRUE.equals(started.get(key)) ? Color.YELLOW
             : Color.RED;

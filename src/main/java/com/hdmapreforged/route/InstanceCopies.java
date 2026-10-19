@@ -9,7 +9,7 @@ public final class InstanceCopies
 
     static List<int[]> load()
     {
-        return Pathfinder.table("/com/hdmapreforged/route/instance_copies.tsv", parts -> {
+        return Pathfinder.table(RouteFiles.DIR + "instance_copies.tsv", parts -> {
             var min = Pathfinder.ints(parts[0]);
             var max = Pathfinder.ints(parts[1]);
             var by = Pathfinder.ints(parts[2]);

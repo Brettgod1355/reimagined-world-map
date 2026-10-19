@@ -5,11 +5,13 @@ import static com.hdmapreforged.route.Route.Outcome.*;
 import static java.lang.Math.*;
 import static com.hdmapreforged.route.Tiles.*;
 
+import com.hdmapreforged.route.Route.*;
 import java.io.*;
 import java.nio.charset.*;
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
+import lombok.*;
 
 /**
  * A* over tiles, sea blocks and jumps ({@link Edge}); costs in half ticks. The heuristic stays a lower bound by folding
@@ -68,8 +70,8 @@ public final class Pathfinder
         // Passages only from: the game's map links, hand links citing a source,
         // and cache passages: within SAME_SPOT, or far ones (into a dungeon, 6400 tiles north) that the collision tool
         // paired with a way back at the other end, unless a map link of the game's starts there and leads elsewhere.
-        var mapLinks = links(map, "/com/hdmapreforged/route/map_link_passages.tsv");
-        var handLinks = links(map, "/com/hdmapreforged/route/links.tsv");
+        var mapLinks = links(map, RouteFiles.DIR + "map_link_passages.tsv");
+        var handLinks = links(map, RouteFiles.DIR + "links.tsv");
         var gameLinks = gameLinkStarts();
         for (Transition t : map.transitions())
         {
@@ -97,7 +99,7 @@ public final class Pathfinder
         // A passage a gates.tsv row covers (a quest-locked city gate the game's map links have as open) is never free:
         // RouteSource offers the row's own edge to players who meet its needs.
         var gated = new ArrayList<int[]>();
-        for (var parts : rows("/com/hdmapreforged/route/gates.tsv"))
+        for (var parts : rows(RouteFiles.DIR + "gates.tsv"))
         {
             int a = parts.length < 3 ? -1 : parse(parts[1]);
             int b = a < 0 ? -1 : parse(parts[2]);
@@ -172,7 +174,7 @@ public final class Pathfinder
     /** Where the game's own map links start (route/map_link_starts.tsv): x, y, plane. */
     static List<int[]> gameLinkStarts()
     {
-        return table("/com/hdmapreforged/route/map_link_starts.tsv", parts -> {
+        return table(RouteFiles.DIR + "map_link_starts.tsv", parts -> {
             int start = parse(parts[0]);
             return start < 0 ? null : new int[]{x(start), y(start), z(start)};
         });
@@ -568,10 +570,10 @@ public final class Pathfinder
     {
         Route route = search(request, cancelled, costLimit);
         // Left without their boat (a place on land): sail only when walking does not get there (an island).
-        if (request.withBoat != null && (route.outcome == NEAREST || route.outcome == NONE)
+        if (request.boat != null && (route.outcome == NEAREST || route.outcome == NONE)
             && !cancelled.getAsBoolean())
         {
-            Route sailed = search(request.withBoat, cancelled, costLimit);
+            Route sailed = search(request.boat, cancelled, costLimit);
             return sailed.outcome == FOUND ? sailed : sailed.keptOut && !route.keptOut ? route.withKeptOut(true)
                 : route;
         }
@@ -610,8 +612,8 @@ public final class Pathfinder
                 key.addAll(List.of(e.from, e.to, e.cost));
             }
         }
-        var heuristic = new Heuristic(bounds.computeIfAbsent(key, k -> Heuristic.bounds(jumps, towards, scale)),
-            towards, scale);
+        var made = bounds.computeIfAbsent(key, k -> Heuristic.bounds(jumps, towards, scale));
+        var heuristic = new Heuristic(towards, scale, made[0], made[1]);
 
         var nodes = new NodeTable();
         var open = new LongHeap();
@@ -740,7 +742,7 @@ public final class Pathfinder
         boolean exhausted = found < 0 && (proof != null || tried);
         Reached reached = found >= 0 ? null : tried ? new Reached(nodes.reached(), false) : proof;
         int end = found >= 0 ? found : best;
-        var steps = end < 0 ? List.<Route.Step>of() : steps(nodes, all, startOffset, end, found >= 0 ? target : -1);
+        var steps = end < 0 ? List.<Step>of() : steps(nodes, all, startOffset, end, found >= 0 ? target : -1);
         Route route = end < 0 ? new Route(NONE, steps, 0, target, -1, exhausted, limited, popped, reached)
             : new Route(found >= 0 ? FOUND : NEAREST, steps, nodes.cost(end), target,
             steps.isEmpty() ? end : steps.get(steps.size() - 1).last(), exhausted, limited, popped, reached);
@@ -944,9 +946,9 @@ public final class Pathfinder
             : pack(x(node) - DX[d], y(node) - DY[d], z(node));
     }
 
-    List<Route.Step> steps(NodeTable nodes, List<Edge> all, int startOffset, int end, int target)
+    List<Step> steps(NodeTable nodes, List<Edge> all, int startOffset, int end, int target)
     {
-        var reversed = new ArrayList<Route.Step>();
+        var reversed = new ArrayList<Step>();
         var run = new ArrayList<Integer>();
         int node = end;
         run.add(node);
@@ -959,7 +961,7 @@ public final class Pathfinder
                 flush(reversed, run, nodes);
                 Edge e = all.get(via);
                 int from = parent >= 0 ? parent : node;
-                reversed.add(new Route.Step(Route.Step.Kind.valueOf(e.kind.name()), new int[]{from, node}, e.name,
+                reversed.add(new Step(Step.Kind.valueOf(e.kind.name()), new int[]{from, node}, e.name,
                     e.detail, e.time, 0, Collections.emptyList(), e.category));
                 run.clear();
             }
@@ -984,14 +986,14 @@ public final class Pathfinder
             // Where the game walks as a passage (its sides) or that target is clicked where the walk to it starts.
             var walk = reversed.get(i - 1);
             var jump = i < reversed.size() ? reversed.get(i) : null;
-            int[] game = walk.kind != Route.Step.Kind.WALK ? null : GameWalk.path(map, walk.first(), jump == null ? beside
+            int[] game = walk.kind != Step.Kind.WALK ? null : GameWalk.path(map, walk.first(), jump == null ? beside
                 : all.stream().filter(e -> e.from >= 0 && e.to == jump.last() && Objects.equals(e.name, jump.name))
                 .mapToInt(e -> e.from).toArray());
             if (game != null && game.length <= walk.points.length)
             {
                 int doors = (int) IntStream.range(1, game.length).filter(k -> map.door(x(game[k - 1]), y(game[k - 1]),
                     z(game[k]), x(game[k]) - x(game[k - 1]), y(game[k]) - y(game[k - 1]))).count();
-                reversed.set(i - 1, new Route.Step(Route.Step.Kind.WALK, game, null, walk.detail,
+                reversed.set(i - 1, new Step(Step.Kind.WALK, game, null, walk.detail,
                     walk.cost * (game.length - 1) / (walk.points.length - 1), doors, walk.obstacles, null));
                 if (jump != null)
                 {
@@ -1003,7 +1005,7 @@ public final class Pathfinder
     }
 
     /** {@code run} is collected backwards. */
-    void flush(List<Route.Step> reversed, List<Integer> run, NodeTable nodes)
+    void flush(List<Step> reversed, List<Integer> run, NodeTable nodes)
     {
         if (run.size() >= 2)
         {
@@ -1026,7 +1028,7 @@ public final class Pathfinder
             }
             int cost = nodes.cost(points[points.length - 1]) - nodes.cost(points[0]);
             boolean sailing = isSea(points[0]);
-            var obstacles = new ArrayList<Route.Obstacle>();
+            var obstacles = new ArrayList<Obstacle>();
             StringBuilder detail = new StringBuilder();
             if (!sailing)
             {
@@ -1036,7 +1038,7 @@ public final class Pathfinder
                     String obstacle = map.obstacle(point);
                     if (obstacle != null)
                     {
-                        obstacles.add(new Route.Obstacle(point, obstacle));
+                        obstacles.add(new Obstacle(point, obstacle));
                         if (detail.indexOf(obstacle) < 0)
                         {
                             detail.append(detail.length() > 0 ? "; " : "").append(obstacle);
@@ -1044,7 +1046,7 @@ public final class Pathfinder
                     }
                 }
             }
-            reversed.add(new Route.Step(sailing ? Route.Step.Kind.SAIL : Route.Step.Kind.WALK, points, null,
+            reversed.add(new Step(sailing ? Step.Kind.SAIL : Step.Kind.WALK, points, null,
                 sailing ? hazards(points) : detail.length() > 0 ? detail.toString() : null, cost, doors, obstacles, null));
         }
         // Only the last point stays.
@@ -1066,6 +1068,7 @@ public final class Pathfinder
     }
 
     /** Folded distance, or via a jump's backward-searched bound; jump bounds cached per 8×8 block. */
+    @RequiredArgsConstructor
     static final class Heuristic
     {
         final int goal;
@@ -1075,14 +1078,6 @@ public final class Pathfinder
         final int[] bounds;
         /** Per 128 × 128 folded tiles, its 8 × 8 blocks' bounds once worked out (-1 not yet): a flood needs 30,000. */
         final int[][] blocks = new int[1 << 14][];
-
-        Heuristic(int[][] made, int goal, int scale)
-        {
-            this.goal = goal;
-            this.scale = scale;
-            origins = made[0];
-            bounds = made[1];
-        }
 
         /** Per jump origin, the least cost from there to the goal by jumps, walking between them as the crow flies. */
         static int[][] bounds(List<Edge> jumps, int goal, int scale)

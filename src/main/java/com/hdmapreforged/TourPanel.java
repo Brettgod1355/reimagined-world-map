@@ -79,6 +79,7 @@ final class TourPanel
     final Actions actions;
     final Consumer<IntFunction<JComponent>> show;
     final Consumer<WorldPoint> focus;
+    @Getter
     boolean open;
     /** While the fastest order is worked out; {@link #orderings} counts runs, so a cancelled one ends nothing. */
     boolean ordering;
@@ -89,11 +90,6 @@ final class TourPanel
     TourPanel(Actions actions, Consumer<IntFunction<JComponent>> show, Consumer<WorldPoint> focus)
     {
         this(actions, show, focus, null);
-    }
-
-    boolean isOpen()
-    {
-        return open;
     }
 
     void toggle()
@@ -347,7 +343,7 @@ final class TourPanel
     /** A button that opens a menu of choices under itself, filled by {@code choices} when clicked. */
     JButton choice(String text, Consumer<JPopupMenu> choices)
     {
-        JButton[] made = new JButton[1];
+        var made = new JButton[1];
         made[0] = button(text, () -> {
             var menu = new JPopupMenu();
             choices.accept(menu);

@@ -19,7 +19,7 @@ public final class OneWay
 
     public static OneWay load()
     {
-        return new OneWay(Pathfinder.table("/com/hdmapreforged/route/one_way.tsv", OneWay::parse));
+        return new OneWay(Pathfinder.table(RouteFiles.DIR + "one_way.tsv", OneWay::parse));
     }
 
     /** "x y plane <tab> x y plane <tab> radius <tab> name", split at tabs; null when not a rule. */

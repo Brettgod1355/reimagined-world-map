@@ -1,6 +1,7 @@
 package com.hdmapreforged;
 
 import static java.awt.BasicStroke.*;
+import static java.lang.Math.*;
 
 import java.awt.*;
 import java.awt.geom.*;
@@ -15,7 +16,7 @@ final class PlayerMarker
     /** {@code otherFloor}: drawn fainter and dashed; {@code home}: in a box saying so, where the house stands. */
     static void paint(Graphics2D g, TextSprites text, double x, double y, double zoom, boolean otherFloor, boolean home)
     {
-        double ring = 12 + Math.max(0, Math.min(3, zoom)) * 1.5;
+        double ring = 12 + max(0, min(3, zoom)) * 1.5;
         if (home)
         {
             box(g, x, y, ring, YELLOW);
@@ -39,9 +40,9 @@ final class PlayerMarker
             g.setColor(pass == 0 ? SHADOW : YELLOW);
             for (int i = 0; i < 4; i++)
             {
-                double a = Math.PI / 2 * i;
-                g.draw(new Line2D.Double(x + Math.cos(a) * in, y + Math.sin(a) * in, x + Math.cos(a) * out,
-                    y + Math.sin(a) * out));
+                double a = PI / 2 * i;
+                g.draw(new Line2D.Double(x + cos(a) * in, y + sin(a) * in, x + cos(a) * out,
+                    y + sin(a) * out));
             }
         }
         g.setColor(otherFloor ? new Color(255, 214, 64, 150) : YELLOW);
@@ -89,7 +90,7 @@ final class PlayerMarker
         g.setColor(Color.BLACK);
         g.setStroke(new BasicStroke(1.2f));
         g.draw(shape);
-        label(g, text, "You", x - Math.cos(angle) * 22, y - Math.sin(angle) * 22 + 4);
+        label(g, text, "You", x - cos(angle) * 22, y - sin(angle) * 22 + 4);
     }
 
     static void label(Graphics2D g, TextSprites text, String label, double cx, double top)

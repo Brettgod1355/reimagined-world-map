@@ -86,7 +86,6 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     String failedName;
     /** The results clicked through from (a drop, a dropper), for Back. */
     final History history = new History();
-    static final int HISTORY = 20;
     /** The tab shown of the current result (a kind of place, "drops", "droppers"); null for the first. */
     String tab;
     /** Which of a monster's drop tables the Drops tab shows. */
@@ -121,7 +120,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         final int table;
     }
 
-    /** The results clicked through from, newest last, at most {@link #HISTORY}; Back takes the newest. */
+    /** The results clicked through from, newest last, at most 20; Back takes the newest. */
     static final class History
     {
         final Deque<Visit> visits = new ArrayDeque<>();
@@ -129,7 +128,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         void push(Visit visit)
         {
             visits.addLast(visit);
-            while (visits.size() > HISTORY)
+            while (visits.size() > 20)
             {
                 visits.removeFirst();
             }
@@ -213,14 +212,17 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         return Arrays.stream(typed.toLowerCase(Locale.ROOT).trim().split("\\s+")).allMatch(lower::contains);
     }
 
-    /** Builds the panel again with {@code build}; the filter being typed in keeps the keys where it is shown again. */
-    void rebuild(Runnable build)
+    /**
+     * Runs {@code action} (building a panel again, opening a menu) so that it never takes focus from the game: a
+     * {@code field} being typed in keeps the keys, also where it is shown again.
+     */
+    static void keepFocus(JComponent field, Runnable action)
     {
-        boolean typing = filter.isFocusOwner();
-        build.run();
+        boolean typing = field.isFocusOwner();
+        action.run();
         if (typing)
         {
-            filter.requestFocusInWindow();
+            field.requestFocusInWindow();
         }
     }
 
@@ -377,7 +379,8 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             {
                 var first = group.points.get(0);
                 if (!place.isEmpty() && group.location.equals(place) && group.name.equals(name)
-                    && first.distanceTo(entry.point) <= NpcSpawns.TOGETHER)
+                    // Spots 48 tiles apart or closer on one floor, one after another, are one place.
+                    && first.distanceTo(entry.point) <= 48)
                 {
                     group.points.add(entry.point);
                     continue entries;
@@ -500,7 +503,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
 
     void refresh()
     {
-        rebuild(() -> card.show(this::section));
+        keepFocus(filter, () -> card.show(this::section));
         view.repaint();
     }
 
@@ -539,7 +542,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             prices.resolve(ids, () -> {
                 if (result == found)
                 {
-                    rebuild(() -> card.update(this::section));
+                    keepFocus(filter, () -> card.update(this::section));
                 }
             });
         }
@@ -957,8 +960,6 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         }
     }
 
-    /** How many droppers get their picture, each asked of the map server once its row is in view, then kept on disk. */
-    static final int PICTURED = 1000;
     /** A list of more droppers than this gets a filter by name. */
     static final int FILTERED = 10;
 
@@ -979,7 +980,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         int shown = 0;
         for (var dropper : result.droppers)
         {
-            JLabel icon = shown++ < PICTURED ? pictureLabel(dropper.npc, PICTURE) : pictureIcon(PICTURE);
+            // The first 1000 droppers get their picture, each asked of the map server once its row is in view, then
+            // kept on disk.
+            JLabel icon = shown++ < 1000 ? pictureLabel(dropper.npc, PICTURE) : pictureIcon(PICTURE);
             Runnable open = () -> findMonster(dropper.name, dropper.table);
             int w = width - PICTURE - 8;
             JPanel row = pictureRow(icon, bold(link(dropper.name, open, w)), grey(dotted(dropper.rarity,

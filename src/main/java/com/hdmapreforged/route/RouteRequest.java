@@ -29,8 +29,12 @@ public final class RouteRequest
      * through it ({@link #throughWilderness()}).
      */
     public final boolean avoidWilderness;
-    /** The same with their boat, searched when this one (left without it) does not arrive; else null. */
-    public final RouteRequest withBoat;
+    /**
+     * The same with their boat, searched when this one (left without it) does not arrive; else null. {@code withBoat}:
+     * this one with it.
+     */
+    @With
+    public final RouteRequest boat;
     /** A way past a bank first, for what is kept there (setting); else null. {@code withBank}: the same with one. */
     @With
     public final BankDetour bank;
@@ -52,21 +56,21 @@ public final class RouteRequest
     public RouteRequest between(int start, int target)
     {
         return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, avoidWilderness,
-            withBoat == null ? null : withBoat.between(start, target), null);
+            boat == null ? null : boat.between(start, target), null);
     }
 
     /** The same ways, through the Wilderness too: searched when staying out of it does not arrive. */
     public RouteRequest throughWilderness()
     {
         return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, false,
-            withBoat == null ? null : withBoat.throughWilderness(), bank);
+            boat == null ? null : boat.throughWilderness(), bank);
     }
 
     /** Whether a search may use the same ways as with {@code other} (jumps and sea): what it reaches differs by start only. */
-    public boolean sameWays(RouteRequest other)
+    boolean sameWays(RouteRequest other)
     {
         return sailingLevel == other.sailingLevel && avoidWilderness == other.avoidWilderness
-            && (withBoat == null) == (other.withBoat == null) && same(edges, other.edges)
+            && (boat == null) == (other.boat == null) && same(edges, other.edges)
             && same(startEdges, other.startEdges);
     }
 

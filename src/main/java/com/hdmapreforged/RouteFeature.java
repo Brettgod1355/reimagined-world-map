@@ -3,11 +3,11 @@ package com.hdmapreforged;
 import static com.hdmapreforged.route.Tiles.*;
 import static com.hdmapreforged.PlayerMarker.circle;
 import static com.hdmapreforged.RoutePanels.*;
+import static com.hdmapreforged.RouteFeature.RouteText.*;
 import static com.hdmapreforged.SearchResults.*;
-import static com.hdmapreforged.HdMapReforgedConfig.GROUP;
-import static com.hdmapreforged.route.Route.Outcome.FOUND;
-import static java.awt.BasicStroke.JOIN_ROUND;
-import static java.awt.BasicStroke.CAP_ROUND;
+import static com.hdmapreforged.HdMapReforgedConfig.*;
+import static com.hdmapreforged.route.Route.Outcome.*;
+import static java.awt.BasicStroke.*;
 import static java.util.Locale.ROOT;
 import static javax.swing.SwingUtilities.invokeLater;
 import static net.runelite.api.gameval.VarbitID.*;
@@ -246,18 +246,18 @@ public final class RouteFeature
 
     boolean shortestPathPlanner()
     {
-        return config.routePlanner() == HdMapReforgedConfig.RoutePlanner.SHORTEST_PATH;
+        return config.routePlanner() == RoutePlanner.SHORTEST_PATH;
     }
 
     /** Path style Lines, or Lines with arrows: the walks are drawn as lines through the tiles. */
     boolean lines()
     {
-        return config.routeStyle() != HdMapReforgedConfig.RouteStyle.TILES;
+        return config.routeStyle() != RouteStyle.TILES;
     }
 
     boolean arrows()
     {
-        return config.routeStyle() == HdMapReforgedConfig.RouteStyle.ARROWS;
+        return config.routeStyle() == RouteStyle.ARROWS;
     }
 
     boolean shortestPathOn()
@@ -523,7 +523,7 @@ public final class RouteFeature
         }
         var tiles = new ArrayList<TileMarkersBridge.Tile>();
         var taken = new HashSet<Integer>();
-        int blocked = RouteText.blockedFrom(route);
+        int blocked = blockedFrom(route);
         var steps = route == null ? Collections.<Step>emptyList() : route.steps;
         for (int index = 0; index < steps.size(); index++)
         {
@@ -548,7 +548,7 @@ public final class RouteFeature
                 if (marked != null)
                 {
                     tiles.add(new TileMarkersBridge.Tile(marked, cannot ? CANNOT : jump(),
-                        RouteText.said(whole(route), step, false)));
+                        said(whole(route), step, false)));
                 }
             }
         }
@@ -814,7 +814,7 @@ public final class RouteFeature
         // Its teleports and transports as it told them, and the walks between them as found here on foot.
         for (var walk : spWalks)
         {
-            shadowed(g, RouteText.path(p, walk, false), 2.5f, beside ? new float[]{6f, 5f} : null, walked);
+            shadowed(g, path(p, walk, false), 2.5f, beside ? new float[]{6f, 5f} : null, walked);
         }
         for (var j : spJumps)
         {
@@ -822,8 +822,8 @@ public final class RouteFeature
         }
         if (p.shows(target))
         {
-            double x = RouteText.x(p, pack(target));
-            double y = RouteText.y(p, pack(target));
+            double x = x(p, pack(target));
+            double y = y(p, pack(target));
             g.setColor(new Color(0, 0, 0, 160));
             g.fill(circle(x, y, 7));
             g.setColor(walked);
@@ -835,8 +835,8 @@ public final class RouteFeature
     {
         if (p.shows(a) && p.shows(b))
         {
-            shadowed(g, new Line2D.Double(RouteText.x(p, pack(a)), RouteText.y(p, pack(a)), RouteText.x(p, pack(b)),
-                RouteText.y(p, pack(b))), 2.5f, dash, color);
+            shadowed(g, new Line2D.Double(x(p, pack(a)), y(p, pack(a)), x(p, pack(b)),
+                y(p, pack(b))), 2.5f, dash, color);
         }
     }
 
@@ -872,11 +872,11 @@ public final class RouteFeature
             + "transports it takes, and the walks between them as found here on foot."
             : "Neither the Shortest Path nor the GPS plugin is on. Install or switch one on, or set Route planner "
                 + "to Reimagined World Map.",
-            width, Font.PLAIN, on ? ColorScheme.LIGHT_GRAY_COLOR : NOTE));
+            width, on ? ColorScheme.LIGHT_GRAY_COLOR : NOTE));
         int number = 1;
         for (var j : spJumps)
         {
-            panel.add(label(number++ + ". " + j.name, width, Font.PLAIN, new Color(200, 170, 255)));
+            panel.add(label(number++ + ". " + j.name, width, new Color(200, 170, 255)));
         }
         panel.add(button("Clear path", this::handOverClear));
         return panel;
@@ -1020,7 +1020,8 @@ public final class RouteFeature
     /** Where the house's picture is kept per account, and the thread that reads and writes it. */
     void setHouseFiles(Filepath folder, Executor io)
     {
-        yourHouse.setHouseFiles(folder, io);
+        yourHouse.houseFolder = folder;
+        yourHouse.houseIo = io;
     }
 
     void stop()
@@ -1181,10 +1182,7 @@ public final class RouteFeature
             yourHouse.writeHouse(house.features());
         }
         // Into the house once its rooms are placed (the tile on the plan is right then); out as soon as one is.
-        if (!house.inside())
-        {
-            yourHouse.placed = false;
-        }
+        yourHouse.placed &= house.inside();
         boolean inside = house.inside() && yourHouse.placed;
         boolean entered = inside != wasInside;
         if (entered)
@@ -1311,9 +1309,9 @@ public final class RouteFeature
         Rectangle dots = null;
         for (int point : tiles)
         {
-            if (RouteText.visible(p, point))
+            if (visible(p, point))
             {
-                Rectangle dot = new Rectangle((int) RouteText.x(p, point) - r, (int) RouteText.y(p, point) - r, 2 * r, 2 * r);
+                Rectangle dot = new Rectangle((int) x(p, point) - r, (int) y(p, point) - r, 2 * r, 2 * r);
                 dots = dots == null ? dot : dots.union(dot);
             }
         }
@@ -1959,7 +1957,7 @@ public final class RouteFeature
         set("routePlannerChosen", true);
         if (get("routePlanner") == null && shortestPathOn())
         {
-            set("routePlanner", HdMapReforgedConfig.RoutePlanner.SHORTEST_PATH);
+            set("routePlanner", RoutePlanner.SHORTEST_PATH);
         }
     }
 
@@ -2359,7 +2357,7 @@ public final class RouteFeature
                     log.warn("Could not plan a part of the custom route", e);
                     return;
                 }
-                if (leg != null && leg.outcome != Outcome.CANCELLED)
+                if (leg != null && leg.outcome != CANCELLED)
                 {
                     int at = i;
                     invokeLater(() -> {
@@ -2737,7 +2735,7 @@ public final class RouteFeature
         {
             return;
         }
-        boolean nearest = route != null && route.outcome == Outcome.NEAREST;
+        boolean nearest = route != null && route.outcome == NEAREST;
         // Searched again only because the player moved: the way anyone could go stays as found (or as being found),
         // not looked for by flooding the world once more.
         boolean keep = nearest && c.onlyMoved() && c.target() == whyTarget && (why != null || explaining);
@@ -2851,7 +2849,7 @@ public final class RouteFeature
                 tip = made;
                 tipShown = made != null;
                 List<Integer> unnamed = made == null ? Collections.emptyList() : made.unnamed();
-                ItemNames names = itemNames;
+                var names = itemNames;
                 if (!unnamed.isEmpty() && names != null)
                 {
                     // Asked of the game only now: once named, the tip is looked for again to say them.
@@ -2918,14 +2916,14 @@ public final class RouteFeature
             return null;
         }
         var bring = withItems.steps.stream().filter(RouteText::lacks)
-            .map(step -> new String[]{RouteText.lack(step), RouteText.describe(step)}).collect(Collectors.toList());
-        return bring.isEmpty() ? null : new Tip(bring, RouteText.about((saved + 1) / 2) + " sooner");
+            .map(step -> new String[]{lack(step), describe(step)}).collect(Collectors.toList());
+        return bring.isEmpty() ? null : new Tip(bring, about((saved + 1) / 2) + " sooner");
     }
 
     /** The steps that need what the player lacks. Null when nothing to say; empty when nothing nameable. */
     static List<String> blockers(Route why)
     {
-        if (why == null || why.outcome == Outcome.CANCELLED)
+        if (why == null || why.outcome == CANCELLED)
         {
             return null;
         }
@@ -2935,7 +2933,7 @@ public final class RouteFeature
             return why.exhausted ? Collections.singletonList(NO_WAY) : null;
         }
         return why.steps.stream().filter(RouteText::lacks)
-            .map(step -> RouteText.describe(step) + ": needs " + RouteText.lack(step)).collect(Collectors.toList());
+            .map(step -> describe(step) + ": needs " + lack(step)).collect(Collectors.toList());
     }
 
     Route effective(RouteController c)
@@ -2946,14 +2944,14 @@ public final class RouteFeature
             return why;
         }
         // Not the way to the nearest spot while the real way is looked for.
-        return route != null && route.outcome == Outcome.NEAREST && explaining ? null : route;
+        return route != null && route.outcome == NEAREST && explaining ? null : route;
     }
 
     boolean unreachable(Route route)
     {
         Route way = why;
-        return route != null && route.outcome == Outcome.NEAREST && route == whyFor && way != null
-            && (way.outcome == FOUND || way.outcome == Outcome.NEAREST && closer(way, route));
+        return route != null && route.outcome == NEAREST && route == whyFor && way != null
+            && (way.outcome == FOUND || way.outcome == NEAREST && closer(way, route));
     }
 
     static boolean closer(Route a, Route b)
@@ -3091,7 +3089,7 @@ public final class RouteFeature
         }
         if (handedOver != null)
         {
-            panel.add(label("Dashed white on the map: Shortest Path's route", width, Font.PLAIN,
+            panel.add(label("Dashed white on the map: Shortest Path's route", width,
                 ColorScheme.MEDIUM_GRAY_COLOR), 1);
         }
         var planned = state;
@@ -3100,7 +3098,7 @@ public final class RouteFeature
             // So a wrong dock choice can be told apart from a wrong level.
             String text = config.routeIgnoreLevels() ? "Planned ignoring levels"
                 : "Planned for Sailing level " + planned.sailingLevel;
-            panel.add(label(text, width, Font.PLAIN, ColorScheme.MEDIUM_GRAY_COLOR), 1);
+            panel.add(label(text, width, ColorScheme.MEDIUM_GRAY_COLOR), 1);
         }
         Tip hint = tip;
         if (hint != null && route != null && route == tipFor)
@@ -3126,7 +3124,7 @@ public final class RouteFeature
         Route route = ahead;
         for (var leg : laterLegs())
         {
-            RouteText.paint(g, p, leg.getValue(), legColor(leg.getKey()), jump());
+            paint(g, p, leg.getValue(), legColor(leg.getKey()), jump());
         }
         if (route == null && fading.isEmpty())
         {
@@ -3134,17 +3132,17 @@ public final class RouteFeature
         }
         if (route != null)
         {
-            RouteText.paint(g, p, route, current(), jump());
+            paint(g, p, route, current(), jump());
         }
         long now = System.currentTimeMillis();
         for (var entry : fading.entrySet())
         {
             int point = entry.getKey();
             float alpha = fadeAlpha(entry.getValue(), now);
-            if (alpha > 0 && RouteText.visible(p, point))
+            if (alpha > 0 && visible(p, point))
             {
                 g.setColor(alpha(walk(), alpha * 200));
-                g.fill(circle(RouteText.x(p, point), RouteText.y(p, point), dotRadius(p)));
+                g.fill(circle(x(p, point), y(p, point), dotRadius(p)));
             }
         }
     }
@@ -3216,7 +3214,7 @@ public final class RouteFeature
             }
         }
         Step step = nextAction(route, player);
-        return step == null ? null : RouteText.describe(step);
+        return step == null ? null : describe(step);
     }
 
     /** The whole route {@code cut} is the start of ({@link #drawn}): what a teleport into the house is for comes after it. */
@@ -3238,20 +3236,20 @@ public final class RouteFeature
         var view = client.getTopLevelWorldView();
         if (onIt && !hdTiles && view != null)
         {
-            tag(g, yourHouse.local(view, namedAt(jump)), RouteText.said(whole(route), jump, house.inside()),
-                RouteText.lacks(jump), 0);
+            tag(g, yourHouse.local(view, namedAt(jump)), said(whole(route), jump, house.inside()),
+                lacks(jump), 0);
         }
         String text = nextText(route, at);
         if (text == null || now != null && now == jump && onIt)
         {
             return;
         }
-        if (now != null && text.equals(RouteText.describe(now)))
+        if (now != null && text.equals(describe(now)))
         {
             // The step itself, not an obstacle on the way: into the house with what to use there.
-            text = RouteText.said(whole(route), now, house.inside());
+            text = said(whole(route), now, house.inside());
         }
-        tag(g, player.getLocalLocation(), text, now != null && RouteText.lacks(now), player.getLogicalHeight() + 60);
+        tag(g, player.getLocalLocation(), text, now != null && lacks(now), player.getLogicalHeight() + 60);
     }
 
     void tag(Graphics2D g, LocalPoint at, String text, boolean lacks, int height)
@@ -3371,7 +3369,7 @@ public final class RouteFeature
     /** Each walk of the route in {@code normal}, red from the first step the player cannot take yet. */
     static void eachWalk(Route route, Color normal, BiConsumer<int[], Color> sink)
     {
-        int blocked = RouteText.blockedFrom(route);
+        int blocked = blockedFrom(route);
         List<Step> steps = route == null ? List.of() : route.steps;
         for (int index = 0; index < steps.size(); index++)
         {
@@ -3459,7 +3457,7 @@ public final class RouteFeature
         boolean arrows = arrows();
         g.setStroke(new BasicStroke(config.routeLineWidth(), CAP_ROUND, JOIN_ROUND));
         eachLine(route, (points, color) -> {
-            Path2D path = new Path2D.Float();
+            var path = new Path2D.Float();
             var heads = new ArrayList<Runnable>();
             int previous = -1;
             for (int i = 0; i < points.length; i++)
@@ -3687,13 +3685,12 @@ public final class RouteFeature
         int half = Perspective.LOCAL_TILE_SIZE / 2;
         int x = local.getX();
         int y = local.getY();
-        Point sw = Perspective.localToCanvas(client, x - half, y - half, heights[plane][ex][ey]);
-        Point se = Perspective.localToCanvas(client, x + half, y - half, heights[plane][ex + 1][ey]);
-        Point ne = Perspective.localToCanvas(client, x + half, y + half, heights[plane][ex + 1][ey + 1]);
-        Point nw = Perspective.localToCanvas(client, x - half, y + half, heights[plane][ex][ey + 1]);
         Polygon poly = new Polygon();
-        for (Point corner : new Point[]{sw, se, ne, nw})
+        // The corners south-west, south-east, north-east, north-west: 0 is the tile's west or south side, 1 east or north.
+        for (int[] c : new int[][]{{0, 0}, {1, 0}, {1, 1}, {0, 1}})
         {
+            Point corner = Perspective.localToCanvas(client, x + (2 * c[0] - 1) * half, y + (2 * c[1] - 1) * half,
+                heights[plane][ex + c[0]][ey + c[1]]);
             if (corner == null)
             {
                 return null;
@@ -3746,11 +3743,11 @@ public final class RouteFeature
         static List<String> notes(Route route)
         {
             var notes = new ArrayList<String>();
-            if (route.outcome == Outcome.NONE)
+            if (route.outcome == NONE)
             {
                 notes.add("No route from here.");
             }
-            else if (route.outcome == Outcome.NEAREST)
+            else if (route.outcome == NEAREST)
             {
                 notes.add(route.exhausted ? "Can't get there." : "Too far to plan: ends as close as it got.");
             }
@@ -4022,7 +4019,7 @@ public final class RouteFeature
                 g.draw(new Line2D.Double(tx - 6, ty + 6, tx + 6, ty - 6));
                 if (route.end >= 0 && visible(p, route.end))
                 {
-                    g.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 1, new float[]{3, 4}, 0));
+                    g.setStroke(new BasicStroke(1.5f, CAP_BUTT, JOIN_MITER, 1, new float[]{3, 4}, 0));
                     g.draw(new Line2D.Double(tx, ty, x(p, route.end), y(p, route.end)));
                 }
             }
@@ -4031,7 +4028,7 @@ public final class RouteFeature
         /** The points' line where shown, broken where not; {@code anyFloor}: also on other floors than the one drawn. */
         static Path2D path(Projection p, int[] points, boolean anyFloor)
         {
-            Path2D line = new Path2D.Double();
+            var line = new Path2D.Double();
             boolean drawing = false;
             var at = drawn(p, points);
             for (int i = 0; i < at.length; i += 3)

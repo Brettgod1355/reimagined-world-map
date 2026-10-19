@@ -64,7 +64,9 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
     {
         overlay.selected = id -> this.widgets.values().stream().anyMatch(w -> w.selected() == id);
         overlay.hovered = id -> id == this.hoveredMember;
-        overlay.setLoot(id -> members.loot(id, System.currentTimeMillis()), this::item, this::repaint);
+        overlay.loot = id -> members.loot(id, System.currentTimeMillis());
+        overlay.itemImage = this::item;
+        overlay.ticker = new PartyMapOverlay.Ticker(this::repaint);
     }
 
     /** Swing thread only; each view's value undoes what {@link #start} added to it. */
@@ -97,19 +99,20 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         }
         loggedOutSince = client.getGameState() == GameState.LOGGED_IN ? null : System.currentTimeMillis();
         SwingUtilities.invokeLater(() -> {
-            for (MapView view : maps)
+            for (var view : maps)
             {
                 MapView.MenuContributor menu = (popup, point) -> contribute(popup, view);
                 view.addOverlay(overlay);
                 view.menuContributors.add(menu);
                 FriendsWidget widget = new FriendsWidget(this::markers, this::groupMembers, party::isInParty,
-                    () -> myWorld, config::partyFriendsTab, row -> follow(view, row.id), view::repaint);
-                widget.setDrops(id -> members.drops(id, System.currentTimeMillis()));
+                    () -> myWorld, config::partyFriendsTab, row -> follow(view, row.id), view::repaint,
+                    new PartyMapOverlay.Ticker(view::repaint));
+                widget.drops = id -> members.drops(id, System.currentTimeMillis());
                 widget.canJoin = () -> !party.isInParty() && lastParty() != null;
                 widget.join = () -> join(view);
                 MapView.ClickCatcher catcher = (at, projection) -> clickedMember(view, widget, at, projection);
                 view.clickCatchers.add(catcher);
-                MouseAdapter pointing = new MouseAdapter()
+                var pointing = new MouseAdapter()
                 {
                     public void mouseMoved(MouseEvent e)
                     {
@@ -203,10 +206,10 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
     {
         long best = -1;
         double bestDistance = 14;
-        for (PartyMapMembers.Marker marker : markers())
+        for (var marker : markers())
         {
             // Where the map draws them, which can differ from the game.
-            WorldPoint shown = projection.shown(marker.point);
+            var shown = projection.shown(marker.point);
             if (!projection.shows(marker.point))
             {
                 continue;
@@ -225,7 +228,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
     /** The sidebar's and the map's pictures of what members share. */
     public BufferedImage skill(int ordinal)
     {
-        Skill[] skills = Skill.values();
+        var skills = Skill.values();
         return ordinal < 0 || ordinal >= Math.min(SKILLS, skills.length) ? null
             : skillIcons.getSkillImage(skills[ordinal], true);
     }
@@ -299,7 +302,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         {
             return new ArrayList<>(lastGroup);
         }
-        for (PartyMember member : all)
+        for (var member : all)
         {
             if (member != null && !isLocal(member.getMemberId()))
             {
@@ -420,7 +423,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         {
             return;
         }
-        WorldPoint point = message.getWorldPoint();
+        var point = message.getWorldPoint();
         if (!HdMapPartyLocation.plausible(point))
         {
             return;
@@ -499,7 +502,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         }
         // Only the most valuable few; the map shows no more.
         valuable.sort(Comparator.comparingLong((HdMapPartyDrop d) -> -d.value()));
-        for (HdMapPartyDrop drop : valuable.subList(0, Math.min(valuable.size(), PartyMapRules.MAX_DROPS_PER_LOOT)))
+        for (var drop : valuable.subList(0, Math.min(valuable.size(), PartyMapRules.MAX_DROPS_PER_LOOT)))
         {
             party.send(drop);
         }
@@ -540,7 +543,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         int[] levels = new int[SKILLS];
         int[] boosted = new int[SKILLS];
         int[] experience = new int[SKILLS];
-        Skill[] skills = Skill.values();
+        var skills = Skill.values();
         for (int k = 0; k < Math.min(skills.length, levels.length); k++)
         {
             levels[k] = client.getRealSkillLevel(skills[k]);
@@ -556,7 +559,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
     {
         int[] ids = new int[quantities.length];
         Arrays.fill(ids, -1);
-        ItemContainer items = client.getItemContainer(container);
+        var items = client.getItemContainer(container);
         Item[] all = items == null ? new Item[0] : items.getItems();
         for (int k = 0; k < Math.min(all.length, ids.length); k++)
         {
@@ -574,7 +577,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
             itemImages.clear();
         }
         return itemImages.computeIfAbsent(key, k -> {
-            AsyncBufferedImage image = itemManager.getImage(id, quantity, quantity > 1);
+            var image = itemManager.getImage(id, quantity, quantity > 1);
             image.onLoaded(this::repaint);
             return image;
         });
@@ -622,7 +625,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
 
     boolean isLocal(long memberId)
     {
-        PartyMember local = party.getLocalMember();
+        var local = party.getLocalMember();
         return local != null && local.getMemberId() == memberId;
     }
 
@@ -630,7 +633,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
     {
         try
         {
-            PartyMember member = party.getMemberById(memberId);
+            var member = party.getMemberById(memberId);
             if (member != null)
             {
                 members.name(memberId, member.getDisplayName());
@@ -650,7 +653,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
     void repaint()
     {
         SwingUtilities.invokeLater(() -> {
-            for (MapView view : views.keySet())
+            for (var view : views.keySet())
             {
                 view.followMember();
                 view.repaint();
@@ -660,9 +663,9 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
 
     void contribute(JPopupMenu popup, MapView view)
     {
-        JMenu friends = new JMenu("Party");
+        var friends = new JMenu("Party");
         String current = party.getPartyPassphrase();
-        for (PartyMapMembers.Marker marker : markers())
+        for (var marker : markers())
         {
             String name = marker.name != null ? marker.name : "party member";
             friends.add("Show " + name + (marker.stale() ? " (" + PartyMapOverlay.ago(marker.ageMillis) + ")" : ""))

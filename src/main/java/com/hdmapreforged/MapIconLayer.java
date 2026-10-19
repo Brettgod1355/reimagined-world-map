@@ -26,8 +26,6 @@ import com.hdmapreforged.MapView.Projection;
 final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
 {
     static final double ICON_PIXELS = 15;
-    static final double OFFSET_PIXELS = -1.5;
-    static final int FIRST_LEVEL = 0;
     static final Color RING = new Color(255, 255, 255, 230);
     static final Color RING_SHADOW = new Color(0, 0, 0, 150);
 
@@ -43,9 +41,8 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
      * each change of size, the first frame of each drew some 400 new images (60 ms on an accelerated pipeline).
      */
     final Map<Long, BufferedImage> scaled = new HashMap<>();
-    /** Past about 4 MB of sprites the sizes kept start again. */
+    /** Past about 4 MB of sprites (1 << 20 pixels) the sizes kept start again. */
     int scaledPixels;
-    static final int MAX_SCALED_PIXELS = 1 << 20;
     /** Made this frame: at a new size the rest are drawn at a size made before, and follow in the next frames. */
     int madeNow;
     boolean later;
@@ -226,7 +223,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
                 {
                     continue;
                 }
-                BufferedImage sprite = sized(icon.element, px);
+                BufferedImage sprite = sized(icon.element, px, view.locked(icon.poi));
                 if (sprite == null)
                 {
                     continue;
@@ -257,12 +254,18 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
      * share, one already made at the next size down or up stands in: at a change of size making all at once drew some
      * 400 new images in one frame (55 ms on an accelerated pipeline, which uploads each).
      */
-    BufferedImage sized(int element, int px)
+    BufferedImage sized(int element, int px, boolean locked)
     {
         BufferedImage sprite = GameIconSprites.element(element);
         if (sprite == null)
         {
             return null;
+        }
+        if (locked)
+        {
+            // Its own sizes, apart from the sprite's.
+            sprite = PoiIcons.locked(sprite);
+            element = ~element;
         }
         int own = max(sprite.getWidth(), sprite.getHeight());
         int times = max(1, round((float) px / own));
@@ -293,7 +296,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         g.drawImage(sprite, 0, 0, w, h, null);
         g.dispose();
         scaledPixels += w * h;
-        if (scaledPixels > MAX_SCALED_PIXELS)
+        if (scaledPixels > 1 << 20)
         {
             scaled.clear();
             scaledPixels = w * h;
@@ -347,7 +350,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
     /** Each layer's setting, read once per frame rather than per icon. */
     boolean[] toggles()
     {
-        boolean[] toggled = new boolean[Layer.values().length];
+        var toggled = new boolean[Layer.values().length];
         for (Layer layer : Layer.values())
         {
             toggled[layer.ordinal()] = view.toggled(layer);
@@ -357,7 +360,8 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
 
     boolean showsAny(Projection projection)
     {
-        return projection.map() != null && tileLevel(projection.zoom()) >= FIRST_LEVEL && enabled.getAsBoolean();
+        // From tile level 0 on.
+        return projection.map() != null && tileLevel(projection.zoom()) >= 0 && enabled.getAsBoolean();
     }
 
     /** On the map in view and its floor, or on the ground floor's view a floor drawn flat on it. */
@@ -388,7 +392,8 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
 
     static Point2D center(Icon icon, Projection projection)
     {
-        double offset = OFFSET_PIXELS * scale(projection.zoom());
+        // -1.5 pixels at the tile level's own size.
+        double offset = -1.5 * scale(projection.zoom());
         return new Point2D.Double(projection.screenX(icon.drawn.getX()) + offset,
             projection.screenY(icon.drawn.getY()) + offset);
     }

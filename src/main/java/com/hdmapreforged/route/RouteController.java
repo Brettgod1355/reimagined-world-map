@@ -22,9 +22,9 @@ import lombok.extern.slf4j.*;
 @Accessors(fluent = true)
 public final class RouteController
 {
-    public static final long FIRST_BACKOFF_MS = 3_000;
-    public static final long MAX_BACKOFF_MS = 60_000;
-    public static final int MAX_AUTOMATIC = 6;
+    static final long FIRST_BACKOFF_MS = 3_000;
+    static final long MAX_BACKOFF_MS = 60_000;
+    static final int MAX_AUTOMATIC = 6;
     /** Tiles from the route before the player counts as having left it: 10 away, as Shortest Path. */
     public static final int STRAY = 9;
 
@@ -44,7 +44,9 @@ public final class RouteController
     int from = -1;
     /** What the route's search was asked; whether it was an automatic search asked the same ways as the one before. */
     RouteRequest asked;
-    boolean moved;
+    /** Whether the route came from an automatic search with the same ways as the one before: only the player moved. */
+    @Getter
+    boolean onlyMoved;
     AtomicBoolean running;
     /** A user search asked for while another ran; started when that one ends. */
     boolean pendingUser;
@@ -128,7 +130,7 @@ public final class RouteController
         unreachable = null;
         unreachableAsked = null;
         asked = null;
-        moved = false;
+        onlyMoved = false;
         searchedAt = -1;
         freshWaits();
     }
@@ -279,7 +281,7 @@ public final class RouteController
 
     static boolean near(int a, int b, int radius)
     {
-        return (isSea(a) || isSea(b) || z(a) == z(b)) && distance(a, b) <= radius;
+        return Route.sameLevel(a, b) && distance(a, b) <= radius;
     }
 
     void start(boolean user)
@@ -354,7 +356,7 @@ public final class RouteController
         {
             return;
         }
-        moved = !user && asked != null && asked.sameWays(request);
+        onlyMoved = !user && asked != null && asked.sameWays(request);
         route = result;
         from = request.start;
         asked = request;
@@ -365,11 +367,5 @@ public final class RouteController
         }
         status = null;
         changed.accept(this);
-    }
-
-    /** Whether the route came from an automatic search with the same ways as the one before: only the player moved. */
-    public boolean onlyMoved()
-    {
-        return moved;
     }
 }

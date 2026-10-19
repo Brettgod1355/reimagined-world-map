@@ -1,5 +1,7 @@
 package com.hdmapreforged;
 
+import static java.lang.Math.*;
+
 import java.util.*;
 import java.util.function.*;
 import net.runelite.client.party.messages.*;
@@ -46,19 +48,19 @@ public class HdMapPartyGear extends PartyMemberMessage
     /** Null when not shared. */
     int[] experience()
     {
-        return x == null ? null : copy(x, SKILLS, 0, v -> Math.max(0, Math.min(200_000_000, v)));
+        return x == null ? null : copy(x, SKILLS, 0, v -> max(0, min(200_000_000, v)));
     }
 
     /** 0 to 100, or -1 when not shared. */
     int runEnergy()
     {
-        return r == null ? -1 : Math.max(0, Math.min(100, r));
+        return r == null ? -1 : max(0, min(100, r));
     }
 
     /** 0 to 100, or -1 when not shared. */
     int specialAttack()
     {
-        return p == null ? -1 : Math.max(0, Math.min(100, p));
+        return p == null ? -1 : max(0, min(100, p));
     }
 
     int[] inventory()
@@ -68,7 +70,7 @@ public class HdMapPartyGear extends PartyMemberMessage
 
     int[] quantities()
     {
-        return copy(q, INVENTORY, 0, v -> Math.max(0, v));
+        return copy(q, INVENTORY, 0, v -> max(0, v));
     }
 
     int[] equipment()
@@ -93,7 +95,7 @@ public class HdMapPartyGear extends PartyMemberMessage
 
     private static int[] levels(int[] values)
     {
-        return copy(values, SKILLS, 0, v -> Math.max(0, Math.min(255, v)));
+        return copy(values, SKILLS, 0, v -> max(0, min(255, v)));
     }
 
     /** The first {@code size} values checked, {@code empty} where none came. */
@@ -101,7 +103,7 @@ public class HdMapPartyGear extends PartyMemberMessage
     {
         int[] out = new int[size];
         Arrays.fill(out, empty);
-        for (int k = 0; values != null && k < Math.min(values.length, size); k++)
+        for (int k = 0; values != null && k < min(values.length, size); k++)
         {
             out[k] = check.applyAsInt(values[k]);
         }

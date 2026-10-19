@@ -1,6 +1,6 @@
 package com.hdmapreforged;
 
-import static com.hdmapreforged.BaseMap.FULL;
+import static com.hdmapreforged.BaseMap.*;
 
 import com.hdmapreforged.route.*;
 import com.google.gson.*;
@@ -22,7 +22,7 @@ final class BaseMaps
     {
         var list = new ArrayList<BaseMap>(maps);
         // Surface first, then the combined map, then alphabetical.
-        list.sort(Comparator.comparingInt((BaseMap m) -> m.id == BaseMap.SURFACE ? 0 : m.id == FULL ? 1 : 2)
+        list.sort(Comparator.comparingInt((BaseMap m) -> m.id == SURFACE ? 0 : m.id == FULL ? 1 : 2)
             .thenComparing(m -> m.name, String.CASE_INSENSITIVE_ORDER));
         sorted = Collections.unmodifiableList(list);
         for (var map : list)
@@ -109,7 +109,7 @@ final class BaseMaps
 
     BaseMap surface()
     {
-        var surface = byId.get(BaseMap.SURFACE);
+        var surface = byId.get(SURFACE);
         return surface != null ? surface : sorted.get(0);
     }
 
@@ -184,7 +184,7 @@ final class BaseMaps
         if (HousePlan.contains(game.getX(), game.getY()))
         {
             // One's house is drawn at the surface map's edge.
-            return byId(BaseMap.SURFACE);
+            return byId(SURFACE);
         }
         var floor = floorMap(game);
         if (floor != null)

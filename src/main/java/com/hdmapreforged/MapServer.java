@@ -86,7 +86,6 @@ final class MapServer
     }
 
     static final Pattern TILE_PATH = Pattern.compile("-?\\d{1,6}/-?\\d/[0-3]_\\d{1,6}_\\d{1,6}\\.png");
-    static final int MAX_CHANGES = 200_000;
 
     /** The changes of {@code version}; null when the server has none (its first version, or not reachable). */
     void changes(String version, Consumer<Changes> callback)
@@ -105,7 +104,8 @@ final class MapServer
         for (var e : list != null && list.isJsonArray() ? list.getAsJsonArray() : new JsonArray())
         {
             String path = e.isJsonPrimitive() ? e.getAsString() : "";
-            if (TILE_PATH.matcher(path).matches() && paths.size() < MAX_CHANGES)
+            // At most 200,000 paths.
+            if (TILE_PATH.matcher(path).matches() && paths.size() < 200_000)
             {
                 paths.add(path);
             }
@@ -131,10 +131,10 @@ final class MapServer
     /** An NPC's picture as the server's PNG bytes, for keeping; null when there is none. Calls back on any thread. */
     void npcPictureBytes(String version, int id, Consumer<byte[]> callback)
     {
-        get(isSafeVersion(version) && id >= 0 ? url("npcs", version, id + ".png") : null, body -> body, callback, null, MAX_PICTURE_BYTES);
+        // At most 256 KB.
+        get(isSafeVersion(version) && id >= 0 ? url("npcs", version, id + ".png") : null, body -> body, callback, null, 256 * 1024);
     }
 
-    static final int MAX_PICTURE_BYTES = 256 * 1024;
     static final int MAX_PICTURE_SIDE = 1024;
 
     static String safeVersion(JsonObject versions, String which)
@@ -190,7 +190,7 @@ final class MapServer
             public void onResponse(Call call, Response response)
             {
                 T value = fallback;
-                try (ResponseBody body = response.body())
+                try (var body = response.body())
                 {
                     if (response.isSuccessful() && body != null)
                     {

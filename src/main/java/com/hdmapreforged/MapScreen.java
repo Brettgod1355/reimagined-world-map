@@ -174,7 +174,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         });
         HintField.onEdit(search, typing::restart);
         typing.setRepeats(false);
-        plain(searchMode, null, 3, e -> keepFocus(() -> {
+        plain(searchMode, null, 3, e -> SearchResults.keepFocus(search, () -> {
             mode = mode.next();
             updateSearchMode();
             showResults();
@@ -229,17 +229,6 @@ final class MapScreen extends JPanel implements MapView.Listener
         button.setMargin(new Insets(1, side, 1, side));
         button.addActionListener(action);
         return button;
-    }
-
-    /** Never takes focus from the game. */
-    void keepFocus(Runnable action)
-    {
-        boolean typing = search.isFocusOwner();
-        action.run();
-        if (typing)
-        {
-            search.requestFocusInWindow();
-        }
     }
 
     void setScreenLayout(Layout layout)
@@ -728,7 +717,8 @@ final class MapScreen extends JPanel implements MapView.Listener
             // A few of each kind, under a heading that searches that kind alone.
             for (var kind : new SearchMode[]{PLACES, MONSTERS, ITEMS})
             {
-                var found = found(kind, typed, MAX_EACH);
+                // Each kind's best 8.
+                var found = found(kind, typed, 8);
                 if (!found.isEmpty())
                 {
                     menu.add(heading(kind));
@@ -752,7 +742,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         menu.setFocusable(false);
         results = menu;
         highlighted = -1;
-        keepFocus(() -> menu.show(search, 0, search.getHeight()));
+        SearchResults.keepFocus(search, () -> menu.show(search, 0, search.getHeight()));
     }
 
     boolean resultsShown()
@@ -820,11 +810,6 @@ final class MapScreen extends JPanel implements MapView.Listener
         chosen.doClick(0);
     }
 
-    static final int MAX_GAME_ICONS = 8;
-
-    /** Each kind's best few when searching everything. */
-    static final int MAX_EACH = 8;
-
     List<JMenuItem> found(SearchMode kind, String typed, int max)
     {
         return kind == PLACES ? placeResults(typed.toLowerCase(Locale.ROOT), max)
@@ -839,7 +824,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         heading.putClientProperty("heading", Boolean.TRUE);
         heading.setFont(heading.getFont().deriveFont(Font.BOLD));
         heading.setToolTipText("Search " + name.toLowerCase(Locale.ROOT) + " only");
-        heading.addActionListener(e -> keepFocus(() -> {
+        heading.addActionListener(e -> SearchResults.keepFocus(search, () -> {
             mode = kind;
             updateSearchMode();
             showResults();
@@ -872,7 +857,8 @@ final class MapScreen extends JPanel implements MapView.Listener
         int shownGameIcons = 0;
         for (var hit : hits)
         {
-            if (shown >= max || hit.type == GAME_ICON && ++shownGameIcons > MAX_GAME_ICONS)
+            // At most 8 game icons.
+            if (shown >= max || hit.type == GAME_ICON && ++shownGameIcons > 8)
             {
                 continue;
             }
@@ -967,8 +953,6 @@ final class MapScreen extends JPanel implements MapView.Listener
     /** A town this near names a place outright; up to {@link #FAR_TOWN} away, with a direction. */
     static final int NEAR_TOWN = 120;
     static final int FAR_TOWN = 400;
-    /** How far a region's label names a place. */
-    static final int REGION_RANGE = 600;
 
     /**
      * What to call where NPCs stand, with the point that name stands for (so places of one name can say which side
@@ -996,8 +980,9 @@ final class MapScreen extends JPanel implements MapView.Listener
             return town.point.distanceTo2D(point) <= NEAR_TOWN ? town
                 : new Place(town.point, compass(town.point, point) + " of " + town.name, null);
         }
-        // Not a region a world away (Last Man Standing's Wild Varrock for a cave under Rellekka): none.
-        return MapData.nearest(last, point, "region", REGION_RANGE, 0);
+        // A region's label names a place up to 600 tiles away; not a region a world away (Last Man Standing's Wild
+        // Varrock for a cave under Rellekka): none.
+        return MapData.nearest(last, point, "region", 600, 0);
     }
 
     /** A dungeon's map as the name of a place in it, with its Wilderness level. */

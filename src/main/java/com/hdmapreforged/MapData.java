@@ -53,12 +53,12 @@ final class MapData
         Icon(WorldPoint location, BaseMap map, Poi poi, boolean own, int element, String kind)
         {
             this.location = location;
-            this.drawn = MapView.shownOn(map, location);
+            drawn = MapView.shownOn(map, location);
             this.map = map;
             this.poi = poi;
             this.own = own;
             this.element = element;
-            this.flat = map != null && drawn != null && drawn.getPlane() > 0
+            flat = map != null && drawn != null && drawn.getPlane() > 0
                 && drawn.getPlane() < WorldMapMoves.floorsDrawnFlat(map.id, drawn.getX(), drawn.getY());
             this.kind = kind;
         }
@@ -162,7 +162,7 @@ final class MapData
         }
         Map<Integer, String> keys = file.keys == null ? Collections.emptyMap() : file.keys;
         var icons = new ArrayList<Icon>();
-        for (IconJson icon : list(file.icons))
+        for (var icon : list(file.icons))
         {
             var at = point(icon.at);
             var poi = icon.own == null ? reading.poi(icon.poi, 0) : item(listed, icon.own);
@@ -219,7 +219,7 @@ final class MapData
                 hits.add(made);
             }
         }
-        List<Poi> gameIcons = icons.stream().filter(icon -> !icon.own).map(icon -> icon.poi).distinct()
+        var gameIcons = icons.stream().filter(icon -> !icon.own).map(icon -> icon.poi).distinct()
             .collect(Collectors.toList());
         return new MapData(pois, hidden, nonNull(listedLabels), icons, gameIcons, new KindIndex(nonNull(listedKinds)),
             new SearchIndex(hits));

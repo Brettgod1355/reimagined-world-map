@@ -128,7 +128,7 @@ final class ServerCache
         {
             return;
         }
-        try (Stream<Filepath> others = folder.walk(1))
+        try (var others = folder.walk(1))
         {
             others.filter(other -> !other.equals(folder) && !other.getFileName().equals(version))
                 .forEach(TileCache::deleteTree);

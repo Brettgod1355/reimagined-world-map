@@ -21,7 +21,6 @@ import net.runelite.api.*;
  */
 final class FullMapWindow implements MapView.WindowControls
 {
-    static final int GRIP_HEIGHT = 10;
     static final Color GRIP_DOTS = new Color(255, 255, 255, 90);
     static final int EDGE = 8;
     /** Thicker than the sides: easy to take hold of. */
@@ -29,7 +28,6 @@ final class FullMapWindow implements MapView.WindowControls
     static final int MIN_WIDTH = 320;
     static final int MIN_HEIGHT = 240;
     static final Color FRAME = new Color(30, 32, 37);
-    static final Color FRAME_EDGE = new Color(255, 255, 255, 40);
     /** By the edges a point is on (see edgesAt). */
     static final int[] CURSORS = {DEFAULT_CURSOR, W_RESIZE_CURSOR, E_RESIZE_CURSOR,
         DEFAULT_CURSOR, N_RESIZE_CURSOR, NW_RESIZE_CURSOR, NE_RESIZE_CURSOR,
@@ -104,12 +102,6 @@ final class FullMapWindow implements MapView.WindowControls
             window.setBounds(screenBounds);
             window.validate();
         }
-    }
-
-    /** Whether the map's window has the keyboard. */
-    boolean hasKeys()
-    {
-        return window != null && window.getFocusOwner() != null;
     }
 
     static boolean menuOpen()
@@ -229,7 +221,8 @@ final class FullMapWindow implements MapView.WindowControls
     void giveKeysBack()
     {
         Canvas canvas = watchedCanvas;
-        if (isOpen() && hasKeys() && !menuOpen() && canvas != null && canvas.isShowing())
+        // Open, and its window has the keyboard.
+        if (isOpen() && window.getFocusOwner() != null && !menuOpen() && canvas != null && canvas.isShowing())
         {
             window.setFocusableWindowState(false);
         }
@@ -263,7 +256,7 @@ final class FullMapWindow implements MapView.WindowControls
             }
         };
         root.setBackground(FRAME);
-        root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(FRAME_EDGE),
+        root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(255, 255, 255, 40)),
             BorderFactory.createEmptyBorder(0, EDGE - 1, BOTTOM - 1, EDGE - 1)));
         root.add(new Grip(), BorderLayout.NORTH);
         root.add(screen, BorderLayout.CENTER);
@@ -441,7 +434,8 @@ final class FullMapWindow implements MapView.WindowControls
     {
         Grip()
         {
-            setPreferredSize(new Dimension(100, GRIP_HEIGHT));
+            // The grip's height: 10 pixels.
+            setPreferredSize(new Dimension(100, 10));
             setCursor(getPredefinedCursor(MOVE_CURSOR));
             setToolTipText("Drag to move; double-click to fill the game view");
             Drag mouse = new Drag()

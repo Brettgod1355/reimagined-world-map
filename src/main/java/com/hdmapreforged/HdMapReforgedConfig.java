@@ -32,9 +32,6 @@ public interface HdMapReforgedConfig extends Config
         position = 5)
     String friends = "friends";
 
-    @ConfigSection(name = "Miscellaneous", description = "Everything else", position = 6)
-    String misc = "misc";
-
     @ConfigItem(keyName = "showTeleports", name = "Teleports", position = 0, section = icons,
         description = "Teleport spells, items and minigame teleports")
     default boolean showTeleports()
@@ -105,7 +102,14 @@ public interface HdMapReforgedConfig extends Config
         return false;
     }
 
-    @ConfigItem(keyName = "onlyUsable", name = "Only what I can use", position = 10, section = icons,
+    @ConfigItem(keyName = "markLocked", name = "Mark what I can't use", position = 10, section = icons,
+        description = "A red sign on shortcuts, moorings and resources whose level, quest or unlock you lack")
+    default boolean markLocked()
+    {
+        return true;
+    }
+
+    @ConfigItem(keyName = "onlyUsable", name = "Only what I can use", position = 11, section = icons,
         description = "Hide icons and routes whose level, quest or unlock you lack (needs you logged in)")
     default boolean onlyUsable()
     {
@@ -114,7 +118,7 @@ public interface HdMapReforgedConfig extends Config
 
     @Range(min = 10, max = 40)
     @Units(Units.PIXELS)
-    @ConfigItem(keyName = "iconSize", name = "Icon size", position = 11, section = icons,
+    @ConfigItem(keyName = "iconSize", name = "Icon size", position = 12, section = icons,
         description = "Size of map icons. The game's own icons grow in whole steps to stay sharp")
     default int iconSize()
     {
@@ -479,12 +483,4 @@ public interface HdMapReforgedConfig extends Config
     default int routeSaveBank()
     {
         return 10;
-    }
-
-    @ConfigItem(keyName = "showVersion", name = "Show plugin version", position = 0, section = misc,
-        description = "The plugin's version in the bottom right corner of the map")
-    default boolean showVersion()
-    {
-        return true;
-    }
-}
+    }}

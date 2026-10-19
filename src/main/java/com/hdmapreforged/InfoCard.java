@@ -328,7 +328,7 @@ final class InfoCard extends Fitted
         var inside = MapView.mapBelow(poi);
         if (inside != null)
         {
-            buttons.add(button(MapView.goInText(inside), () -> map.goIn(inside)));
+            buttons.add(button(inside.map.id == BaseMap.SURFACE ? "Go out" : "Go in", () -> map.goIn(inside)));
         }
         var target = poi;
         if (router != null)
@@ -400,7 +400,7 @@ final class InfoCard extends Fitted
         if (!links.isEmpty())
         {
             heading(poi.type.isRandomDestination() ? "Can send you to (" + links.size() + ")"
-                : poi.type.isNetwork() ? "Travel to (" + links.size() + ")" : "Leads to");
+                : PoiType.NETWORKS.contains(poi.type) ? "Travel to (" + links.size() + ")" : "Leads to");
             var lines = new JCheckBox("Show lines on the map", map.linesShown(poi.type));
             lines.setOpaque(false);
             lines.setFocusable(false);
@@ -483,7 +483,7 @@ final class InfoCard extends Fitted
             }, textWidth));
         var sorted = new ArrayList<ItemSources.Ware>(wares);
         sorted.sort(ItemSources.wareOrder(wareSort, itemNames::price));
-        for (ItemSources.Ware ware : sorted)
+        for (var ware : sorted)
         {
             JLabel icon = pictureIcon(PICTURE);
             itemNames.picture(ware.itemId, icon);

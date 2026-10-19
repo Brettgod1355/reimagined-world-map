@@ -44,7 +44,6 @@ final class MapPanel extends PluginPanel
 
     /** Text width inside the sidebar's padding. */
     static final int TEXT_WIDTH = PANEL_WIDTH - 52;
-    static final int FRIENDS_REFRESH_MS = 2000;
 
     final Consumer<WorldPoint> showOnMap;
     final Friends friends;
@@ -56,7 +55,6 @@ final class MapPanel extends PluginPanel
     IntFunction<JComponent> waitingRoute;
     final JPanel friendsHolder = column();
     final JPanel toursHolder = column();
-    final JLabel toursHeading = heading("Custom routes");
     TourPanel.Actions tours;
     /** The custom route open for editing, or null for the list. */
     IntFunction<JComponent> editorSection;
@@ -85,7 +83,7 @@ final class MapPanel extends PluginPanel
         content.add(Box.createVerticalStrut(10));
         content.add(card(routeHeading, routeHolder));
         content.add(Box.createVerticalStrut(8));
-        content.add(card(toursHeading, toursHolder));
+        content.add(card(heading("Custom routes"), toursHolder));
         content.add(Box.createVerticalStrut(8));
         content.add(card(heading("Party"), friendsHolder));
 
@@ -108,7 +106,8 @@ final class MapPanel extends PluginPanel
             }
         });
         showRoute(null);
-        friendsTimer = new Timer(FRIENDS_REFRESH_MS, e -> refreshFriends());
+        // Every 2 seconds.
+        friendsTimer = new Timer(2000, e -> refreshFriends());
         friendsTimer.start();
         refreshFriends();
     }
@@ -219,7 +218,7 @@ final class MapPanel extends PluginPanel
         List<Row> rows = in ? friends.rows() : Collections.emptyList();
         boolean rejoin = !in && friends.canRejoin();
         StringBuilder key = new StringBuilder(in ? "in" : rejoin ? "out, rejoin" : "out");
-        String[] places = new String[rows.size()];
+        var places = new String[rows.size()];
         for (int i = 0; i < rows.size(); i++)
         {
             Row row = rows.get(i);
@@ -227,7 +226,7 @@ final class MapPanel extends PluginPanel
             key.append('|').append(row.name).append(',').append(row.world).append(',').append(places[i]);
             if (row.id == openFriend)
             {
-                PartyMapMembers.Gear shared = friends.gear(row.id);
+                var shared = friends.gear(row.id);
                 key.append(",open,").append(friendPage).append(',').append(shared == null ? 0 : shared.at);
             }
         }
@@ -351,7 +350,7 @@ final class MapPanel extends PluginPanel
         else if (friendPage == 1)
         {
             grid = new JPanel(new GridLayout(5, 3, 2, 2));
-            JComponent[] cells = new JComponent[15];
+            var cells = new JComponent[15];
             for (int k = 0; k < WORN.length; k++)
             {
                 var at = WORN[k];
@@ -397,7 +396,7 @@ final class MapPanel extends PluginPanel
         {
             protected void paintComponent(Graphics g)
             {
-                Graphics2D g2 = (Graphics2D) g.create();
+                var g2 = (Graphics2D) g.create();
                 Orbs.paint(g2, (getWidth() - Orbs.WIDTH) / 2, 0, kind, value, max, pictures::sprite);
                 g2.dispose();
             }

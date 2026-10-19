@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import static java.lang.Math.*;
 import static com.hdmapreforged.PlayerMarker.circle;
 
 import java.awt.*;
@@ -40,16 +41,8 @@ final class PartyMapOverlay implements MapView.Overlay
 
     LongFunction<List<PartyMapMembers.Loot>> loot = id -> Collections.emptyList();
     BiFunction<Integer, Integer, BufferedImage> itemImage = (id, q) -> null;
+    /** Replaced by the party map with one that repaints its views. */
     Ticker ticker = new Ticker(() -> { });
-
-    void setLoot(LongFunction<List<PartyMapMembers.Loot>> loot,
-        BiFunction<Integer, Integer, BufferedImage> itemImage, Runnable repaint)
-    {
-        this.loot = loot;
-        this.itemImage = itemImage;
-        ticker.stop();
-        ticker = new Ticker(repaint);
-    }
 
     /**
      * Repaints ~30 times a second while something moves, instead of asking for a frame from inside paint (which never
@@ -173,10 +166,10 @@ final class PartyMapOverlay implements MapView.Overlay
             for (int k = 0; k < showing.size(); k++)
             {
                 var drop = showing.get(k);
-                double t = Math.min(1, (now - drop.at) / (double) PartyMapMembers.LOOT_MS);
-                double rise = 1 - Math.pow(1 - t, 3);
+                double t = min(1, (now - drop.at) / (double) PartyMapMembers.LOOT_MS);
+                double rise = 1 - pow(1 - t, 3);
                 float alpha = (float) (t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25);
-                layer.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0, alpha)));
+                layer.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, max(0, alpha)));
                 double top = y - 22 - (showing.size() - 1 - k) * 22 - rise * 50;
                 String text = drop.name != null ? drop.name : shortValue(drop.value);
                 BufferedImage icon = itemImage.apply(drop.item, drop.quantity);
@@ -235,8 +228,8 @@ final class PartyMapOverlay implements MapView.Overlay
             {
                 Shape clip = layer.getClip();
                 layer.clip(disc);
-                layer.drawImage(marker.avatar, (int) Math.round(x - r), (int) Math.round(y - r),
-                    (int) Math.round(r * 2), (int) Math.round(r * 2), null);
+                layer.drawImage(marker.avatar, (int) round(x - r), (int) round(y - r),
+                    (int) round(r * 2), (int) round(r * 2), null);
                 layer.setClip(clip);
             }
             else
@@ -287,7 +280,7 @@ final class PartyMapOverlay implements MapView.Overlay
         int nameWidth = nameMetrics.stringWidth(name);
         var smallMetrics = g.getFontMetrics(SMALL_FONT);
         int detailWidth = detail == null ? 0 : smallMetrics.stringWidth(detail);
-        int width = Math.max(nameWidth, detailWidth) + 10;
+        int width = max(nameWidth, detailWidth) + 10;
         int height = nameMetrics.getHeight() + (detail == null ? 0 : smallMetrics.getHeight()) + 2;
         double left = x - width / 2.0;
         var box = new RoundRectangle2D.Double(left, top, width, height, 8, 8);

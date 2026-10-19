@@ -1,21 +1,16 @@
 package com.hdmapreforged;
 
+import lombok.*;
 import net.runelite.client.party.messages.*;
 
 /** A valuable drop a party member just got, sent once to the party. Values from other clients are checked. */
+@AllArgsConstructor
 public class HdMapPartyDrop extends PartyMemberMessage
 {
     /** Item id, quantity, and worth in coins as the sender priced it. */
     private final int i;
     private final int q;
     private final long v;
-
-    HdMapPartyDrop(int item, int quantity, long value)
-    {
-        i = item;
-        q = quantity;
-        v = value;
-    }
 
     /** -1 when not believable. */
     int item()

@@ -9,11 +9,10 @@ import java.util.List;
 /** Outlined map text, rendered once then copied (each label is nine antialiased strings). Swing thread only. */
 final class TextSprites
 {
-    static final int LIMIT = 1500;
     static final Color OUTLINE = new Color(0, 0, 0, 200);
 
-    /** By text, font, colour and device scale (in tenths). */
-    final Map<List<Object>, BufferedImage> cache = new LruMap<>(256, LIMIT);
+    /** By text, font, colour and device scale (in tenths); at most 1500. */
+    final Map<List<Object>, BufferedImage> cache = new LruMap<>(256, 1500);
 
     /** Like {@code g.drawString} with the given font, outlined. */
     void draw(Graphics2D g, String text, Font font, float x, float y, Color color)

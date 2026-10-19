@@ -26,7 +26,6 @@ final class ItemNames implements IntFunction<String>, SearchResults.Prices
     final Map<Integer, Integer> prices = new ConcurrentHashMap<>();
     /** Id to when its price was looked up; prices move, so they are looked up again after a while. */
     final Map<Integer, Long> priced = new ConcurrentHashMap<>();
-    static final long PRICE_MS = 10 * 60_000;
     /** More than a big shop sells; the game's own image cache keeps only 128 for every plugin. */
     static final int IMAGES = 512;
     /** The pictures of the items shown last, so a list built again never asks the game again. Swing thread. */
@@ -76,7 +75,8 @@ final class ItemNames implements IntFunction<String>, SearchResults.Prices
             }
         }
         Long priced = this.priced.get(id);
-        return priced == null || now - priced >= PRICE_MS;
+        // Prices are looked up again after 10 minutes.
+        return priced == null || now - priced >= 10 * 60_000;
     }
 
     /** Client thread. */

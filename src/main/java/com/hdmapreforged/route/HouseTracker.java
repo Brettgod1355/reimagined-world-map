@@ -1,12 +1,15 @@
 package com.hdmapreforged.route;
 
 import java.util.*;
+import lombok.*;
+import lombok.experimental.*;
 
 /**
  * The player-owned house is an instance far from its town, so routes start from its ways out: the exit portal and,
  * in the player's own house only, the portals and such seen there. Teleporting in or building mode means one's own
  * house; entering by a house portal may be a friend's. Client thread only.
  */
+@Accessors(fluent = true)
 public final class HouseTracker
 {
     /** By varbit 2187 (POH_HOUSE_LOCATION). */
@@ -26,8 +29,10 @@ public final class HouseTracker
     /** How long a choice at a house portal is kept: the walk to the portal, not a later visit. */
     static final int CHOICE_TICKS = 30;
 
+    @Getter
     boolean inside;
     int lastOutside = -1;
+    @Getter
     int exit = -1;
     boolean own;
     /** Varbit 2187: the town of one's own house. */
@@ -95,19 +100,9 @@ public final class HouseTracker
         inside = nowInside;
     }
 
-    public boolean inside()
-    {
-        return inside;
-    }
-
     public boolean own()
     {
         return inside && own;
-    }
-
-    public int exit()
-    {
-        return exit;
     }
 
     /** The portal of one's own house, -1 while its town is not known. */

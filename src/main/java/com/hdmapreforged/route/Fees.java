@@ -29,7 +29,7 @@ public final class Fees
 
     static List<Fee> load()
     {
-        return Pathfinder.table("/com/hdmapreforged/route/fees.tsv", parts -> {
+        return Pathfinder.table(RouteFiles.DIR + "fees.tsv", parts -> {
             var xyz = Pathfinder.ints(parts[0]);
             return new Fee(xyz[0], xyz[1], xyz[2], Integer.parseInt(parts[1].trim()), parts[2].trim());
         });

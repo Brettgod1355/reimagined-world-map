@@ -13,7 +13,7 @@ import lombok.*;
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public final class SeaMap
 {
-    public static final String AREAS = "/com/hdmapreforged/route/sea_areas.tsv";
+    static final String AREAS = RouteFiles.DIR + "sea_areas.tsv";
     /** Water tiles a block needs, of CELL * CELL. */
     static final int MIN_WATER = 10;
     /** No sea here. */
@@ -27,7 +27,7 @@ public final class SeaMap
         public final String name;
         public final int x;
         public final int y;
-        public final String hazard;
+        final String hazard;
         /** 0 for none, -1 when it cannot be crossed. */
         public final int level;
     }

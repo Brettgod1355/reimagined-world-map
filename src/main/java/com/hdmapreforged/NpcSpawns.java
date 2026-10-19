@@ -8,9 +8,6 @@ import net.runelite.api.coords.*;
 /** Where a monster or NPC is, as places of close spawns, and what it drops ({@link WorldData#spawns}); also a kind's places. */
 final class NpcSpawns
 {
-    /** Spots this close on one floor, one after another, are one place. */
-    static final int TOGETHER = 48;
-
     @RequiredArgsConstructor
     static final class Group
     {

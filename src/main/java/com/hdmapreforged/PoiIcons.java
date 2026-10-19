@@ -21,33 +21,34 @@ final class PoiIcons
 
     /** Rendered badges by type, size and screen scale. */
     static final Map<Long, BufferedImage> SPRITES = new ConcurrentHashMap<>();
-    static final int MAX_SPRITES = 4000;
     /** The pixels they hold together: zooming makes a size per quarter pixel, and 4000 large ones were tens of MB. */
     static final AtomicLong SPRITE_PIXELS = new AtomicLong();
-    static final long MAX_SPRITE_PIXELS = 4_000_000;
 
     /** {@link #paint} from a cached image: painting hundreds of badges shape by shape was most of a frame's cost. */
-    static void paintCached(Graphics2D g, PoiType type, double cx, double cy, double size, boolean emphasised)
+    static void paintCached(Graphics2D g, PoiType type, double cx, double cy, double size, boolean emphasised,
+        boolean locked)
     {
         var transform = g.getTransform();
         double device = device(transform);
         // Quarter pixels of badge size, so zooming changes the image in small steps.
         int quarter = (int) round(size * 4);
-        long key = (long) type.ordinal() << 40 | (long) quarter << 16 | round(device * 10) << 1 | (emphasised ? 1 : 0);
+        long key = (long) type.ordinal() << 40 | (locked ? 1L << 39 : 0) | (long) quarter << 16 | round(device * 10) << 1
+            | (emphasised ? 1 : 0);
         double drawnSize = quarter / 4.0;
         // Room around the badge for the shadow and the emphasis ring.
         double extent = drawnSize + (ceil(drawnSize * 0.35) + 2) * 2;
         BufferedImage sprite = SPRITES.get(key);
         if (sprite == null)
         {
-            if (SPRITES.size() > MAX_SPRITES || SPRITE_PIXELS.get() > MAX_SPRITE_PIXELS)
+            // At most 4000 sprites and 4 million pixels.
+            if (SPRITES.size() > 4000 || SPRITE_PIXELS.get() > 4_000_000)
             {
                 SPRITES.clear();
                 SPRITE_PIXELS.set(0);
             }
             sprite = sprite(extent, extent, device, sg -> {
                 sg.setRenderingHint(KEY_STROKE_CONTROL, VALUE_STROKE_PURE);
-                paint(sg, type, extent / 2, extent / 2, drawnSize, emphasised);
+                paint(sg, type, extent / 2, extent / 2, drawnSize, emphasised, locked);
             });
             SPRITES.put(key, sprite);
             SPRITE_PIXELS.addAndGet((long) sprite.getWidth() * sprite.getHeight());
@@ -105,6 +106,46 @@ final class PoiIcons
         })), cx - extent / 2, cy - extent / 2);
     }
 
+    /**
+     * A game sprite with the game's sign for what one cannot use yet, in its own pixels as the game draws it: red on the
+     * pixels just inside its outline, all round, and a band three pixels wide from top right to bottom left. Once per
+     * sprite.
+     */
+    static BufferedImage locked(BufferedImage icon)
+    {
+        return LOCKED_SPRITES.computeIfAbsent(icon, k -> {
+            int w = icon.getWidth();
+            int h = icon.getHeight();
+            var out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int rgb = icon.getRGB(x, y);
+                    boolean red = drawn(icon, x, y) && !edge(icon, x, y) && (abs(x + y - (w + h - 2) / 2.0) <= 1
+                        || edge(icon, x + 1, y) || edge(icon, x - 1, y) || edge(icon, x, y + 1) || edge(icon, x, y - 1));
+                    out.setRGB(x, y, red ? LOCKED.getRGB() : rgb);
+                }
+            }
+            return out;
+        });
+    }
+
+    /** Whether the pixel is on the sprite's outline: drawn, beside one that is not. */
+    static boolean edge(BufferedImage icon, int x, int y)
+    {
+        return drawn(icon, x, y)
+            && !(drawn(icon, x + 1, y) && drawn(icon, x - 1, y) && drawn(icon, x, y + 1) && drawn(icon, x, y - 1));
+    }
+
+    static boolean drawn(BufferedImage icon, int x, int y)
+    {
+        return x >= 0 && y >= 0 && x < icon.getWidth() && y < icon.getHeight() && icon.getRGB(x, y) >>> 24 != 0;
+    }
+
+    static final Map<BufferedImage, BufferedImage> LOCKED_SPRITES = Collections.synchronizedMap(new WeakHashMap<>());
+    static final Color LOCKED = new Color(230, 20, 20);
+
     /** Screen pixels per unit, clamped to a sane range; shared with {@link TextSprites}. */
     static double device(AffineTransform transform)
     {
@@ -130,12 +171,12 @@ final class PoiIcons
     }
 
     /** The game's own map icon for the type if it has one, else a round badge in the type's color with a glyph. */
-    static void paint(Graphics2D g, PoiType type, double cx, double cy, double size, boolean emphasised)
+    static void paint(Graphics2D g, PoiType type, double cx, double cy, double size, boolean emphasised, boolean locked)
     {
         BufferedImage game = GameIconSprites.get(type);
         if (game != null)
         {
-            paintGameIcon(g, game, cx, cy, size, emphasised);
+            paintGameIcon(g, locked ? locked(game) : game, cx, cy, size, emphasised);
             return;
         }
         double r = size / 2;
@@ -191,7 +232,7 @@ final class PoiIcons
         for (String op : ops.split(";"))
         {
             var t = op.trim().split(" ");
-            double[] a = new double[8];
+            var a = new double[8];
             for (int i = 1; i < t.length; i++)
             {
                 a[i] = Double.parseDouble(t[i]);
@@ -306,7 +347,7 @@ final class PoiIcons
     {
         return sprite(size + 2, size + 2, 1, g -> {
             g.setRenderingHint(KEY_STROKE_CONTROL, VALUE_STROKE_PURE);
-            paint(g, type, (size + 2) / 2.0 - 0.5, (size + 2) / 2.0 - 1, size - 1, false);
+            paint(g, type, (size + 2) / 2.0 - 0.5, (size + 2) / 2.0 - 1, size - 1, false, false);
         });
     }
 

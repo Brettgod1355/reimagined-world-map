@@ -48,10 +48,7 @@ final class FairyRingLog
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event)
     {
-        if (event.getGroupId() == InterfaceID.FAIRYRINGS_LOG)
-        {
-            open = true;
-        }
+        open |= event.getGroupId() == InterfaceID.FAIRYRINGS_LOG;
     }
 
     @Subscribe

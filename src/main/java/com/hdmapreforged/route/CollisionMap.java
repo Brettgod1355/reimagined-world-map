@@ -5,15 +5,17 @@ import java.nio.charset.*;
 import java.util.*;
 import java.util.function.*;
 import java.util.zip.*;
+import lombok.*;
 
 /**
  * Where one can walk, from the bundled collision.zip: per region and floor, bitsets of walkable tiles and of walls and
  * doors on the north and east edges, plus ground-floor water. Immutable after loading but for one's own house
  * ({@link #setHouse}, replaced whole), so any thread may read it.
  */
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 public final class CollisionMap
 {
-    public static final String RESOURCE = "/com/hdmapreforged/route/collision.zip";
+    public static final String RESOURCE = RouteFiles.DIR + "collision.zip";
     static final int MAGIC = 0x48444d43;
     static final int WALK = 0;
     static final int WALL_N = 64;
@@ -32,17 +34,8 @@ public final class CollisionMap
     final Map<Integer, String> obstacles;
     final boolean[] obstacleRegions = new boolean[1 << 16];
     /** One's own house, where no map of the game lies; replaced whole. */
+    @Setter
     volatile HousePlan house;
-
-    CollisionMap(List<Transition> transitions, Map<Integer, String> obstacles)
-    {
-        this.transitions = transitions;
-        this.obstacles = obstacles;
-        for (int node : obstacles.keySet())
-        {
-            obstacleRegions[region(Tiles.x(node), Tiles.y(node))] = true;
-        }
-    }
 
     public static CollisionMap load() throws IOException
     {
@@ -85,6 +78,7 @@ public final class CollisionMap
             throw new IOException("No collision.bin");
         }
         var map = new CollisionMap(Collections.unmodifiableList(transitions), obstacles);
+        obstacles.keySet().forEach(node -> map.obstacleRegions[region(Tiles.x(node), Tiles.y(node))] = true);
         map.decode(bin);
         return map;
     }
@@ -187,11 +181,6 @@ public final class CollisionMap
         return plan != null ? plan.layers(region, z) : found;
     }
 
-    public void setHouse(HousePlan plan)
-    {
-        house = plan;
-    }
-
     public HousePlan house()
     {
         return house;
@@ -208,7 +197,7 @@ public final class CollisionMap
         return edge(x, y, z, WALK);
     }
 
-    public boolean hasWater(int region)
+    boolean hasWater(int region)
     {
         return region >= 0 && region < 1 << 16 && water[region] != null;
     }

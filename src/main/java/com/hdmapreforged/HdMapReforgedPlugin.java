@@ -102,8 +102,6 @@ public class HdMapReforgedPlugin extends Plugin
     volatile long worldAsked;
     /** Asked again at most this often, and only when the search, a card or a route uses it. */
     static final long WORLD_ASK_MS = 60 * 60_000L;
-    /** In developer mode, against a map server on this computer. */
-    static final long DEVELOPER_WORLD_ASK_MS = 30_000L;
     volatile long worldAskMs = WORLD_ASK_MS;
     MapServer server;
     MapScreen screen;
@@ -134,7 +132,7 @@ public class HdMapReforgedPlugin extends Plugin
     {
         public void keyPressed(KeyEvent e)
         {
-            FullMapWindow open = fullMap;
+            var open = fullMap;
             if (e.getKeyCode() == KeyEvent.VK_ESCAPE && open != null && open.isOpen())
             {
                 e.consume();
@@ -180,6 +178,7 @@ public class HdMapReforgedPlugin extends Plugin
     {
         int started = life.incrementAndGet();
         currentVersion = null;
+        failedMaps = 0;
         io = Executors.newFixedThreadPool(4, runnable -> daemon(runnable, "Reimagined World Map tiles"));
         dataIo = Executors.newSingleThreadExecutor(runnable -> daemon(runnable, "Reimagined World Map data"));
         home = getPluginDirectory();
@@ -189,7 +188,7 @@ public class HdMapReforgedPlugin extends Plugin
         serverCache = new ServerCache(home.joinSegment("server-cache"), io);
         configureTiles();
 
-        ItemNames itemNames = new ItemNames(clientThread, itemManager);
+        var itemNames = new ItemNames(clientThread, itemManager);
         screen = new MapScreen(tiles, config, this::worldInUse, itemNames, this::togglePopOut);
         fullScreen = new MapScreen(tiles, config, this::worldInUse, itemNames, () -> fullMap.close());
         fullMap = new FullMapWindow(client, fullScreen, config.fullMapBounds(),
@@ -215,12 +214,12 @@ public class HdMapReforgedPlugin extends Plugin
         gameIcons = new MapIconLayer[]{gameIconLayer(screen), gameIconLayer(fullScreen)};
         graves = new GraveMarker[]{new GraveMarker(screen.view), new GraveMarker(fullScreen.view)};
         clientThread.invoke(this::checkGrave);
-        NpcPictures pictures = new NpcPictures((id, done) -> {
+        var pictures = new NpcPictures((id, done) -> {
             String version = tiles.version;
             serverCache.bytes("npcs", version, id + ".png", fetch -> server.npcPictureBytes(version, id, fetch),
                 bytes -> done.accept(MapServer.decode(bytes)));
         });
-        for (MapScreen on : new MapScreen[]{screen, fullScreen})
+        for (var on : new MapScreen[]{screen, fullScreen})
         {
             on.view.linesChoice = value -> configManager.setConfiguration(GROUP, "linesOff", value);
             on.view.checkForMap = () -> runData(this::checkForMap);
@@ -228,7 +227,8 @@ public class HdMapReforgedPlugin extends Plugin
         }
 
         worldAsked = System.currentTimeMillis();
-        worldAskMs = developerMode ? DEVELOPER_WORLD_ASK_MS : WORLD_ASK_MS;
+        // In developer mode, against a map server on this computer, every 30 seconds.
+        worldAskMs = developerMode ? 30_000L : WORLD_ASK_MS;
         // The screens start empty until a map version's files are had and read on the data thread.
         runData(() -> resolveVersions(false, true));
         whenGameLoaded(started, () -> GameIconSprites.load(client), PoiIcons::clearCache);
@@ -253,7 +253,7 @@ public class HdMapReforgedPlugin extends Plugin
 
     MapIconLayer gameIconLayer(MapScreen on)
     {
-        MapIconLayer layer = new MapIconLayer(on.view, config::showGameIcons, config::iconSize);
+        var layer = new MapIconLayer(on.view, config::showGameIcons, config::iconSize);
         on.view.addOverlay(layer);
         on.view.hitLayers.add(layer);
         on.view.setBadgeCover(layer::covers);
@@ -356,16 +356,16 @@ public class HdMapReforgedPlugin extends Plugin
         {
             return;
         }
-        WorldPoint location = playerLocation(player);
+        var location = playerLocation(player);
         route.tick(location);
-        WorldPoint home = route.home();
+        var home = route.home();
         // In a house the party sees its portal (the house's own place is a copy of the game's rooms).
-        WorldPoint door = home == null || !HousePlan.contains(home.getX(), home.getY()) ? home : route.outside();
+        var door = home == null || !HousePlan.contains(home.getX(), home.getY()) ? home : route.outside();
         party.tick(home != null ? door : location, home != null, ticks);
-        WorldPoint shown = home != null ? home : location;
+        var shown = home != null ? home : location;
         // On the house's plan, or in a box at its portal while that plan is not known (a friend's house).
         boolean boxed = home != null && !HousePlan.contains(home.getX(), home.getY());
-        WorldPoint outside = route.outside();
+        var outside = route.outside();
         if (shown != null && (!shown.equals(lastPlayer) || boxed != atHome))
         {
             lastPlayer = shown;
@@ -382,33 +382,33 @@ public class HdMapReforgedPlugin extends Plugin
     /** As the game's maps show it: in instances the copied real location, on a boat the boat's main-world place. */
     WorldPoint playerLocation(Player player)
     {
-        LocalPoint local = player.getLocalLocation();
-        WorldView view = player.getWorldView();
+        var local = player.getLocalLocation();
+        var view = player.getWorldView();
         if (local != null && view != null && !view.isTopLevel())
         {
-            WorldEntity boat = client.getTopLevelWorldView().worldEntities().byIndex(view.getId());
+            var boat = client.getTopLevelWorldView().worldEntities().byIndex(view.getId());
             local = boat != null ? boat.transformToMainWorld(local) : null;
         }
         if (local == null)
         {
             return null;
         }
-        WorldPoint at = WorldPoint.fromLocalInstance(client, local);
+        var at = WorldPoint.fromLocalInstance(client, local);
         // An instance copying a place on the map (the Watchtower's top floor): that place's tile.
-        int[] place = InstanceCopies.place(at.getX(), at.getY(), at.getPlane());
+        var place = InstanceCopies.place(at.getX(), at.getY(), at.getPlane());
         return place == null ? at : new WorldPoint(place[0], place[1], place[2]);
     }
 
     void updateUnlocks()
     {
         boolean due = unlocksDirty && ticks - lastUnlockTick >= UNLOCK_TICKS || ticks - lastUnlockTick >= QUEST_TICKS;
-        Unlocks.Watched reads = watched;
+        var reads = watched;
         if (!due || reads == null || client.getGameState() != GameState.LOGGED_IN)
         {
             return;
         }
         boolean quests = ticks - lastQuestTick >= QUEST_TICKS;
-        Unlocks previous = unlocks;
+        var previous = unlocks;
         unlocks = Unlocks.capture(client, reads, unlocks, quests);
         unlocksDirty = false;
         lastUnlockTick = ticks;
@@ -422,7 +422,7 @@ public class HdMapReforgedPlugin extends Plugin
             unlocks = previous;
             return;
         }
-        Unlocks current = unlocks;
+        var current = unlocks;
         screens(s -> s.setUnlocks(current));
     }
 
@@ -510,7 +510,7 @@ public class HdMapReforgedPlugin extends Plugin
             return;
         }
         ourEntryAdded = false;
-        MenuEntry[] entries = client.getMenu().getMenuEntries();
+        var entries = client.getMenu().getMenuEntries();
         int ours = ownEntryIndex(entries);
         if (ours >= 0 && ours != entries.length - 1)
         {
@@ -530,16 +530,13 @@ public class HdMapReforgedPlugin extends Plugin
         return option != null && Text.removeTags(option).toLowerCase(Locale.ROOT).contains("world map");
     }
 
-    static boolean isOurEntry(MenuEntry entry)
-    {
-        return entry.getType() == MenuAction.RUNELITE && MENU_OPTION.equals(entry.getOption()) && isOrb(entry.getParam1());
-    }
-
     static int ownEntryIndex(MenuEntry[] entries)
     {
         for (int i = 0; i < entries.length; i++)
         {
-            if (isOurEntry(entries[i]))
+            var entry = entries[i];
+            if (entry.getType() == MenuAction.RUNELITE && MENU_OPTION.equals(entry.getOption())
+                && isOrb(entry.getParam1()))
             {
                 return i;
             }
@@ -570,7 +567,7 @@ public class HdMapReforgedPlugin extends Plugin
     @Subscribe
     public void onVarbitChanged(VarbitChanged event)
     {
-        Unlocks.Watched reads = watched;
+        var reads = watched;
         if (reads != null && (reads.watches(event.getVarbitId()) || reads.watchesVarp(event.getVarpId()))
             || Unlocks.timesTeleports(event.getVarpId()))
         {
@@ -594,7 +591,7 @@ public class HdMapReforgedPlugin extends Plugin
     void showGrave(WorldPoint at)
     {
         SwingUtilities.invokeLater(() -> {
-            for (GraveMarker grave : graves)
+            for (var grave : graves)
             {
                 grave.set(at);
             }
@@ -697,7 +694,7 @@ public class HdMapReforgedPlugin extends Plugin
      */
     void resolveVersions(boolean now, boolean world)
     {
-        KnownVersion known = KnownVersion.read(home.joinSegment(KnownVersion.FILE));
+        var known = KnownVersion.read(home.joinSegment(KnownVersion.FILE));
         // Asked now: the remembered version may be the broken one.
         if (known != null && !now)
         {
@@ -775,7 +772,7 @@ public class HdMapReforgedPlugin extends Plugin
         String file = WorldData.FILE + ".json";
         serverCache.bytes("data", version, file, fetch -> server.data(version, WorldData.FILE, fetch),
             bytes -> runData(() -> {
-                WorldData read = bytes == null ? null : WorldData.parse(bytes);
+                var read = bytes == null ? null : WorldData.parse(bytes);
                 if (started != life.get())
                 {
                     return;
@@ -830,11 +827,11 @@ public class HdMapReforgedPlugin extends Plugin
             {
                 return;
             }
-            byte[] list = files.get(0).join();
-            byte[] regions = files.get(1).join();
-            byte[] places = files.get(2).join();
-            byte[] routeData = files.get(3).join();
-            BaseMaps maps = list == null ? null : BaseMaps.parse(gson, MapServer.text(list));
+            var list = files.get(0).join();
+            var regions = files.get(1).join();
+            var places = files.get(2).join();
+            var routeData = files.get(3).join();
+            var maps = list == null ? null : BaseMaps.parse(gson, MapServer.text(list));
             MapData data = null;
             if (maps != null && maps.byId(BaseMap.SURFACE) != null && regions != null && places != null)
             {
@@ -974,7 +971,7 @@ public class HdMapReforgedPlugin extends Plugin
         watched = reads;
         route.setIcons(data.icons);
         clientThread.invokeLater(() -> unlocksDirty = true);
-        Set<Integer> elements = data.icons.stream().filter(icon -> icon.element >= 0).map(icon -> icon.element)
+        var elements = data.icons.stream().filter(icon -> icon.element >= 0).map(icon -> icon.element)
             .collect(Collectors.toCollection(HashSet::new));
         whenGameLoaded(started, () -> GameIconSprites.loadElements(client, elements), () -> { });
         SwingUtilities.invokeLater(() -> {
@@ -982,7 +979,7 @@ public class HdMapReforgedPlugin extends Plugin
             {
                 // The game's icons with the data they belong to: a found shop is selected among them, a found passage
                 // shown by the game's icon for that way in.
-                for (MapIconLayer layer : gameIcons)
+                for (var layer : gameIcons)
                 {
                     layer.setIcons(data.icons, data.hidden);
                 }
@@ -1011,7 +1008,7 @@ public class HdMapReforgedPlugin extends Plugin
 
     void dock()
     {
-        MapWindow closing = window;
+        var closing = window;
         window = null;
         if (closing != null)
         {

@@ -152,7 +152,7 @@ public final class BankDetour
             }
             String lower = name.toLowerCase(Locale.ROOT);
             held.merge(lower, n, Long::sum);
-            for (String[] c : COMBINED)
+            for (var c : COMBINED)
             {
                 if (lower.equals(c[0] + " rune"))
                 {

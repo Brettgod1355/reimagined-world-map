@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.charset.*;
 import java.util.*;
 import java.util.stream.*;
+import lombok.*;
 
 /**
  * A planner passage that is an Agility shortcut (shortcuts.tsv). It knows nothing of the shortcut's level, so
@@ -24,9 +25,10 @@ public final class ShortcutPassage
     ShortcutPassage(Edge edge, List<Shortcut> shortcuts)
     {
         this.edge = edge;
-        this.ways = shortcuts.stream().map(s -> s.way).collect(Collectors.toUnmodifiableList());
+        ways = shortcuts.stream().map(s -> s.way).collect(Collectors.toUnmodifiableList());
     }
 
+    @RequiredArgsConstructor
     static final class Shortcut
     {
         /** Lower case: "Rocks (Waterbirth Island)" is "rocks". */
@@ -34,14 +36,6 @@ public final class ShortcutPassage
         final int origin;
         final int destination;
         final String[] way;
-
-        Shortcut(String name, int origin, int destination, String[] way)
-        {
-            this.object = object(name);
-            this.origin = origin;
-            this.destination = destination;
-            this.way = way;
-        }
 
         /** It starts or ends here, and its name names the object (looked at only then: 15,000 passages, 200 shortcuts). */
         boolean stands(Edge e)
@@ -110,14 +104,14 @@ public final class ShortcutPassage
                     continue;
                 }
                 var cells = line.split("\t", -1);
-                String name = cell(header, cells, "Name");
+                String object = object(cell(header, cells, "Name"));
                 int origin = Tiles.parse(cell(header, cells, "Origin"));
                 // An empty object name would match every edge nearby.
-                if (origin < 0 || object(name).isEmpty())
+                if (origin < 0 || object.isEmpty())
                 {
                     continue;
                 }
-                list.add(new Shortcut(name, origin, Tiles.parse(cell(header, cells, "Destination")), new String[]{
+                list.add(new Shortcut(object, origin, Tiles.parse(cell(header, cells, "Destination")), new String[]{
                     cell(header, cells, "Skills"), cell(header, cells, "Items"), cell(header, cells, "Quests"),
                     cell(header, cells, "Varbits")}));
             }

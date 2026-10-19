@@ -29,13 +29,8 @@ final class TileCache
     static final int TILE_SIZE = 256;
     static final int MIN_ZOOM = -3;
     static final int MAX_ZOOM = 3;
-    /** OkHttp itself still caps requests at 5 per host, shared with the rest of RuneLite. */
-    static final int MAX_IN_FLIGHT = 10;
     /** A tile is well under 200 KB. */
     static final int MAX_TILE_BYTES = 2 * 1024 * 1024;
-    /** Older half-written files were left by a crash; newer ones may still be being written. */
-    static final long PART_STALE_MS = 10 * 60 * 1000L;
-    static final long RETRY_AFTER_MS = 30_000;
     static final long MB = 1024 * 1024;
     /**
      * 128 MB of tiles in view: past it the views draw a coarser level, a quarter of the tiles (a 4K window's upper floor
@@ -379,7 +374,8 @@ final class TileCache
         BufferedImage image = peek(key);
         Long failedAt = failed.get(key);
         if (!(image != null && !stale.contains(key) || version == null || missing.contains(key) || loading.contains(key)
-            || queued.contains(key) || failedAt != null && System.currentTimeMillis() - failedAt < RETRY_AFTER_MS))
+            // A failed tile is tried again after 30 seconds.
+            || queued.contains(key) || failedAt != null && System.currentTimeMillis() - failedAt < 30_000))
         {
             queue.addFirst(key);
             queued.add(key);
@@ -434,7 +430,8 @@ final class TileCache
 
     void pump()
     {
-        while (inFlight < MAX_IN_FLIGHT && !queue.isEmpty())
+        // At most 10 at once; OkHttp itself still caps requests at 5 per host, shared with the rest of RuneLite.
+        while (inFlight < 10 && !queue.isEmpty())
         {
             Key key = queue.pollFirst();
             queued.remove(key);
@@ -589,7 +586,7 @@ final class TileCache
                 {
                     calls.remove(call);
                     byte[] bytes;
-                    try (ResponseBody body = response.body())
+                    try (var body = response.body())
                     {
                         bytes = bytes(response, body);
                     }
@@ -752,7 +749,7 @@ final class TileCache
     static BufferedImage readImage(byte[] bytes, BiPredicate<Integer, Integer> sizeOk) throws IOException
     {
         // In memory: ImageIO's default stream would cache to a temporary file.
-        try (ImageInputStream in = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)))
+        try (var in = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)))
         {
             var readers = ImageIO.getImageReaders(in);
             if (!readers.hasNext())
@@ -929,46 +926,43 @@ final class TileCache
     {
         try
         {
-            trimDisk();
+            if (!diskCache)
+            {
+                return;
+            }
+            long counted = diskBytes.get();
+            long now = System.currentTimeMillis();
+            var entries = new ArrayList<Entry>();
+            long total = 0;
+            for (var file : files(cacheRoot))
+            {
+                String name = file.getFileName();
+                try
+                {
+                    Entry entry = new Entry(file);
+                    // Half-written files older than 10 minutes were left by a crash; newer ones may still be being
+                    // written.
+                    if (name.endsWith(PART_SUFFIX) && now - entry.modified > 10 * 60 * 1000L)
+                    {
+                        delete(file);
+                        continue;
+                    }
+                    entries.add(entry);
+                    total += entry.size;
+                }
+                catch (IOException e)
+                {
+                    // Removed meanwhile.
+                }
+            }
+            total -= trimOldest(entries, total, diskLimitMb * MB);
+            // Tiles written during the walk still count.
+            diskBytes.addAndGet(total - counted);
         }
         finally
         {
             trimQueued.set(false);
         }
-    }
-
-    void trimDisk()
-    {
-        if (!diskCache)
-        {
-            return;
-        }
-        long counted = diskBytes.get();
-        long now = System.currentTimeMillis();
-        var entries = new ArrayList<Entry>();
-        long total = 0;
-        for (var file : files(cacheRoot))
-        {
-            String name = file.getFileName();
-            try
-            {
-                Entry entry = new Entry(file);
-                if (name.endsWith(PART_SUFFIX) && now - entry.modified > PART_STALE_MS)
-                {
-                    delete(file);
-                    continue;
-                }
-                entries.add(entry);
-                total += entry.size;
-            }
-            catch (IOException e)
-            {
-                // Removed meanwhile.
-            }
-        }
-        total -= trimOldest(entries, total, diskLimitMb * MB);
-        // Tiles written during the walk still count.
-        diskBytes.addAndGet(total - counted);
     }
 
     /** Removes the oldest files until 80% of {@code limit} is left, if over it; returns the bytes removed. */
@@ -1023,7 +1017,7 @@ final class TileCache
 
     static List<Filepath> walk(Filepath dir, int depth, Predicate<Filepath> filter)
     {
-        try (Stream<Filepath> found = dir.walk(depth))
+        try (var found = dir.walk(depth))
         {
             return found.filter(filter).collect(Collectors.toList());
         }

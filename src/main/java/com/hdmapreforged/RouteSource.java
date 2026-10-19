@@ -6,6 +6,7 @@ import static com.hdmapreforged.PoiType.*;
 import static com.hdmapreforged.RouteFeature.pack;
 
 import com.hdmapreforged.route.*;
+import com.hdmapreforged.route.Edge.Kind;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -114,9 +115,7 @@ final class RouteSource
                 nodeLimit);
             var sailing = request(start, target, pois, unlocks, state, options.withSailing(true).withSailToLand(true),
                 nodeLimit);
-            return walking == null || sailing == null ? sailing : new RouteRequest(walking.start, walking.target,
-                walking.startEdges, walking.edges, walking.sailingLevel, walking.running, walking.nodeLimit,
-                walking.avoidWilderness, sailing, null);
+            return walking == null || sailing == null ? sailing : walking.withBoat(sailing);
         }
         if (start >= 0 && HousePlan.contains(start))
         {
@@ -179,7 +178,7 @@ final class RouteSource
                 int from = snap(RouteFeature.worldPoint(exit));
                 if (from >= 0)
                 {
-                    edges.add(new Edge(from, state.returnExit, Edge.Kind.ENTRANCE, back.exitName, null, 6));
+                    edges.add(new Edge(from, state.returnExit, Kind.ENTRANCE, back.exitName, null, 6));
                 }
             }
         }
@@ -201,7 +200,7 @@ final class RouteSource
         if (state.inHouse)
         {
             // In the house its own portal, box or amulet goes before a spell or item, unless that is over 10 tiles quicker.
-            startEdges.replaceAll(e -> e.kind == Edge.Kind.TELEPORT ? e.weighed(HOUSE_FIRST) : e);
+            startEdges.replaceAll(e -> e.kind == Kind.TELEPORT ? e.weighed(HOUSE_FIRST) : e);
         }
         if (start < 0 && startEdges.isEmpty())
         {
@@ -302,7 +301,7 @@ final class RouteSource
     /** Where to stand at each bank (banks.tsv): by its icon's tile, the tiles beside its booths, nearest the icon first. */
     static final RouteFiles.Table<Map<Integer, int[]>> BANKS = new RouteFiles.Table<>(() -> {
         var banks = new LinkedHashMap<Integer, List<Integer>>();
-        for (var cells : Pathfinder.rows("/com/hdmapreforged/route/banks.tsv"))
+        for (var cells : Pathfinder.rows(RouteFiles.DIR + "banks.tsv"))
         {
             int icon = cells.length < 2 ? -1 : parse(cells[0]);
             int stand = icon < 0 ? -1 : parse(cells[1]);
@@ -319,7 +318,7 @@ final class RouteSource
     /** The booth or chest each stand of banks.tsv uses (its fifth column), by the stand. */
     static final RouteFiles.Table<Map<Integer, Integer>> BOOTHS = new RouteFiles.Table<>(() -> {
         var booths = new HashMap<Integer, Integer>();
-        for (var cells : Pathfinder.rows("/com/hdmapreforged/route/banks.tsv"))
+        for (var cells : Pathfinder.rows(RouteFiles.DIR + "banks.tsv"))
         {
             int stand = cells.length < 5 ? -1 : parse(cells[1]);
             int booth = stand < 0 ? -1 : parse(cells[4]);
@@ -362,7 +361,7 @@ final class RouteSource
     /** gates.tsv by column: Name, Origin, Destination, Skills, Items, Quests, Varbits; {@code #} lines are comments. */
     static List<Gate> readGates()
     {
-        return Pathfinder.table("/com/hdmapreforged/route/gates.tsv", cells -> {
+        return Pathfinder.table(RouteFiles.DIR + "gates.tsv", cells -> {
             var from = point(cell(cells, 1));
             var to = point(cell(cells, 2));
             return from == null || to == null ? null : new Gate(from, to, cell(cells, 0), new Needs(cell(cells, 3),
@@ -373,7 +372,7 @@ final class RouteSource
     /** sea_passages.tsv by column: from x y, to x y, Name, Quests, Note; {@code #} lines are comments. */
     static List<SeaPassage> readSeaPassages()
     {
-        return Pathfinder.table("/com/hdmapreforged/route/sea_passages.tsv", cells -> {
+        return Pathfinder.table(RouteFiles.DIR + "sea_passages.tsv", cells -> {
             var from = Pathfinder.ints(cell(cells, 0));
             var to = Pathfinder.ints(cell(cells, 1));
             return new SeaPassage(from[0], from[1], to[0], to[1], cell(cells, 2), new Needs("", "", cell(cells, 3), ""),
@@ -418,7 +417,7 @@ final class RouteSource
             {
                 // A row named by its action ("Climb-down Ladder (Mining Guild)") as it is; a door or gate opened.
                 String name = ACTION.matcher(gate.name).lookingAt() ? gate.name : "Open " + gate.name;
-                into.add(new Edge(a, b, Edge.Kind.ENTRANCE, name, detail(call, unlocks, null, gate.needs), 4));
+                into.add(new Edge(a, b, Kind.ENTRANCE, name, detail(call, unlocks, null, gate.needs), 4));
             }
         }
     }
@@ -436,7 +435,7 @@ final class RouteSource
                 // What it needs, and what the step should say besides (the boat's kind).
                 String needs = detail(call, unlocks, null, passage.needs);
                 String detail = needs == null ? passage.note : passage.note.isEmpty() ? needs : needs + ". " + passage.note;
-                into.add(new Edge(from, to, Edge.Kind.ENTRANCE, passage.name, detail.isEmpty() ? null : detail, 10));
+                into.add(new Edge(from, to, Kind.ENTRANCE, passage.name, detail.isEmpty() ? null : detail, 10));
             }
         }
     }
@@ -528,7 +527,7 @@ final class RouteSource
         {
             return;
         }
-        (outside ? edges : into).add(new Edge(from, to, Edge.Kind.TELEPORT, member.name,
+        (outside ? edges : into).add(new Edge(from, to, Kind.TELEPORT, member.name,
             detail(call, unlocks, TELEPORT, member.needs),
             // Half ticks: 4 ticks (a teleport spell, a tablet); a home or minigame teleport takes 24 ticks to cast.
             once ? 48 : 8, category)
@@ -669,19 +668,19 @@ final class RouteSource
         return code.matches("[A-Z]{3}(-[A-Z]{3})+") ? code.split("-").length : 1;
     }
 
-    static Edge.Kind kind(PoiType type)
+    static Kind kind(PoiType type)
     {
         switch (type)
         {
             case BOAT:
             case CHARTER:
-                return Edge.Kind.SHIP;
+                return Kind.SHIP;
             case AGILITY_SHORTCUT:
             case PORTAL:
             case LEVER:
-                return Edge.Kind.ENTRANCE;
+                return Kind.ENTRANCE;
             default:
-                return Edge.Kind.TRANSPORT;
+                return Kind.TRANSPORT;
         }
     }
 
@@ -750,7 +749,7 @@ final class RouteSource
         {
             return;
         }
-        into.add(new Edge(water, land, Edge.Kind.DISEMBARK, "Dock at " + poi.name + dockLevel(poi), null, 10));
+        into.add(new Edge(water, land, Kind.DISEMBARK, "Dock at " + poi.name + dockLevel(poi), null, 10));
         int needed = Math.max(1, level(poi.needs));
         String lacking = call.realSailing < needed
             ? "You lack: " + (call.realSailing <= 0 ? "Sailing" : needed + " Sailing")
@@ -785,7 +784,7 @@ final class RouteSource
         {
             return;
         }
-        into.add(new Edge(land, water, Edge.Kind.BOARD, name, lacking != null ? lacking : hint, cost));
+        into.add(new Edge(land, water, Kind.BOARD, name, lacking != null ? lacking : hint, cost));
     }
 
     static String dockLevel(Poi poi)
@@ -819,7 +818,7 @@ final class RouteSource
                 : map.nearestWalkable(x(state.boats[i]), y(state.boats[i]), 0, 12);
             if (land >= 0)
             {
-                into.add(new Edge(Edge.ANYWHERE, land, Edge.Kind.TELEPORT, "Teleport to Boat", means, 10));
+                into.add(new Edge(Edge.ANYWHERE, land, Kind.TELEPORT, "Teleport to Boat", means, 10));
             }
         }
     }
@@ -911,7 +910,7 @@ final class RouteSource
                         && distance(t.getKey(), node) <= 3 && stairs(t.getValue())))
                     {
                         out.add(new Edge(Edge.ANYWHERE, map.nearestWalkable(x(node), y(node), other, 3),
-                            Edge.Kind.STAIRS, name, null, 5));
+                            Kind.STAIRS, name, null, 5));
                     }
                 }
                 for (Edge e : out)
@@ -967,13 +966,13 @@ final class RouteSource
         {
             if (best >= 0)
             {
-                starts.add(new Edge(Edge.ANYWHERE, plan.arrival, Edge.Kind.TELEPORT, teleport,
+                starts.add(new Edge(Edge.ANYWHERE, plan.arrival, Kind.TELEPORT, teleport,
                     detail(call, unlocks, TELEPORT, INTO_HOUSE_NEEDS[best]), 10, "Teleports")
                     .weighed(call.saving.teleport + lacking));
             }
             if (door >= 0)
             {
-                edges.add(new Edge(door, plan.arrival, Edge.Kind.ENTRANCE, "Enter your house", null, 6));
+                edges.add(new Edge(door, plan.arrival, Kind.ENTRANCE, "Enter your house", null, 6));
             }
             return;
         }
@@ -981,13 +980,13 @@ final class RouteSource
         {
             if (best >= 0)
             {
-                starts.add(new Edge(Edge.ANYWHERE, e.to, Edge.Kind.HOUSE, teleport + " → " + e.name,
+                starts.add(new Edge(Edge.ANYWHERE, e.to, Kind.HOUSE, teleport + " → " + e.name,
                     both(detail(call, unlocks, TELEPORT, INTO_HOUSE_NEEDS[best]), e.detail), 10 + e.cost)
                     .weighed(call.saving.teleport + lacking));
             }
             if (door >= 0)
             {
-                edges.add(new Edge(door, e.to, Edge.Kind.HOUSE, "Enter your house → " + e.name, e.detail,
+                edges.add(new Edge(door, e.to, Kind.HOUSE, "Enter your house → " + e.name, e.detail,
                     6 + e.cost));
             }
         }
@@ -1111,7 +1110,7 @@ final class RouteSource
         if (to >= 0)
         {
             // One kind (as minigame teleports are), to leave all out at once; the way out of the house is none.
-            into.add(new Edge(Edge.ANYWHERE, to, Edge.Kind.HOUSE, name, detail, cost, name.contains(": ")
+            into.add(new Edge(Edge.ANYWHERE, to, Kind.HOUSE, name, detail, cost, name.contains(": ")
                 ? "House teleports" : null));
         }
     }

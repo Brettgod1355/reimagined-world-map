@@ -11,24 +11,16 @@ import java.util.regex.*;
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ItemSnapshot
 {
-    static final Map<Integer, int[]> COMBINATIONS = new HashMap<>();
     /** Compiled once: a split on a pattern compiles it on every call, and requests check hundreds of columns. */
     public static final Pattern ALL = Pattern.compile("&&");
     public static final Pattern ANY = Pattern.compile("\\|\\|");
     public static final int AIR = 556;
-    public static final int WATER = 555;
-    public static final int EARTH = 557;
+    static final int WATER = 555;
+    static final int EARTH = 557;
     public static final int FIRE = 554;
-
-    static
-    {
-        COMBINATIONS.put(4694, new int[]{WATER, FIRE});
-        COMBINATIONS.put(4695, new int[]{AIR, WATER});
-        COMBINATIONS.put(4696, new int[]{AIR, EARTH});
-        COMBINATIONS.put(4697, new int[]{AIR, FIRE});
-        COMBINATIONS.put(4698, new int[]{WATER, EARTH});
-        COMBINATIONS.put(4699, new int[]{EARTH, FIRE});
-    }
+    /** Combination runes (steam, mist, dust, smoke, mud, lava) by id, with the two runes each counts as. */
+    static final Map<Integer, int[]> COMBINATIONS = Map.of(4694, new int[]{WATER, FIRE}, 4695, new int[]{AIR, WATER},
+        4696, new int[]{AIR, EARTH}, 4697, new int[]{AIR, FIRE}, 4698, new int[]{WATER, EARTH}, 4699, new int[]{EARTH, FIRE});
 
     public static final ItemSnapshot NONE = new ItemSnapshot(Collections.emptyMap(), Collections.emptySet());
     public static final ItemSnapshot EVERYTHING = new ItemSnapshot(Collections.emptyMap(), Collections.emptySet());
@@ -57,7 +49,7 @@ public final class ItemSnapshot
     }
 
     /** These items and {@code more} (a bank's), with the same staff's runes. */
-    public ItemSnapshot plus(Map<Integer, Long> more)
+    ItemSnapshot plus(Map<Integer, Long> more)
     {
         var all = new HashMap<Integer, Long>(carried);
         more.forEach((id, n) -> add(all, id, n));
@@ -141,10 +133,7 @@ public final class ItemSnapshot
                     continue;
                 }
                 judged = true;
-                if (unlimited.contains(id) || carried.getOrDefault(id, 0L) >= quantity)
-                {
-                    any = true;
-                }
+                any |= unlimited.contains(id) || carried.getOrDefault(id, 0L) >= quantity;
             }
             if (judged && !any)
             {

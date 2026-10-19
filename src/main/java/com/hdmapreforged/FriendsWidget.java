@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import static java.lang.Math.*;
 import static com.hdmapreforged.MapView.*;
 
 import java.text.*;
@@ -14,6 +15,7 @@ import lombok.*;
 import net.runelite.api.coords.*;
 
 /** The friends button at the map's bottom left, opening into the party list and a member's details. Swing thread only. */
+@RequiredArgsConstructor
 final class FriendsWidget implements Widget
 {
     @RequiredArgsConstructor
@@ -62,6 +64,7 @@ final class FriendsWidget implements Widget
     final Supplier<Boolean> enabled;
     final Consumer<Row> focus;
     final Runnable repaint;
+    /** Repaints while drops rise; made by the caller with the same repaint. */
     final PartyMapOverlay.Ticker ticker;
     boolean dropsMoving;
     boolean open;
@@ -71,7 +74,6 @@ final class FriendsWidget implements Widget
     LongFunction<PartyMapMembers.Gear> gear = id -> null;
     Images images;
 
-    @Setter
     LongFunction<List<PartyMapMembers.Drop>> drops = id -> Collections.emptyList();
 
     long selected()
@@ -86,20 +88,6 @@ final class FriendsWidget implements Widget
     {
         open = true;
         selected = id;
-    }
-
-    FriendsWidget(Supplier<List<PartyMapMembers.Marker>> party, Supplier<List<Member>> group,
-        BooleanSupplier inGroup, IntSupplier myWorld, Supplier<Boolean> enabled,
-        Consumer<Row> focus, Runnable repaint)
-    {
-        this.party = party;
-        this.group = group;
-        this.inGroup = inGroup;
-        this.myWorld = myWorld;
-        this.enabled = enabled;
-        this.focus = focus;
-        this.repaint = repaint;
-        this.ticker = new PartyMapOverlay.Ticker(repaint);
     }
 
     static List<Row> rows(List<PartyMapMembers.Marker> party, List<Member> group)
@@ -173,7 +161,7 @@ final class FriendsWidget implements Widget
             }
             return;
         }
-        int w = Math.min(WIDTH, width - 24);
+        int w = min(WIDTH, width - 24);
         var tab = tab(g, bottom, clicks, "Party · " + rows.size() + (open ? "  ▾" : "  ▴"));
         double tabTop = tab.getY();
         clicks.add(tab, () -> {
@@ -194,7 +182,7 @@ final class FriendsWidget implements Widget
         {
             String text = "No one else in your party yet";
             g.setFont(ROW);
-            double boxWidth = Math.max(w, g.getFontMetrics().stringWidth(text) + 20);
+            double boxWidth = max(w, g.getFontMetrics().stringWidth(text) + 20);
             var alone = new RoundRectangle2D.Double(LEFT, tabTop - 4 - ROW_HEIGHT - 6, boxWidth,
                 ROW_HEIGHT + 6, 10, 10);
             box(g, alone, CONTROL_FILL, CONTROL_EDGE);
@@ -204,8 +192,8 @@ final class FriendsWidget implements Widget
         }
         // Opens upwards, as many rows as fit (with room for a chosen one's folded details above, so one can switch
         // between them); the last line then says how many more.
-        int fit = Math.max(1, (int) ((tabTop - 60 - (chosen != null ? 34 + STATUS_H : 0)) / ROW_HEIGHT));
-        var shown = rows.size() > fit ? rows.subList(0, Math.max(1, fit - 1)) : rows;
+        int fit = max(1, (int) ((tabTop - 60 - (chosen != null ? 34 + STATUS_H : 0)) / ROW_HEIGHT));
+        var shown = rows.size() > fit ? rows.subList(0, max(1, fit - 1)) : rows;
         int more = rows.size() - shown.size();
         int lines = shown.size() + (more > 0 ? 1 : 0);
         double listTop = tabTop - 4 - lines * ROW_HEIGHT - 6;
@@ -278,7 +266,7 @@ final class FriendsWidget implements Widget
     void paintDetails(Graphics2D g, Row row, double x0, int w, double bottomY, Clicks clicks)
     {
         var shared = gear.apply(row.id);
-        int panelW = Math.max(w, 4 * Orbs.WIDTH + 3 * 4 + 16);
+        int panelW = max(w, 4 * Orbs.WIDTH + 3 * 4 + 16);
         int full = 30 + 26 + STATUS_H + BODY_H + 10;
         // Folded (or the map too low for all of it): the name and the orbs only.
         boolean cramped = bottomY - full < 44;
@@ -451,14 +439,14 @@ final class FriendsWidget implements Widget
         for (int k = 0; k < showing.size(); k++)
         {
             var drop = showing.get(k);
-            double t = Math.min(1, (now - drop.at) / (double) PartyMapMembers.DROP_MS);
-            double rise = 1 - Math.pow(1 - t, 3);
+            double t = min(1, (now - drop.at) / (double) PartyMapMembers.DROP_MS);
+            double rise = 1 - pow(1 - t, 3);
             float alpha = (float) (t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3);
             String text = "+" + AMOUNT.format(drop.amount);
             double tx = x0 + panelW - 14 - metrics.stringWidth(text);
             double ty = start + (showing.size() - 1 - k) * 18 - rise * 60;
             Composite old = g.getComposite();
-            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0, alpha)));
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, max(0, alpha)));
             BufferedImage icon = images == null ? null : images.skill(drop.skill);
             if (icon != null)
             {
@@ -479,7 +467,7 @@ final class FriendsWidget implements Widget
         {
             return;
         }
-        BufferedImage image = images.item(id, Math.max(1, quantity));
+        BufferedImage image = images.item(id, max(1, quantity));
         if (image != null)
         {
             g.drawImage(image, (int) (x + (SLOT_W - image.getWidth()) / 2.0), (int) (y + (SLOT_H - image.getHeight()) / 2.0),

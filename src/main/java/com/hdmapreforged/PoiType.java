@@ -53,7 +53,7 @@ enum PoiType
     {
         this.displayName = displayName;
         this.layer = layer;
-        this.color = new Color(rgb);
+        color = new Color(rgb);
     }
 
     /** Obelisks send you to a random other obelisk unless you can choose. */
@@ -62,12 +62,6 @@ enum PoiType
         return this == OBELISK;
     }
 
-    /** Every stop reaches every other. */
-    boolean isNetwork()
-    {
-        return NETWORKS.contains(this);
-    }
-
-    /** Fairy rings to obelisks, in the order above. */
+    /** Fairy rings to obelisks, in the order above; every stop of one reaches every other. */
     static final Set<PoiType> NETWORKS = EnumSet.range(FAIRY_RING, OBELISK);
 }

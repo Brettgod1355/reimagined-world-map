@@ -9,7 +9,7 @@ import lombok.*;
  */
 public final class ReturnAreas
 {
-    public static final String RESOURCE = "/com/hdmapreforged/route/return_areas.tsv";
+    public static final String RESOURCE = RouteFiles.DIR + "return_areas.tsv";
 
     @AllArgsConstructor(access = AccessLevel.PACKAGE)
     public static final class Area

@@ -12,8 +12,6 @@ import static java.lang.Math.*;
 import com.hdmapreforged.route.HousePlan;
 import java.util.concurrent.*;
 import java.awt.*;
-import java.io.*;
-import java.nio.charset.*;
 import java.awt.event.*;
 import java.awt.geom.*;
 import java.awt.image.*;
@@ -38,11 +36,6 @@ final class MapView extends JComponent
         void viewChanged();
 
         void nearestRequested(WorldPoint point);
-    }
-
-    interface Chrome
-    {
-        void pickMap(Point at);
     }
 
     interface WindowControls
@@ -163,24 +156,7 @@ final class MapView extends JComponent
     static final Color LABEL_BACKGROUND = new Color(16, 16, 20, 225);
     static final Font LABEL_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 12);
     static final Font SMALL_FONT = new Font(Font.SANS_SERIF, Font.PLAIN, 10);
-    static final Color VERSION_TEXT = new Color(255, 255, 255, 140);
     static final Color NOTICE_TEXT = new Color(200, 200, 200);
-    /** Null when the build left none. */
-    static final String VERSION = version();
-
-    static String version()
-    {
-        try (var in = MapView.class.getResourceAsStream("version.txt"))
-        {
-            String version = in == null ? "" : new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
-            // Unexpanded ("${version}") when built without the build's own resources step.
-            return version.isEmpty() || version.startsWith("$") ? null : "v" + version;
-        }
-        catch (IOException e)
-        {
-            return null;
-        }
-    }
     static final BasicStroke THIN = new BasicStroke(1f);
     static final BasicStroke ICON_LINE = new BasicStroke(1.8f);
     static final BasicStroke ROUND_LINE = new BasicStroke(2.2f, CAP_ROUND, JOIN_ROUND);
@@ -200,10 +176,7 @@ final class MapView extends JComponent
     static final Color FLOOR_COLOR = new Color(0xffff00);
     /** The game's small places ("Altar" in the Ourania Cave), in the game's small size. */
     static final Font SMALL_PLACE_FONT = new Font(Font.SANS_SERIF, Font.PLAIN, 11);
-    /** Small places from about three pixels a tile: the game's map shows them zoomed in too. */
-    static final double PLACE_ZOOM = 1.5;
     static final int[] WILDERNESS_STARTS = {3520, 9920};
-    static final double EASE = 0.28;
 
     @RequiredArgsConstructor
     static final class Drawn
@@ -264,7 +237,8 @@ final class MapView extends JComponent
     boolean stepping;
 
     List<Drawn> drawn = new ArrayList<>();
-    Chrome chrome;
+    /** Opens the map picker at a point; null without the map's own controls. */
+    Consumer<Point> chrome;
     List<Control> controls = new ArrayList<>();
     final List<Widget> widgets = new CopyOnWriteArrayList<>();
     /** Kinds whose destination lines are hidden. */
@@ -579,7 +553,7 @@ final class MapView extends JComponent
 
     void setLinesShown(PoiType type, boolean shown)
     {
-        Set<PoiType> now = EnumSet.copyOf(linesOff);
+        var now = EnumSet.copyOf(linesOff);
         if (shown)
         {
             now.remove(type);
@@ -596,10 +570,10 @@ final class MapView extends JComponent
     /** Setting format: "FAIRY_RING,SPIRIT_TREE". */
     void setLinesOff(String value)
     {
-        Set<PoiType> off = EnumSet.noneOf(PoiType.class);
+        var off = EnumSet.noneOf(PoiType.class);
         for (String name : value == null ? new String[0] : value.split(","))
         {
-            for (PoiType t : PoiType.values())
+            for (var t : PoiType.values())
             {
                 if (t.name().equals(name.trim()))
                 {
@@ -717,6 +691,14 @@ final class MapView extends JComponent
         }
         return false;
     }
+
+    /** Gets the game's sign for what one cannot use: a shortcut, mooring or resource whose needs are certainly unmet. */
+    boolean locked(Poi poi)
+    {
+        return LOCKABLE.contains(poi.type) && unlocks != null && config.markLocked() && !usable(poi, true);
+    }
+
+    static final Set<PoiType> LOCKABLE = EnumSet.of(AGILITY_SHORTCUT, MOORING, SALVAGE, GAME_ICON);
 
     boolean usable(Needs needs)
     {
@@ -1025,11 +1007,8 @@ final class MapView extends JComponent
     /** The whole map just fits the view, so it never shrinks to a small picture in a black field. */
     double minZoom()
     {
-        if (map == null || getWidth() <= 0 || getHeight() <= 0)
-        {
-            return MIN_ZOOM;
-        }
-        return max(MIN_ZOOM, min(1, fit(map, getWidth(), getHeight())));
+        return map == null || getWidth() <= 0 || getHeight() <= 0 ? MIN_ZOOM
+            : max(MIN_ZOOM, min(1, fit(map, getWidth(), getHeight())));
     }
 
     /** Log2 of the scale at which a map's bounds just fit {@code width} by {@code height}. */
@@ -1065,10 +1044,11 @@ final class MapView extends JComponent
     /**
      * The share of the way left a step covers, {@code steps} animator periods after the last: a late step (after a slow
      * frame) catches up rather than slowing the animation down. A first step, or one after a long stall, counts as one.
+     * One period covers 0.28 of the way.
      */
     static double ease(double steps)
     {
-        return 1 - pow(1 - EASE, steps > 0 && steps <= 4 ? steps : 1);
+        return 1 - pow(1 - 0.28, steps > 0 && steps <= 4 ? steps : 1);
     }
 
     void step()
@@ -1249,10 +1229,7 @@ final class MapView extends JComponent
     {
         if (tiles.version == null)
         {
-            String notice = "Loading map…";
-            g.setColor(NOTICE_TEXT);
-            g.setFont(LABEL_FONT);
-            g.drawString(notice, (getWidth() - g.getFontMetrics().stringWidth(notice)) / 2, getHeight() / 2);
+            notice(g, "Loading map…", getHeight() / 2);
             return;
         }
         int level = MapIconLayer.tileLevel(zoom);
@@ -1288,9 +1265,10 @@ final class MapView extends JComponent
         int visible = count(range);
         tiles.beginFrame(this, end == null ? visible : max(visible, count(end)));
         // A frame after one with no tile at all, not even a stand-in (the map just opened or switched), may read some tiles
-        // from disk. At a zoom's change of level the stand-ins show meanwhile: reading there stalled the zoom.
-        int diskNow = drawnTiles == 0 ? FIRST_FRAME_DISK_TILES : 0;
-        long diskUntil = System.nanoTime() + FIRST_FRAME_DISK_NANOS;
+        // from disk (up to 24 tiles, for up to 60 ms). At a zoom's change of level the stand-ins show meanwhile:
+        // reading there stalled the zoom.
+        int diskNow = drawnTiles == 0 ? 24 : 0;
+        long diskUntil = System.nanoTime() + 60_000_000L;
         drawnTiles = 0;
         scaled.beginFrame(need(visible));
         boolean settled = zoom == targetZoom;
@@ -1451,8 +1429,6 @@ final class MapView extends JComponent
     int endLevel;
     /** Zooming out through this frame's level: its tiles are drawn only from memory. */
     boolean passing;
-    static final int FIRST_FRAME_DISK_TILES = 24;
-    static final long FIRST_FRAME_DISK_NANOS = 60_000_000L;
 
     static final Layer[] LAYERS = Layer.values();
 
@@ -1656,7 +1632,7 @@ final class MapView extends JComponent
             else if (free)
             {
                 g.setComposite(at.getPlane() == plane ? normal : AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.55f));
-                PoiIcons.paintCached(g, poi.type, x, y, size, false);
+                PoiIcons.paintCached(g, poi.type, x, y, size, false, locked(poi));
                 frame.add(new Drawn(poi, x, y, size / 2 + 2));
             }
         }
@@ -1667,7 +1643,7 @@ final class MapView extends JComponent
             double x = screenX(at.getX() + 0.5);
             double y = screenY(at.getY() + 0.5);
             double s = poi == selected ? size * 1.25 : size * 1.1;
-            PoiIcons.paintCached(g, poi.type, x, y, s, poi == selected || inGroup(poi));
+            PoiIcons.paintCached(g, poi.type, x, y, s, poi == selected || inGroup(poi), locked(poi));
             frame.add(new Drawn(poi, x, y, s / 2 + 2));
         }
         drawn = frame;
@@ -1708,7 +1684,9 @@ final class MapView extends JComponent
                 grow();
             }
             int mask = keys.length - 1;
-            int i = (int) (mix(key) & mask);
+            // The key's bits mixed, so that keys close together spread over the table.
+            long h = key * 0x9E3779B97F4A7C15L;
+            int i = (int) ((h ^ (h >>> 29)) & mask);
             while (used[i])
             {
                 if (keys[i] == key)
@@ -1746,12 +1724,6 @@ final class MapView extends JComponent
                     add(oldKeys[i]);
                 }
             }
-        }
-
-        static long mix(long key)
-        {
-            long h = key * 0x9E3779B97F4A7C15L;
-            return h ^ (h >>> 29);
         }
     }
 
@@ -1834,7 +1806,8 @@ final class MapView extends JComponent
         {
             double z = targetZoom;
             if (!(pass == 0 ? z < -0.5 : pass == 1 ? z >= -2 && z < 2.5 : pass == 2 ? z >= -1.2 && z < 3.5
-                : z >= PLACE_ZOOM))
+                // Small places from about three pixels a tile (zoom 1.5): the game's map shows them zoomed in too.
+                : z >= 1.5))
             {
                 continue;
             }
@@ -2002,7 +1975,7 @@ final class MapView extends JComponent
         return fromLayers(layer -> layer.hit(p, projection));
     }
 
-    void setChrome(Chrome chrome)
+    void setChrome(Consumer<Point> chrome)
     {
         this.chrome = chrome;
         repaint();
@@ -2037,7 +2010,6 @@ final class MapView extends JComponent
     void paintControls(Graphics2D g)
     {
         var painted = new ArrayList<Control>();
-        paintVersion(g);
         if (chrome == null)
         {
             backOffset = 0;
@@ -2052,7 +2024,7 @@ final class MapView extends JComponent
         String mapName = (map == null ? "Map" : map.name) + "  ▾";
         int mapWidth = metrics.stringWidth(mapName) + 28;
         text(g, mapName, control(g, painted, MARGIN, MARGIN, mapWidth,
-            () -> chrome.pickMap(new Point(MARGIN, MARGIN + CONTROL + 4)), "Choose a map"), metrics);
+            () -> chrome.accept(new Point(MARGIN, MARGIN + CONTROL + 4)), "Choose a map"), metrics);
         backOffset = mapWidth + 6;
         paintBack(g, painted);
         g.setFont(CONTROL_FONT);
@@ -2150,14 +2122,10 @@ final class MapView extends JComponent
         var painted = new ArrayList<Control>();
         g.setRenderingHint(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON);
         g.setRenderingHint(KEY_TEXT_ANTIALIASING, VALUE_TEXT_ANTIALIAS_ON);
-        paintVersion(g);
         if (mapUnavailable)
         {
-            String notice = "The map could not be loaded";
-            g.setFont(LABEL_FONT);
-            g.setColor(NOTICE_TEXT);
             int cy = getHeight() / 2;
-            g.drawString(notice, (getWidth() - g.getFontMetrics().stringWidth(notice)) / 2, cy - 14);
+            notice(g, "The map could not be loaded", cy - 14);
             String check = "Check for a new map";
             g.setFont(CONTROL_FONT);
             var metrics = g.getFontMetrics();
@@ -2171,15 +2139,12 @@ final class MapView extends JComponent
         controls = painted;
     }
 
-    void paintVersion(Graphics2D g)
+    /** A line of grey text across the middle, its baseline at {@code y}. */
+    void notice(Graphics2D g, String text, int y)
     {
-        if (VERSION == null || !config.showVersion())
-        {
-            return;
-        }
-        g.setFont(SMALL_FONT);
-        float x = getWidth() - MARGIN - g.getFontMetrics().stringWidth(VERSION);
-        text.draw(g, VERSION, SMALL_FONT, x, getHeight() - 6, VERSION_TEXT);
+        g.setColor(NOTICE_TEXT);
+        g.setFont(LABEL_FONT);
+        g.drawString(text, (getWidth() - g.getFontMetrics().stringWidth(text)) / 2, y);
     }
 
     /** A short message on the map ("Added to My route"), or null. */
@@ -2334,11 +2299,6 @@ final class MapView extends JComponent
         }
     }
 
-    static String goInText(Poi.Link inside)
-    {
-        return inside.map.id == SURFACE ? "Go out" : "Go in";
-    }
-
     @RequiredArgsConstructor
     static final class Back
     {
@@ -2349,7 +2309,6 @@ final class MapView extends JComponent
         final int plane;
     }
 
-    static final int MAX_BACK = 12;
     final ArrayDeque<Back> back = new ArrayDeque<>();
 
     /** Before the player opens another map: Back returns here. Automatic changes call {@link #showMap} alone. */
@@ -2360,7 +2319,8 @@ final class MapView extends JComponent
             return;
         }
         back.push(new Back(map, targetX, targetY, targetZoom, plane));
-        while (back.size() > MAX_BACK)
+        // At most 12 maps back.
+        while (back.size() > 12)
         {
             back.removeLast();
         }

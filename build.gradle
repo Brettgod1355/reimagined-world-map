@@ -14,7 +14,3 @@ file('runelite-plugin.properties').withInputStream { pluginProperties.load(it) }
 group = 'com.hdmapreforged'
 version = pluginProperties.getProperty('version')
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release.set(11) }
-processResources {
-    inputs.property('version', version)
-    filesMatching('**/version.txt') { expand(version: version) }
-}

@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import static java.lang.Math.*;
 import static com.hdmapreforged.RouteFeature.*;
 import static com.hdmapreforged.RoutePanels.*;
 import static com.hdmapreforged.SearchResults.*;
@@ -115,8 +116,8 @@ public final class RouteHouse
                     int data = plane[x][y];
                     if (data != -1 && HouseTracker.isTemplate((data >> 14 & 0x3ff) * 8, (data >> 3 & 0x7ff) * 8))
                     {
-                        west = Math.min(west, x);
-                        south = Math.min(south, y);
+                        west = min(west, x);
+                        south = min(south, y);
                     }
                 }
             }
@@ -234,9 +235,9 @@ public final class RouteHouse
         for (int z = 0; z < 4; z++)
         {
             var flags = collision == null || collision[z] == null ? new int[0][] : collision[z].getFlags();
-            for (int x = Math.max(0, dx); x < Math.min(SIZE, SIZE + dx); x++)
+            for (int x = max(0, dx); x < min(SIZE, SIZE + dx); x++)
             {
-                for (int y = Math.max(0, dy); y < Math.min(SIZE, SIZE + dy); y++)
+                for (int y = max(0, dy); y < min(SIZE, SIZE + dy); y++)
                 {
                     Tile tile = scene[z][x][y];
                     // No ground (the void round the house) is no floor, though the game sets no flag there.
@@ -324,7 +325,7 @@ public final class RouteHouse
         }
         var seen = new HousePlan(placed, things, arrival);
         // The game's own minimap of each floor (only floors the house has: each picture is drawn for the whole scene).
-        BufferedImage[] drawn = new BufferedImage[4];
+        var drawn = new BufferedImage[4];
         for (int z = 0; z < 4; z++)
         {
             var floor = placed[z];
@@ -422,15 +423,10 @@ public final class RouteHouse
 
     static final int LOOK = SIZE * 4;
 
+    /** Set by {@link RouteFeature#setHouseFiles}. */
     volatile Filepath houseFolder;
 
     volatile Executor houseIo;
-
-    void setHouseFiles(Filepath folder, Executor io)
-    {
-        houseFolder = folder;
-        houseIo = io;
-    }
 
     Filepath lookFile(long account)
     {
@@ -447,7 +443,7 @@ public final class RouteHouse
     {
         BufferedImage best = null;
         int most = 0;
-        for (int margin = 0; margin + LOOK <= Math.min(all.getWidth(), all.getHeight()); margin += 32)
+        for (int margin = 0; margin + LOOK <= min(all.getWidth(), all.getHeight()); margin += 32)
         {
             int painted = 0;
             for (int i = 0; i < floor.length; i++)
@@ -492,12 +488,12 @@ public final class RouteHouse
     void keepLook(BufferedImage[] drawn, byte[][] floors, int dx, int dy)
     {
         // A look read from the file meanwhile does not replace this one.
-        BufferedImage[] pending = new BufferedImage[4];
+        var pending = new BufferedImage[4];
         houseLook.set(pending);
         var file = lookFile(houseOf);
         Executor io = houseIo;
         Runnable fit = () -> {
-            BufferedImage[] look = new BufferedImage[4];
+            var look = new BufferedImage[4];
             for (int z = 0; z < 4; z++)
             {
                 look[z] = drawn[z] == null ? null : sceneOf(drawn[z], floors[z], dx, dy);
@@ -559,7 +555,7 @@ public final class RouteHouse
     /** The account's kept look, read on the file thread; our own drawing of the plan until then. */
     void readLook(long account)
     {
-        BufferedImage[] none = new BufferedImage[4];
+        var none = new BufferedImage[4];
         houseLook.set(none);
         var file = lookFile(account);
         if (file == null)
@@ -567,7 +563,7 @@ public final class RouteHouse
             return;
         }
         later(houseIo, () -> {
-            BufferedImage[] look = new BufferedImage[4];
+            var look = new BufferedImage[4];
             try (ImageInputStream in = file.isFile() ? new MemoryCacheImageInputStream(new ByteArrayInputStream(
                 TileCache.read(file))) : null)
             {
@@ -660,13 +656,13 @@ public final class RouteHouse
             return;
         }
         // One picture a floor, the game's minimap of it: not thousands of shapes a frame.
-        BufferedImage look = houseLook.get()[Math.max(0, Math.min(3, p.plane()))];
+        BufferedImage look = houseLook.get()[max(0, min(3, p.plane()))];
         // At the surface map's edge, where the map draws the house.
-        int left = (int) Math.round(p.screenX(DRAWN_X));
-        int top = (int) Math.round(p.screenY(DRAWN_Y + SIZE));
+        int left = (int) round(p.screenX(DRAWN_X));
+        int top = (int) round(p.screenY(DRAWN_Y + SIZE));
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-        g.drawImage(look, left, top, (int) Math.round(p.screenX(DRAWN_X
-            + SIZE)) - left, (int) Math.round(p.screenY(DRAWN_Y)) - top, null);
+        g.drawImage(look, left, top, (int) round(p.screenX(DRAWN_X
+            + SIZE)) - left, (int) round(p.screenY(DRAWN_Y)) - top, null);
         seen.things.forEach((node, name) -> {
             String label = name.split(":")[0];
             float x = (float) RouteText.x(p, node) - g.getFontMetrics().stringWidth(label) / 2f;
@@ -691,18 +687,18 @@ public final class RouteHouse
         var now = houseFeatures;
         if (collision == null || houseOf == Long.MIN_VALUE)
         {
-            panel.add(label("Log in to see and set this account's house.", width, Font.PLAIN, NOTE));
+            panel.add(label("Log in to see and set this account's house.", width, NOTE));
             return panel;
         }
         Color gray = ColorScheme.LIGHT_GRAY_COLOR;
         panel.add(label(seen == null ? "Teleport into it once: its rooms, portals, nexus and jewellery box are read "
             + "then. Or set them here." : "As seen last time you were in it, for this account. Routes walk through it; "
-            + "right-click in it for a route there.", width, Font.PLAIN, gray));
+            + "right-click in it for a route there.", width, gray));
         var box = new JComboBox<String>(new String[]{"No jewellery box", "Basic jewellery box",
             "Fancy jewellery box", "Ornate jewellery box"});
         box.setSelectedIndex(Arrays.asList(BOXES).indexOf(HouseSettings.box(now)));
         String[] amulets = {"Mounted amulet of glory", "Mounted Xeric's talisman", "Mounted digsite pendant"};
-        JCheckBox[] mounted = new JCheckBox[amulets.length];
+        var mounted = new JCheckBox[amulets.length];
         for (int i = 0; i < amulets.length; i++)
         {
             mounted[i] = new JCheckBox(amulets[i], now.contains(MOUNTED[i]));
@@ -745,8 +741,8 @@ public final class RouteHouse
         }
         var parts = new ArrayList<JComponent>(List.of(box));
         parts.addAll(List.of(mounted));
-        parts.addAll(List.of(garden, obelisk, label("Portals:", width, Font.PLAIN, gray), portals,
-            label("Portal nexus:", width, Font.PLAIN, gray), nexus));
+        parts.addAll(List.of(garden, obelisk, label("Portals:", width, gray), portals,
+            label("Portal nexus:", width, gray), nexus));
         for (var part : parts)
         {
             part.setAlignmentX(Component.LEFT_ALIGNMENT);
