@@ -8,6 +8,8 @@ import net.runelite.client.ui.*;
 final class Floating extends JPanel
 {
     static final int BAR = 24;
+    /** The soft white of names and buttons on the map. */
+    static final Color LIGHT = new Color(200, 200, 205);
 
     final JPanel bar = new JPanel(new BorderLayout(4, 0));
     final JButton fold = small("–", "Fold up");
@@ -17,12 +19,12 @@ final class Floating extends JPanel
     Floating(String title, Runnable close)
     {
         super(new BorderLayout());
-        setBorder(BorderFactory.createLineBorder(new Color(255, 255, 255, 45)));
+        setBorder(BorderFactory.createLineBorder(MapView.CONTROL_EDGE));
         setBackground(ColorScheme.DARKER_GRAY_COLOR);
         bar.setBackground(new Color(24, 26, 30));
         bar.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 2));
         JLabel name = new JLabel(title);
-        name.setForeground(new Color(200, 200, 205));
+        name.setForeground(LIGHT);
         name.setFont(name.getFont().deriveFont(Font.BOLD));
         bar.add(name, BorderLayout.CENTER);
         JPanel buttons = new JPanel(new BorderLayout(2, 0));
@@ -77,7 +79,7 @@ final class Floating extends JPanel
         button.setMargin(new Insets(0, 6, 0, 6));
         button.setBorderPainted(false);
         button.setContentAreaFilled(false);
-        button.setForeground(new Color(200, 200, 205));
+        button.setForeground(LIGHT);
         button.setToolTipText(tip);
         return button;
     }

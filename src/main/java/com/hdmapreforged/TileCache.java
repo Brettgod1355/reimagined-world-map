@@ -413,6 +413,20 @@ final class TileCache
         return readBody(body, MAX_TILE_BYTES);
     }
 
+    /** Every tile downloaded again (the map looks wrong): those on disk go first, then those in memory. */
+    void downloadAgain()
+    {
+        execute(() -> {
+            versionDirs().forEach(TileCache::deleteTree);
+            diskBytes.set(0);
+            synchronized (this)
+            {
+                fallbackVersion = null;
+                clear();
+            }
+        });
+    }
+
     synchronized void clear()
     {
         generation++;

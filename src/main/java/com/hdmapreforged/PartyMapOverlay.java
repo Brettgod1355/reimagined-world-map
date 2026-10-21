@@ -2,6 +2,7 @@ package com.hdmapreforged;
 
 import static java.lang.Math.*;
 import static com.hdmapreforged.PlayerMarker.circle;
+import static com.hdmapreforged.MapView.text;
 
 import java.awt.*;
 import java.awt.geom.*;
@@ -95,7 +96,7 @@ final class PartyMapOverlay implements MapView.Overlay
             .toLowerCase(Locale.ROOT);
     }
 
-    public void paint(Graphics2D g, MapView.Projection projection)
+    public void paint(Graphics2D g, Projection projection)
     {
         var all = markers.get();
         if (all.isEmpty())
@@ -145,7 +146,7 @@ final class PartyMapOverlay implements MapView.Overlay
     }
 
     /** Drops rising above the marker, newest lowest; true while any shows. */
-    boolean paintLoot(Graphics2D g, MapView.Projection projection, Marker marker, double x, double y)
+    boolean paintLoot(Graphics2D g, Projection projection, Marker marker, double x, double y)
     {
         var showing = loot.apply(marker.id);
         if (showing.isEmpty())
@@ -195,7 +196,7 @@ final class PartyMapOverlay implements MapView.Overlay
         return true;
     }
 
-    static void paintMarker(Graphics2D g, MapView.Projection projection, Marker marker, WorldPoint at, double x,
+    static void paintMarker(Graphics2D g, Projection projection, Marker marker, WorldPoint at, double x,
         double y, int myWorld, boolean chosen, boolean hover)
     {
         if (x < -40 || y < -40 || x > projection.width() + 40 || y > projection.height() + 40)
@@ -219,10 +220,9 @@ final class PartyMapOverlay implements MapView.Overlay
             {
                 PlayerMarker.box(layer, x, y, r, color);
                 layer.setFont(NAME_FONT);
-                layer.drawString("House", (float) (x - layer.getFontMetrics().stringWidth("House") / 2.0),
-                    (float) (y - r - 12));
+                text(layer, "House", x - layer.getFontMetrics().stringWidth("House") / 2.0, y - r - 12);
             }
-            layer.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 60));
+            layer.setColor(RouteFeature.alpha(color, 60));
             layer.fill(circle(x, y, r + 5));
             if (marker.avatar != null)
             {
@@ -241,8 +241,7 @@ final class PartyMapOverlay implements MapView.Overlay
                 layer.setFont(NAME_FONT);
                 var metrics = layer.getFontMetrics();
                 layer.setColor(new Color(15, 15, 20));
-                layer.drawString(initial, (float) (x - metrics.stringWidth(initial) / 2.0),
-                    (float) (y + metrics.getAscent() / 2.0 - 1.5));
+                text(layer, initial, x - metrics.stringWidth(initial) / 2.0, y + metrics.getAscent() / 2.0 - 1.5);
             }
             // White: gold would read as the local player's yellow marker.
             ring(layer, disc, 2f, Color.WHITE);
@@ -290,13 +289,12 @@ final class PartyMapOverlay implements MapView.Overlay
         double textLeft = x - nameWidth / 2.0;
         float baseline = (float) (top + 1 + nameMetrics.getAscent());
         g.setColor(Color.WHITE);
-        g.drawString(name, (float) textLeft, baseline);
+        text(g, name, textLeft, baseline);
         if (detail != null)
         {
             g.setFont(SMALL_FONT);
-            g.setColor(otherWorld ? FriendsWidget.OTHER_WORLD : new Color(200, 200, 205));
-            g.drawString(detail, (float) (x - detailWidth / 2.0),
-                (float) (top + 1 + nameMetrics.getHeight() + smallMetrics.getAscent()));
+            g.setColor(otherWorld ? FriendsWidget.OTHER_WORLD : Floating.LIGHT);
+            text(g, detail, x - detailWidth / 2.0, top + 1 + nameMetrics.getHeight() + smallMetrics.getAscent());
         }
     }
 

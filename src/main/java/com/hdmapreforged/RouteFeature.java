@@ -45,7 +45,6 @@ import net.runelite.client.plugins.*;
 import net.runelite.client.ui.*;
 import net.runelite.client.ui.overlay.*;
 import net.runelite.client.util.*;
-import com.hdmapreforged.MapView.Projection;
 
 /**
  * "Path to here": our own route search; only shows a way, never walks, clicks or sends anything.
@@ -54,7 +53,7 @@ import com.hdmapreforged.MapView.Projection;
  */
 @Slf4j
 @RequiredArgsConstructor(onConstructor_ = @Inject)
-public final class RouteFeature
+public final class RouteFeature implements TourPanel.Actions
 {
     /** Per account: the house's features ("box:ornate,glory,portal:Varrock") and its plan. */
     static final String HOUSE_KEY = "routeHouse";
@@ -85,7 +84,6 @@ public final class RouteFeature
         new Color(200, 255, 110), new Color(255, 255, 255), new Color(180, 150, 255)};
 
     static final Color CANNOT = new Color(255, 112, 112);
-    static final Color SP_WALK = new Color(255, 214, 64);
     static final Color SHADOW = new Color(0, 0, 0, 130);
 
     Color walk()
@@ -192,19 +190,9 @@ public final class RouteFeature
 
     void setIcons(List<MapData.Icon> icons)
     {
-        shipwrights = shipwrights(icons);
-        seaSpots = seaSpots(icons);
-    }
-
-    static int[] shipwrights(List<MapData.Icon> icons)
-    {
-        return tiles(icons, "Shipwright");
-    }
-
-    /** The game's icons on the water (the Barracuda Trials' starts), which are sailed to. */
-    static int[] seaSpots(List<MapData.Icon> icons)
-    {
-        return tiles(icons, "Barracuda Trial");
+        shipwrights = tiles(icons, "Shipwright");
+        // The game's icons on the water (the Barracuda Trials' starts), which are sailed to.
+        seaSpots = tiles(icons, "Barracuda Trial");
     }
 
     /** Where the game's icons of a key on its map stand, on the ground floor. */
@@ -810,7 +798,7 @@ public final class RouteFeature
         float[] jump = {9f, 6f};
         // Beside our route (both planners on): white and dashed, to tell the two apart.
         boolean beside = !shortestPathPlanner();
-        Color walked = beside ? Color.WHITE : SP_WALK;
+        Color walked = beside ? Color.WHITE : PlayerMarker.YELLOW;
         // Its teleports and transports as it told them, and the walks between them as found here on foot.
         for (var walk : spWalks)
         {
@@ -938,7 +926,7 @@ public final class RouteFeature
             screen.card.setRouter(this::routeTo);
             screen.setStopAdder(this::addStop);
             screen.npcs.setFastest(this::lookAtFastest);
-            screen.setTours(tourActions);
+            screen.setTours(this);
         }
         overlays.forEach(overlayManager::add);
         eventBus.register(this);
@@ -972,7 +960,7 @@ public final class RouteFeature
             try
             {
                 var map = CollisionMap.load();
-                var sea = SeaMap.build(map);
+                var sea = SeaMap.load();
                 Pathfinder pathfinder = new Pathfinder(map, sea);
                 var loadedPorts = Ports.load();
                 invokeLater(() -> {
@@ -992,9 +980,19 @@ public final class RouteFeature
                         screen.view.ground = p -> map.walkable(p.getX(), p.getY(), p.getPlane());
                     }
                     walker = pathfinder;
+                    // A new map version's tables: the route on the way is planned again with them, not dropped.
+                    var before = controller;
+                    if (before != null)
+                    {
+                        before.cancelRunning();
+                    }
                     controller = new RouteController(searches, SwingUtilities::invokeLater, pathfinder,
                         target -> withBank(request(start, target, false), start, target),
                         c -> changed(), System::currentTimeMillis);
+                    if (before != null && before.target() >= 0)
+                    {
+                        controller.setTarget(before.target());
+                    }
                 });
             }
             catch (Exception e)
@@ -1016,13 +1014,6 @@ public final class RouteFeature
 
     /** Counts starts and stops, so a load finishing after a stop is dropped. */
     final AtomicInteger loads = new AtomicInteger();
-
-    /** Where the house's picture is kept per account, and the thread that reads and writes it. */
-    void setHouseFiles(Filepath folder, Executor io)
-    {
-        yourHouse.houseFolder = folder;
-        yourHouse.houseIo = io;
-    }
 
     void stop()
     {
@@ -1502,7 +1493,7 @@ public final class RouteFeature
             pandemonium, boats.keySet().stream().mapToInt(Integer::intValue).toArray(), true,
             house.inside(), house.inside() ? house.exit() : house.portal(), house.own(), house.features(),
             client.getVarbitValue(POH_TELE_TOGGLE) == 0)
-            .withReturn(returns.exit()).withBoatFocus(boats.values().stream().mapToInt(Integer::intValue).toArray());
+            .withReturnExit(returns.exit()).withBoatFocus(boats.values().stream().mapToInt(Integer::intValue).toArray());
     }
 
     @Subscribe
@@ -1785,7 +1776,7 @@ public final class RouteFeature
         }
     }
 
-    void toast(String text)
+    public void toast(String text)
     {
         forScreens(screen -> screen.view.showToast(text));
     }
@@ -1832,8 +1823,8 @@ public final class RouteFeature
                     config.routeSaveTransport(), config.routeSaveCanoe(), config.routeSaveCarpet(), config.routeSaveShip()),
             anything, wilderness != null ? wilderness : config.routeAvoidWilderness(), config.routeSailToLand());
         nameItems(view.pois());
-        from.itemNames(itemNames);
-        from.plantedSpiritTrees(planted.grown());
+        from.itemNames = itemNames;
+        from.plantedTrees = planted.grown();
         return from.request(begin, target, view.pois(), view.unlocks(), player, options, RouteRequest.DEFAULT_NODE_LIMIT);
     }
 
@@ -1875,7 +1866,7 @@ public final class RouteFeature
     volatile Map<Integer, Long> pouchRunes = Map.of();
     /** The same by the game's own item names, read where the pouch is (not through the item name cache). */
     volatile Map<String, Long> pouchNamed = Map.of();
-    /** The item ids any teleport or transport of the places needs; null before the places are known. */
+    /** The item ids any teleport, transport, gate or own way needs; null before the places are known. */
     volatile Set<Integer> routeItemIds;
 
     /** This account's bank as kept, on its login. */
@@ -1918,14 +1909,9 @@ public final class RouteFeature
     /** The place list whose items were named last. */
     volatile List<Poi> named;
 
-    void itemNames(ItemNames names)
-    {
-        itemNames = names;
-    }
-
     /**
-     * Asks the game once per place list for the names of the items its teleports and transports need; they are also
-     * what is kept of the bank.
+     * Asks the game once per place list for the names of the items its teleports and transports need, and the gates',
+     * shortcuts' and own ways'; they are also what is kept of the bank.
      */
     void nameItems(List<Poi> pois)
     {
@@ -1942,7 +1928,9 @@ public final class RouteFeature
             {
                 ids.addAll(Requirements.itemIds(member.needs.items));
             }
+            poi.links().forEach(link -> ids.addAll(Requirements.itemIds(link.needs.items)));
         }
+        RouteSource.fixedNeeds().forEach(needs -> ids.addAll(Requirements.itemIds(needs.items)));
         routeItemIds = Collections.unmodifiableSet(ids);
         names.resolve(ids, () -> { });
     }
@@ -2159,7 +2147,7 @@ public final class RouteFeature
     volatile Running tour;
 
     /** The running custom route's name, or null. */
-    String runningTour()
+    public String runningTour()
     {
         Running r = tour;
         return r == null ? null : r.tour.name;
@@ -2195,7 +2183,7 @@ public final class RouteFeature
         refreshTours();
     }
 
-    List<Tour> tours()
+    public List<Tour> tours()
     {
         return Tour.decode(get(TOURS_KEY));
     }
@@ -2207,7 +2195,7 @@ public final class RouteFeature
     }
 
     /** The route stops are added to: the last one edited, else the first, else a new "My route". */
-    String editingName()
+    public String editingName()
     {
         String editing = get(EDITING_KEY);
         var tours = tours();
@@ -2253,54 +2241,16 @@ public final class RouteFeature
         return "A spot on the map";
     }
 
-    final TourPanel.Actions tourActions = new TourPanel.Actions()
+    public void save(List<Tour> tours, String editing)
     {
-        public List<Tour> tours()
-        {
-            return RouteFeature.this.tours();
-        }
+        saveTours(tours, editing);
+        refreshTours();
+    }
 
-        public String editing()
-        {
-            return editingName();
-        }
-
-        public void save(List<Tour> tours, String editing)
-        {
-            saveTours(tours, editing);
-            refreshTours();
-        }
-
-        public void run(Tour tour)
-        {
-            runTour(tour);
-        }
-
-        public void fastestOrder(Tour tour, boolean everything, Runnable done)
-        {
-            RouteFeature.this.fastestOrder(tour, everything, done);
-        }
-
-        public void say(String text)
-        {
-            toast(text);
-        }
-
-        public void cancelOrder()
-        {
-            orders.incrementAndGet();
-        }
-
-        public String running()
-        {
-            return runningTour();
-        }
-
-        public void stop()
-        {
-            clearRoute();
-        }
-    };
+    public void cancelOrder()
+    {
+        orders.incrementAndGet();
+    }
 
     void refreshTours()
     {
@@ -2308,7 +2258,7 @@ public final class RouteFeature
         sidebarTours.run();
     }
 
-    void runTour(Tour chosen)
+    public void runTour(Tour chosen)
     {
         if (chosen.stops.isEmpty())
         {
@@ -2378,7 +2328,7 @@ public final class RouteFeature
     TourPanel.Actions sidebarTours(Runnable refresh)
     {
         sidebarTours = refresh;
-        return tourActions;
+        return this;
     }
 
     /** Also shows the steps in the sidebar; a step clicked there goes to {@code focus}. */
@@ -2421,7 +2371,7 @@ public final class RouteFeature
     }
 
     /** Stops a custom route and clears the route, also Shortest Path's. */
-    void clearRoute()
+    public void clearRoute()
     {
         var c = controller;
         stopTour();
@@ -2558,7 +2508,7 @@ public final class RouteFeature
      * Orders the stops fastest from the player, by routes between every two (in the background), and saves it unless
      * the stops changed meanwhile. {@code done} always runs on Swing.
      */
-    void fastestOrder(Tour chosen, boolean everything, Runnable done)
+    public void fastestOrder(Tour chosen, boolean everything, Runnable done)
     {
         var work = background;
         Pathfinder pf = walker;
@@ -2877,12 +2827,6 @@ public final class RouteFeature
         final List<String[]> bring;
         /** "About 2 minutes sooner". */
         final String sooner;
-
-        String text()
-        {
-            return "Tip: bring " + bring.stream().map(b -> b[0] + " (" + b[1] + ")").collect(Collectors.joining("; "))
-                + ": " + sooner.substring(0, 1).toLowerCase(ROOT) + sooner.substring(1);
-        }
 
         /** Item ids the game had not named yet ("Item 995"). */
         List<Integer> unnamed()
@@ -3800,34 +3744,31 @@ public final class RouteFeature
             return "About " + (seconds < 90 ? seconds + " seconds" : round(seconds / 60.0) + " minutes");
         }
 
-        /**
-         * The jewellery box's menu in its order, which gives each place its key: 1 to 9, then A to R. Our name for the
-         * place, then the box's where it differs; kept as our name to the box's key and name ("burthorpe games room" to
-         * "5 Burthorpe").
-         */
-        static final Map<String, String> BOX = box("Emir's Arena", "Castle Wars",
-            "Ferox Enclave", "Fortis Colosseum", "Burthorpe Games Room|Burthorpe", "Barbarian Assault|Barbarian Outpost",
-            "Corporeal Beast", "Tears of Guthix", "Wintertodt Camp", "Warriors' Guild", "Champions' Guild",
-            "Edgeville Monastery|Monastery", "Ranging Guild", "Fishing Guild", "Mining Guild", "Crafting Guild",
-            "Cooking Guild", "Woodcutting Guild", "Farming Guild", "Miscellania", "Grand Exchange",
-            "Falador Park", "Dondakan|Dondakan's Rock", "Edgeville", "Karamja", "Draynor Village", "Al-Kharid|Al Kharid");
         /** How a house step from outside joins the way in to what is used inside. */
         static final String INTO = " → ";
         /** The same in the game, whose font has no "→". */
         static final String THEN = " -> ";
         static final Pattern LEVEL = Pattern.compile("\\(level (\\d+)\\)");
 
-        static Map<String, String> box(String... places)
+        /**
+         * The jewellery box's menu in its order (list "jewellery box"), which gives each place its key: 1 to 9, then A to
+         * R. Our name for the place, then the box's where it differs; kept as our name to the box's key and name
+         * ("burthorpe games room" to "5 Burthorpe").
+         */
+        static Map<String, String> box(List<String> places)
         {
             var keyed = new HashMap<String, String>();
-            for (int i = 0; i < places.length; i++)
+            String keys = "123456789ABCDEFGHIJKLMNOPQR";
+            for (int i = 0; i < min(places.size(), keys.length()); i++)
             {
-                var names = places[i].split("\\|");
-                keyed.put(names[0].toLowerCase(ROOT), "123456789ABCDEFGHIJKLMNOPQR".charAt(i) + " "
-                    + names[names.length - 1]);
+                var names = places.get(i).split("\\|");
+                keyed.put(names[0].toLowerCase(ROOT), keys.charAt(i) + " " + names[names.length - 1]);
             }
             return keyed;
         }
+
+        static final RouteFiles.Table<Map<String, String>> BOX = new RouteFiles.Table<>(() -> box(Pathfinder.list(
+            "jewellery box")));
 
         /**
          * What a house step uses in the house, as the game says it: "Jewellery box 5 Burthorpe" (with the key the box's
@@ -3847,7 +3788,7 @@ public final class RouteFeature
             String place = what.substring(what.lastIndexOf(": ") + 2);
             if (what.startsWith("Jewellery box: ") || what.startsWith("Mounted glory: "))
             {
-                String keyed = BOX.get(place.toLowerCase(ROOT));
+                String keyed = BOX.get().get(place.toLowerCase(ROOT));
                 return what.startsWith("Mounted") ? "Mounted glory " + (keyed == null ? place : keyed.substring(2))
                     : "Jewellery box " + (keyed == null ? place : keyed);
             }
@@ -3884,19 +3825,24 @@ public final class RouteFeature
 
         /** Characters above which a text in the game is {@link #shortened}. */
         static final int LONG = 50;
-        static final Pattern INTO_HOUSE = Pattern.compile("^(Teleport to House|Teleport to house tablet"
-            + "|Construction cape: Tele to POH|Max cape: Home)( \\(Inside\\))?(" + INTO + "|" + THEN + ")");
         static final Pattern BOX_PLACE = Pattern.compile("Jewellery box (\\S) .*?(?=" + INTO + "|" + THEN + "|$)");
+
+        /** Each way into the house as a text starts with it, and its short name ("TP house"). */
+        static final RouteFiles.Table<List<Map.Entry<Pattern, String>>> HOUSE_WAYS = new RouteFiles.Table<>(() ->
+            RouteSource.own("house").stream().map(way -> Map.entry(Pattern.compile("^" + Pattern.quote(way[1])
+            + "( \\(Inside\\))?(" + INTO + "|" + THEN + ")"), way[6])).collect(Collectors.toList()));
 
         /** A long text cut short: "TP house, Jwlry box O → Bank: Dramen staff". */
         static String shortened(String text)
         {
-            var into = INTO_HOUSE.matcher(text);
-            if (into.find())
+            for (var way : HOUSE_WAYS.get())
             {
-                String way = into.group(1);
-                text = (way.startsWith("Construction") ? "Con cape" : way.startsWith("Max") ? "Max cape"
-                    : way.endsWith("tablet") ? "House tab" : "TP house") + ", " + text.substring(into.end());
+                var into = way.getKey().matcher(text);
+                if (into.find())
+                {
+                    text = way.getValue() + ", " + text.substring(into.end());
+                    break;
+                }
             }
             return BOX_PLACE.matcher(text).replaceFirst("Jwlry box $1");
         }

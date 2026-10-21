@@ -13,18 +13,8 @@ import lombok.experimental.*;
 public final class HouseTracker
 {
     /** By varbit 2187 (POH_HOUSE_LOCATION). */
-    static final int[][] PORTALS = {
-        null,
-        {2953, 3224}, // Rimmington
-        {2893, 3465}, // Taverley
-        {3340, 3003}, // Pollnivneach
-        {2670, 3631}, // Rellekka
-        {2757, 3178}, // Brimhaven
-        {2544, 3096}, // Yanille
-        {3239, 6076}, // Prifddinas
-        {1743, 3517}, // Hosidius
-        {1422, 2963}, // Aldarin
-    };
+    static final RouteFiles.Table<int[][]> PORTALS = new RouteFiles.Table<>(() -> Pathfinder.list("house portals",
+        p -> Arrays.copyOf(Pathfinder.ints(p), 2)).toArray(int[][]::new));
     static final int PORTAL_RADIUS = 12;
     /** How long a choice at a house portal is kept: the walk to the portal, not a later visit. */
     static final int CHOICE_TICKS = 30;
@@ -54,15 +44,17 @@ public final class HouseTracker
 
     public static int portal(int location)
     {
-        return location > 0 && location < PORTALS.length ? Tiles.pack(PORTALS[location][0], PORTALS[location][1], 0) : -1;
+        var portals = PORTALS.get();
+        return location > 0 && location < portals.length ? Tiles.pack(portals[location][0], portals[location][1], 0) : -1;
     }
 
     static int portalNear(int node)
     {
-        for (int i = 1; i < PORTALS.length; i++)
+        var portals = PORTALS.get();
+        for (int i = 1; i < portals.length; i++)
         {
-            if (Tiles.z(node) == 0 && Math.abs(Tiles.x(node) - PORTALS[i][0]) <= PORTAL_RADIUS
-                && Math.abs(Tiles.y(node) - PORTALS[i][1]) <= PORTAL_RADIUS)
+            if (Tiles.z(node) == 0 && Math.abs(Tiles.x(node) - portals[i][0]) <= PORTAL_RADIUS
+                && Math.abs(Tiles.y(node) - portals[i][1]) <= PORTAL_RADIUS)
             {
                 return i;
             }
@@ -194,11 +186,12 @@ public final class HouseTracker
     public void restore(Set<String> saved)
     {
         features.clear();
+        var known = Pathfinder.list("house features");
         for (String f : saved)
         {
-            if (f.startsWith("portal:") || f.startsWith("nexus:") || f.startsWith("box:")
-                || Set.of("fairy ring", "spirit tree", "spirit tree+fairy ring", "glory", "xeric", "digsite", "obelisk")
-                .contains(f))
+            // Without the map version's list (not come yet, or an older version) all are kept, as they are saved back.
+            if (f.startsWith("portal:") || f.startsWith("nexus:") || f.startsWith("box:") || known.isEmpty()
+                || known.contains(f))
             {
                 features.add(f);
             }

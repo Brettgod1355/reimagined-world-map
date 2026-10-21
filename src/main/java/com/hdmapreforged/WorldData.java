@@ -8,7 +8,7 @@ import lombok.*;
 import net.runelite.api.coords.*;
 
 /**
- * What the search finds, as our map server works it out once for every player each week (its search.json, see
+ * What the search finds, as our map server works it out once for every player at each wiki sync (its search.json, see
  * {@code MapServer}): each NPC name's places with how many stand there or the way in, the kind most seen and what
  * they drop; each item's shops, spots on the ground and droppers; the shops' wares; the names to suggest; and which
  * map draws each place where maps overlap, for the map version it names. Immutable.

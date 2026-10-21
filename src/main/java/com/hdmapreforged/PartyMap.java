@@ -189,7 +189,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
 
     volatile long hoveredMember = -1;
 
-    boolean clickedMember(MapView view, FriendsWidget widget, Point at, MapView.Projection projection)
+    boolean clickedMember(MapView view, FriendsWidget widget, Point at, Projection projection)
     {
         long best = memberAt(at, projection);
         if (best < 0)
@@ -202,7 +202,7 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         return true;
     }
 
-    long memberAt(Point at, MapView.Projection projection)
+    long memberAt(Point at, Projection projection)
     {
         long best = -1;
         double bestDistance = 14;

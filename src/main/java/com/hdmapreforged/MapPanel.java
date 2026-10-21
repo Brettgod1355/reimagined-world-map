@@ -183,7 +183,7 @@ final class MapPanel extends PluginPanel
             return;
         }
         List<Tour> saved = tours == null ? Collections.emptyList() : tours.tours();
-        String running = tours == null ? null : tours.running();
+        String running = tours == null ? null : tours.runningTour();
         if (saved.isEmpty())
         {
             toursHolder.add(text("None yet. Right-click the map, Add to custom route."));

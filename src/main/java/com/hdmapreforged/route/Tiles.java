@@ -1,6 +1,5 @@
 package com.hdmapreforged.route;
 
-import java.io.*;
 import java.util.*;
 
 /** Route graph nodes as ints: a game tile, or with {@link #SEA} set a 4×4 block of sea tiles on the ground floor. */
@@ -9,29 +8,12 @@ public final class Tiles
     public static final int SEA = 1 << 30;
     public static final int CELL = 4;
 
-    /** The Wilderness's safe zones and the ground south of its edge, read from wilderness.tsv when first asked. */
-    static final class Zones
-    {
-        static final int[][] SAFE;
-        static final int[][] OUTSIDE;
-
-        static
-        {
-            var safe = new ArrayList<int[]>();
-            var outside = new ArrayList<int[]>();
-            try
-            {
-                Pathfinder.rows(Tiles.class.getResourceAsStream("wilderness.tsv"), 0,
-                    c -> ("safe".equals(c[0]) ? safe : outside).add(Pathfinder.ints(c[1])));
-            }
-            catch (IOException | RuntimeException e)
-            {
-                // What was read.
-            }
-            SAFE = safe.toArray(new int[0][]);
-            OUTSIDE = outside.toArray(new int[0][]);
-        }
-    }
+    /**
+     * The Wilderness's safe zones and the ground south of its edge (the map version's wilderness.tsv); a row of fewer
+     * than four numbers holds no tile.
+     */
+    static final RouteFiles.Table<List<int[]>> ZONES = new RouteFiles.Table<>(() -> Pathfinder.table(RouteFiles.DIR
+        + "wilderness.tsv", c -> Arrays.copyOf(Pathfinder.ints(c[1]), 4)));
 
     public static int pack(int x, int y, int z)
     {
@@ -108,7 +90,7 @@ public final class Tiles
 
     /**
      * In the Wilderness: above ground x 2944-3391, y 3520-3967, and its dungeons 6400 tiles north of that; not its safe
-     * zones, nor the ground south of its edge ({@link Zones}).
+     * zones, nor the ground south of its edge ({@link #ZONES}).
      */
     public static boolean wilderness(int node)
     {
@@ -119,10 +101,10 @@ public final class Tiles
         int x = x(node);
         int y = y(node);
         return x >= 2944 && x <= 3391 && (y >= 3520 && y <= 3967 || y >= 9920 && y <= 10367)
-            && !within(Zones.SAFE, x, y) && !within(Zones.OUTSIDE, x, y);
+            && !within(ZONES.get(), x, y);
     }
 
-    static boolean within(int[][] zones, int x, int y)
+    static boolean within(List<int[]> zones, int x, int y)
     {
         for (var zone : zones)
         {

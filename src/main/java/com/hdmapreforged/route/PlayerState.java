@@ -19,6 +19,7 @@ public final class PlayerState
     public final boolean sailing;
     public final int[] boats;
     /** Per boat of {@link #boats}: its teleport focus, 0 none, 1 (Summon Boat), 2 greater (also Teleport to Boat). */
+    @With
     public final int[] boatFocus;
     public final boolean running;
     @With
@@ -66,18 +67,5 @@ public final class PlayerState
     public PlayerState inOwnHouse(boolean inside)
     {
         return withInHouse(inside).withOwnHouse(inside);
-    }
-
-    /** The same, in an area whose way out leads back to {@code exit} (or -1: none known). */
-    public PlayerState withReturn(int exit)
-    {
-        return withReturnExit(exit);
-    }
-
-    /** The same, with each boat's teleport focus (see {@link #boatFocus}). */
-    public PlayerState withBoatFocus(int[] focus)
-    {
-        return new PlayerState(items, sailingLevel, sailing, boats, Arrays.copyOf(focus, boats.length), running, inHouse,
-            houseExit, ownHouse, houseFeatures, landsInside, returnExit, carried);
     }
 }

@@ -5,7 +5,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.*;
 import java.util.regex.*;
-import java.util.stream.*;
 import lombok.*;
 import lombok.extern.slf4j.*;
 import net.runelite.client.util.*;

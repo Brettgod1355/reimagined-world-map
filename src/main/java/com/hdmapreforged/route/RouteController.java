@@ -105,7 +105,7 @@ public final class RouteController
         changed.accept(this);
     }
 
-    void cancelRunning()
+    public void cancelRunning()
     {
         if (running != null)
         {

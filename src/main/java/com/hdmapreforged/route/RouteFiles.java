@@ -97,21 +97,37 @@ public final class RouteFiles
         return in;
     }
 
-    /** What is read from a table, read again once another route.zip is used. */
+    /**
+     * What is read from a table, read again once another route.zip is used; without a lock once read (the planner asks
+     * in its inner loop).
+     */
     @RequiredArgsConstructor
     public static final class Table<T>
     {
         final Supplier<T> read;
-        int readAt = -1;
-        T value;
+        volatile int readAt = -1;
+        volatile T value;
 
-        public synchronized T get()
+        public T get()
         {
             int now = generation;
             if (readAt != now)
             {
-                value = read.get();
-                readAt = now;
+                synchronized (this)
+                {
+                    if (readAt != now)
+                    {
+                        try
+                        {
+                            value = read.get();
+                        }
+                        finally
+                        {
+                            // Once per route.zip, also when the read fails: then what was read before stays.
+                            readAt = now;
+                        }
+                    }
+                }
             }
             return value;
         }

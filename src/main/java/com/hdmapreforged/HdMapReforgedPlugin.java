@@ -21,6 +21,8 @@ import net.runelite.api.*;
 import net.runelite.api.coords.*;
 import net.runelite.api.events.*;
 import net.runelite.api.gameval.*;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetModalMode;
 import net.runelite.client.callback.*;
 import net.runelite.client.config.*;
 import net.runelite.client.eventbus.*;
@@ -98,11 +100,15 @@ public class HdMapReforgedPlugin extends Plugin
     volatile String worldVersion;
     /** A data version whose search.json could not be used, said once in the log. */
     volatile String worldRefused;
-    /** When the server was last asked for a newer version of it. */
-    volatile long worldAsked;
-    /** Asked again at most this often, and only when the search, a card or a route uses it. */
-    static final long WORLD_ASK_MS = 60 * 60_000L;
-    volatile long worldAskMs = WORLD_ASK_MS;
+    /** When the server was last asked for its versions (map and data, one small file). */
+    volatile long versionsAsked;
+    /** Asked again at most this often while the search, a card or a route uses the world facts. */
+    static final long VERSIONS_ASK_MS = 60 * 60_000L;
+    volatile long versionsAskMs = VERSIONS_ASK_MS;
+    /** And at a login, unless asked this shortly before (the start asks too). */
+    static final long LOGIN_ASK_MS = 5 * 60_000L;
+    /** Since the login screen: the next LOGGED_IN is a login, not the end of a loading screen or a world hop. */
+    volatile boolean loggedOut = true;
     MapServer server;
     MapScreen screen;
     MapScreen fullScreen;
@@ -113,7 +119,7 @@ public class HdMapReforgedPlugin extends Plugin
     {
         public void keyPressed(KeyEvent e)
         {
-            // A key that types goes to the chat or input box taking text, not to the map.
+            // A key that types goes to the chat, an input box or an interface taking keys, not to the map.
             if (!config.openMapKey().matches(e) || !typingInGame(e))
             {
                 super.keyPressed(e);
@@ -147,6 +153,8 @@ public class HdMapReforgedPlugin extends Plugin
     boolean atHome;
     /** Null until a version's maps and places are shown. */
     volatile String currentVersion;
+    /** The route.zip in use, put back when a newer version turns out unusable. Data thread. */
+    byte[] routeInUse;
     /** What the requirements of the data shown read; null before it loads. */
     volatile Unlocks.Watched watched;
     /** Each skill's real level as last seen, so only a level gained marks unlocks for a new look. Client thread. */
@@ -179,6 +187,8 @@ public class HdMapReforgedPlugin extends Plugin
         int started = life.incrementAndGet();
         currentVersion = null;
         failedMaps = 0;
+        // Turned on at the login screen, the next login asks; turned on in the game, the next loading screen does not.
+        loggedOut = client.getGameState() != GameState.LOGGED_IN;
         io = Executors.newFixedThreadPool(4, runnable -> daemon(runnable, "Reimagined World Map tiles"));
         dataIo = Executors.newSingleThreadExecutor(runnable -> daemon(runnable, "Reimagined World Map data"));
         home = getPluginDirectory();
@@ -206,8 +216,10 @@ public class HdMapReforgedPlugin extends Plugin
             .build();
         clientToolbar.addNavigation(button);
         party.start(screen.view, fullScreen.view);
-        route.setHouseFiles(home.joinSegment("house"), io);
-        route.itemNames(itemNames);
+        // Where the house's picture is kept per account, and the thread that reads and writes it.
+        route.yourHouse.houseFolder = home.joinSegment("house");
+        route.yourHouse.houseIo = io;
+        route.itemNames = itemNames;
         route.start(screen, fullScreen);
         route.setSidebar(panel::showRoute, this::showOnMap);
         panel.setTours(route.sidebarTours(panel::refreshTours));
@@ -226,11 +238,11 @@ public class HdMapReforgedPlugin extends Plugin
             on.setNpcPictures(pictures);
         }
 
-        worldAsked = System.currentTimeMillis();
+        versionsAsked = System.currentTimeMillis();
         // In developer mode, against a map server on this computer, every 30 seconds.
-        worldAskMs = developerMode ? 30_000L : WORLD_ASK_MS;
+        versionsAskMs = developerMode ? 30_000L : VERSIONS_ASK_MS;
         // The screens start empty until a map version's files are had and read on the data thread.
-        runData(() -> resolveVersions(false, true));
+        runData(() -> resolveVersions(false));
         whenGameLoaded(started, () -> GameIconSprites.load(client), PoiIcons::clearCache);
     }
 
@@ -459,6 +471,25 @@ public class HdMapReforgedPlugin extends Plugin
      * client thread each client tick; the key thread only reads it.
      */
     volatile boolean gameTakesText;
+    /**
+     * Whether an open interface takes keys itself (the jewellery box's letters, a menu's numbers): looked at again on
+     * the two client ticks after one opens or closes, as its scripts set its key handler when it loads; until then the
+     * game gets typed keys, so a key pressed at once never opens the map past the interface.
+     */
+    volatile boolean interfaceTakesKeys;
+    volatile int interfacesChanged = 2;
+
+    @Subscribe
+    public void onWidgetLoaded(WidgetLoaded event)
+    {
+        interfacesChanged = 2;
+    }
+
+    @Subscribe
+    public void onWidgetClosed(WidgetClosed event)
+    {
+        interfacesChanged = 2;
+    }
 
     @Subscribe
     public void onClientTick(ClientTick tick)
@@ -466,6 +497,11 @@ public class HdMapReforgedPlugin extends Plugin
         boolean text = false;
         if (client.getGameState() == GameState.LOGGED_IN)
         {
+            if (interfacesChanged > 0)
+            {
+                interfacesChanged--;
+                interfaceTakesKeys = modalTakesKeys();
+            }
             var chat = client.getWidget(InterfaceID.Chatbox.UNIVERSE);
             var input = client.getWidget(InterfaceID.Chatbox.INPUT);
             text = client.getFocusedInputFieldWidget() != null || client.getVarcIntValue(VarClientID.MESLAYERMODE) != 0
@@ -477,6 +513,27 @@ public class HdMapReforgedPlugin extends Plugin
         gameTakesText = text;
     }
 
+    /** Whether a modal interface open now (not the chat, the side panels or the game view) has a key handler. */
+    boolean modalTakesKeys()
+    {
+        for (WidgetNode node : client.getComponentTable())
+        {
+            if (node.getModalMode() == WidgetModalMode.NON_MODAL)
+            {
+                continue;
+            }
+            Widget w;
+            for (int child = 0; child < 2000 && (w = client.getWidget(node.getId(), child)) != null; child++)
+            {
+                if (w.getOnKeyListener() != null && !w.isHidden())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /** Not hidden by itself; a closed chat hides only its parents. */
     boolean shown(int component)
     {
@@ -484,11 +541,14 @@ public class HdMapReforgedPlugin extends Plugin
         return w != null && !w.isSelfHidden();
     }
 
-    /** Whether the game takes this key as text: it types a character (no Ctrl, Alt or Meta) while it takes text. */
+    /**
+     * Whether the game takes this key: it types a character (no Ctrl, Alt or Meta) while the game takes text or an open
+     * interface takes keys.
+     */
     boolean typingInGame(KeyEvent e)
     {
         return e.getKeyChar() != KeyEvent.CHAR_UNDEFINED && !e.isControlDown() && !e.isAltDown() && !e.isMetaDown()
-            && gameTakesText;
+            && (gameTakesText || interfaceTakesKeys || interfacesChanged > 0);
     }
 
     void toggleFullMap()
@@ -613,6 +673,12 @@ public class HdMapReforgedPlugin extends Plugin
         {
             unlocksDirty = true;
             lastQuestTick = ticks - QUEST_TICKS;
+            if (loggedOut)
+            {
+                // A game update's new map is taken at the next login.
+                loggedOut = false;
+                askVersions(LOGIN_ASK_MS);
+            }
         }
         if (game == GameState.LOGIN_SCREEN || game == GameState.HOPPING || game == GameState.CONNECTION_LOST)
         {
@@ -620,6 +686,7 @@ public class HdMapReforgedPlugin extends Plugin
         }
         if (game == GameState.LOGIN_SCREEN)
         {
+            loggedOut = true;
             lastPlayer = null;
             unlocks = null;
             showGrave(null);
@@ -646,6 +713,9 @@ public class HdMapReforgedPlugin extends Plugin
             case "checkMapNow":
                 // Every click: RuneLite's settings panel would not show the box unticking itself.
                 runData(this::checkForMap);
+                break;
+            case "downloadMapAgain":
+                tiles.downloadAgain();
                 break;
             case "followPlayer":
                 screens(s -> s.view.setFollowing(config.followPlayer()));
@@ -688,34 +758,21 @@ public class HdMapReforgedPlugin extends Plugin
     }
 
     /**
-     * The map server's current one (remembered); nothing is shown before a version's
-     * files are had. {@code now}: ask the server even when the update check is not due; {@code world}: also take its
-     * newer world facts, in the same request. Data thread.
+     * The map server's current map version and the world facts' data version, from one small answer; at the start the
+     * remembered map version shows meanwhile (nothing is shown before a version's files are had). {@code now}: while
+     * running, so the remembered one is not taken again (it may be the broken one). Data thread.
      */
-    void resolveVersions(boolean now, boolean world)
+    void resolveVersions(boolean now)
     {
         var known = KnownVersion.read(home.joinSegment(KnownVersion.FILE));
-        // Asked now: the remembered version may be the broken one.
         if (known != null && !now)
         {
-            useVersion(known.version);
-        }
-        // Against a map server of one's own (developer mode, -Dhdmap.server): a data fix published there shows at the
-        // next start, not a week later.
-        boolean askMap = now || known == null || developerMode && System.getProperty("hdmap.server") != null
-            || known.due(System.currentTimeMillis());
-        if (!askMap && !world)
-        {
-            return;
+            useVersion(known);
         }
         int started = life.get();
-        boolean mapAsked = askMap;
         server.versions(versions -> runData(() -> {
-            if (world)
-            {
-                loadWorld(started, versions.data);
-            }
-            if (!mapAsked || started != life.get())
+            loadWorld(started, versions.data);
+            if (started != life.get())
             {
                 return;
             }
@@ -724,7 +781,7 @@ public class HdMapReforgedPlugin extends Plugin
                 if (wantedVersion == null)
                 {
                     // The first start, and no answer: nothing to show until the server answers.
-                    retryLater(started, () -> resolveVersions(false, world));
+                    retryLater(started, RETRY_MS, () -> resolveVersions(false));
                 }
                 else if (failedMaps > 0)
                 {
@@ -737,25 +794,33 @@ public class HdMapReforgedPlugin extends Plugin
                 }
                 return;
             }
-            KnownVersion.write(home.joinSegment(KnownVersion.FILE), versions.map, System.currentTimeMillis());
+            if (!versions.map.equals(wantedVersion))
+            {
+                KnownVersion.write(home.joinSegment(KnownVersion.FILE), versions.map);
+            }
             useVersion(versions.map);
         }));
     }
 
     /**
-     * The world facts, for what shows them (the search, a card, a route): asks the server for a newer version when
-     * {@link #WORLD_ASK_MS} have passed since it last did, so nothing is fetched while nothing uses them.
+     * The world facts, for what shows them (the search, a card, a route): asks the server for newer versions when
+     * {@link #versionsAskMs} have passed since it last did, so nothing is fetched while nothing uses them.
      */
     WorldData worldInUse()
     {
-        long now = System.currentTimeMillis();
-        if (now - worldAsked >= worldAskMs)
-        {
-            worldAsked = now;
-            int started = life.get();
-            server.versions(versions -> loadWorld(started, versions.data));
-        }
+        askVersions(versionsAskMs);
         return world;
+    }
+
+    /** Asks the server for its versions unless it did within {@code gapMs}; a newer map or data version is taken. */
+    void askVersions(long gapMs)
+    {
+        long now = System.currentTimeMillis();
+        if (now - versionsAsked >= gapMs)
+        {
+            versionsAsked = now;
+            runData(() -> resolveVersions(true));
+        }
     }
 
     /**
@@ -791,7 +856,7 @@ public class HdMapReforgedPlugin extends Plugin
                 }
                 if (bytes == null)
                 {
-                    worldAsked = System.currentTimeMillis() - worldAskMs + RETRY_MS;
+                    versionsAsked = System.currentTimeMillis() - versionsAskMs + RETRY_MS;
                 }
                 else
                 {
@@ -832,6 +897,10 @@ public class HdMapReforgedPlugin extends Plugin
             var places = files.get(2).join();
             var routeData = files.get(3).join();
             var maps = list == null ? null : BaseMaps.parse(gson, MapServer.text(list));
+            // Before the places: their icons are drawn where the version's world map moves put them; and before the
+            // switch: its gates and shortcuts are among the needs it watches.
+            var routeBefore = routeInUse;
+            useRoute(routeData, version);
             MapData data = null;
             if (maps != null && maps.byId(BaseMap.SURFACE) != null && regions != null && places != null)
             {
@@ -858,20 +927,9 @@ public class HdMapReforgedPlugin extends Plugin
                 {
                     screens(s -> s.view.setMapUnavailable(true));
                 }
+                useRoute(routeBefore, currentVersion);
                 retryMap(started, version);
                 return;
-            }
-            if (routeData != null)
-            {
-                try
-                {
-                    // Before the switch: the version's gates and shortcuts are among the needs it watches.
-                    RouteFiles.use(routeData);
-                }
-                catch (IOException | RuntimeException e)
-                {
-                    log.debug("Unusable route data of map version {}", version, e);
-                }
             }
             switchVersion(version, maps, data, started);
             route.loadPlanner();
@@ -888,7 +946,28 @@ public class HdMapReforgedPlugin extends Plugin
         {
             failedMaps = 1;
         }
-        resolveVersions(true, false);
+        resolveVersions(true);
+    }
+
+    /**
+     * Uses a map version's route.zip (the planner's tables, the world map moves); none or an unusable one changes
+     * nothing. Data thread.
+     */
+    void useRoute(byte[] zip, String version)
+    {
+        if (zip == null)
+        {
+            return;
+        }
+        try
+        {
+            RouteFiles.use(zip);
+            routeInUse = zip;
+        }
+        catch (IOException | RuntimeException e)
+        {
+            log.debug("Unusable route data of map version {}", version, e);
+        }
     }
 
     /**
@@ -902,17 +981,12 @@ public class HdMapReforgedPlugin extends Plugin
         retryLater(started, gap, () -> {
             if (version.equals(wantedVersion))
             {
-                resolveVersions(true, false);
+                resolveVersions(true);
             }
         });
     }
 
-    /** Runs {@code task} on the data thread after {@link #RETRY_MS} unless the plugin stopped meanwhile. */
-    void retryLater(int started, Runnable task)
-    {
-        retryLater(started, RETRY_MS, task);
-    }
-
+    /** Runs {@code task} on the data thread after {@code delayMs} unless the plugin stopped meanwhile. */
     void retryLater(int started, long delayMs, Runnable task)
     {
         Timer timer = new Timer((int) delayMs, e -> runData(() -> {
@@ -938,7 +1012,7 @@ public class HdMapReforgedPlugin extends Plugin
         {
             // The tiles of the version in use carry over, but for those the server says changed.
             // On the data thread: the upgrade may remove many files, too long for OkHttp's shared callback threads.
-            server.changes(version, changes -> runData(() -> {
+            server.changes(version, current, changes -> runData(() -> {
                 if (changes != null && changes.from.equals(current))
                 {
                     tiles.upgrade(current, version, changes.changed, changes.removed);

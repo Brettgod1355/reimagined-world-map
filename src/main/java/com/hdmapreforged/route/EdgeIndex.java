@@ -13,18 +13,6 @@ final class EdgeIndex
     final IntMap slots;
     final int[][] lists;
 
-    /** By where they start (not {@link Edge#ANYWHERE}), each index plus {@code offset}. */
-    static EdgeIndex of(List<Edge> edges, int offset)
-    {
-        return of(edges, offset, false);
-    }
-
-    /** By where they end, each index plus {@code offset}: a flood back from a target. */
-    static EdgeIndex byDestination(List<Edge> edges, int offset)
-    {
-        return of(edges, offset, true);
-    }
-
     static EdgeIndex of(List<Edge> edges, int offset, boolean byDestination)
     {
         var slots = new IntMap(edges.size());

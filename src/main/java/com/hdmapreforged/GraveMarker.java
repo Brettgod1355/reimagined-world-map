@@ -45,7 +45,7 @@ final class GraveMarker implements MapView.Overlay, MapView.HitLayer
         return grave;
     }
 
-    public void paint(Graphics2D g, MapView.Projection p)
+    public void paint(Graphics2D g, Projection p)
     {
         Point center = center(p);
         if (center != null)
@@ -56,13 +56,13 @@ final class GraveMarker implements MapView.Overlay, MapView.HitLayer
         }
     }
 
-    public Poi hit(Point point, MapView.Projection p)
+    public Poi hit(Point point, Projection p)
     {
         Point center = center(p);
         return center != null && center.distance(point) <= view.iconSize(p.zoom()) * 0.6 ? grave : null;
     }
 
-    Point center(MapView.Projection p)
+    Point center(Projection p)
     {
         var shown = grave();
         if (shown == null || !shown.isOn(p.map()))

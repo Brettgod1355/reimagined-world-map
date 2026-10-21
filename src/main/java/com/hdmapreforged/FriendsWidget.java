@@ -290,7 +290,7 @@ final class FriendsWidget implements Widget
         }
         dot(g, row.color, x0 + 12, top + 11);
         g.setColor(Color.WHITE);
-        g.drawString(fit(row.name, title, panelW - 130), (float) (x0 + 26), (float) (top + 19));
+        text(g, fit(row.name, title, panelW - 130), x0 + 26, top + 19);
         if (row.world > 0)
         {
             String world = "W" + row.world;
@@ -300,7 +300,7 @@ final class FriendsWidget implements Widget
             boolean elsewhere = mine > 0 && row.world != mine;
             double right = x0 + panelW - (cramped ? 34 : 56);
             g.setColor(elsewhere ? OTHER_WORLD : WORLD);
-            g.drawString(world, (float) (right - rowMetrics.stringWidth(world)), (float) (top + 20));
+            text(g, world, right - rowMetrics.stringWidth(world), top + 20);
         }
         titleButton(g, clicks, title, x0 + panelW - 26, top, "×", () -> {
             selected = -1;
@@ -328,8 +328,7 @@ final class FriendsWidget implements Widget
             g.setColor(k == page ? new Color(70, 76, 88, 235) : clicks.hovered(tabShape) ? CONTROL_HOVER : new Color(40, 43, 50, 220));
             g.fill(tabShape);
             g.setColor(k == page ? Color.WHITE : new Color(180, 180, 186));
-            g.drawString(PAGES[k], (float) (tabShape.getCenterX() - metrics.stringWidth(PAGES[k]) / 2.0),
-                (float) (top + 44));
+            text(g, PAGES[k], tabShape.getCenterX() - metrics.stringWidth(PAGES[k]) / 2.0, top + 44);
             int chosen = k;
             clicks.add(tabShape, () -> {
                 page = chosen;
@@ -341,8 +340,8 @@ final class FriendsWidget implements Widget
         if (shared == null)
         {
             g.setColor(FRIEND);
-            g.drawString("Nothing shared yet.", (float) (x0 + 12), (float) (y0 + 16));
-            g.drawString("They share it with this plugin's setting.", (float) (x0 + 12), (float) (y0 + 32));
+            text(g, "Nothing shared yet.", x0 + 12, y0 + 16);
+            text(g, "They share it with this plugin's setting.", x0 + 12, y0 + 32);
             return;
         }
         double gridLeft = x0 + (panelW - (page == 2 ? 3 * SKILL_W : (page == 0 ? 4 : 3) * SLOT_W)) / 2.0;
@@ -381,7 +380,7 @@ final class FriendsWidget implements Widget
                     g.drawImage(icon, (int) sx + 2, (int) sy + 3, 16, 16, null);
                 }
                 g.setColor(levelColor(shared.boosted[k], shared.levels[k]));
-                g.drawString(level(shared.boosted[k], shared.levels[k]), (float) (sx + 22), (float) (sy + 16));
+                text(g, level(shared.boosted[k], shared.levels[k]), sx + 22, sy + 16);
             }
         }
         paintDrops(g, row.id, x0, top + 110, panelW);
@@ -396,8 +395,7 @@ final class FriendsWidget implements Widget
         var tab = new RoundRectangle2D.Double(LEFT, tabTop, tabWidth, CONTROL, 10, 10);
         box(g, tab, clicks.hovered(tab) ? CONTROL_HOVER : CONTROL_FILL, CONTROL_EDGE);
         g.setColor(Color.WHITE);
-        g.drawString(label, (float) (LEFT + (tabWidth - metrics.stringWidth(label)) / 2.0),
-            middle(tabTop + CONTROL / 2.0, metrics));
+        text(g, label, LEFT + (tabWidth - metrics.stringWidth(label)) / 2.0, middle(tabTop + CONTROL / 2.0, metrics));
         return tab;
     }
 
@@ -453,9 +451,9 @@ final class FriendsWidget implements Widget
                 g.drawImage(icon, (int) tx - 19, (int) ty - 13, 16, 16, null);
             }
             g.setColor(new Color(0, 0, 0, 180));
-            g.drawString(text, (float) tx + 1, (float) ty + 1);
+            text(g, text, tx + 1, ty + 1);
             g.setColor(Color.WHITE);
-            g.drawString(text, (float) tx, (float) ty);
+            text(g, text, tx, ty);
             g.setComposite(old);
         }
         dropsMoving = true;
@@ -490,9 +488,9 @@ final class FriendsWidget implements Widget
             g.setColor(CONTROL_HOVER);
             g.fill(button);
         }
-        g.setColor(new Color(200, 200, 205));
+        g.setColor(Floating.LIGHT);
         g.setFont(CONTROL_FONT);
-        g.drawString(mark, (float) (button.getCenterX() - title.stringWidth(mark) / 2.0), (float) (top + 20));
+        text(g, mark, button.getCenterX() - title.stringWidth(mark) / 2.0, top + 20);
         clicks.add(button, action, tip);
     }
 

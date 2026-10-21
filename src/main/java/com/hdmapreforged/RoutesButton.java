@@ -13,7 +13,6 @@ final class RoutesButton implements Widget
 {
     static final int LEFT = 12;
     static final Color OPEN = new Color(60, 66, 44, 235);
-    static final Color ROUTE = new Color(255, 214, 64);
 
     final Runnable toggle;
     final BooleanSupplier open;
@@ -29,13 +28,7 @@ final class RoutesButton implements Widget
         var metrics = g.getFontMetrics();
         int w = floorGroupWidth(metrics);
         var button = new RoundRectangle2D.Double(LEFT, bottom - CONTROL, w, CONTROL, 10, 10);
-        g.setColor(new Color(0, 0, 0, 70));
-        g.fill(new RoundRectangle2D.Double(LEFT + 1, bottom - CONTROL + 2, w, CONTROL, 10, 10));
-        g.setColor(open.getAsBoolean() ? OPEN : clicks.hovered(button) ? CONTROL_HOVER : CONTROL_FILL);
-        g.fill(button);
-        g.setColor(CONTROL_EDGE);
-        g.setStroke(new BasicStroke(1f));
-        g.draw(button);
+        box(g, button, open.getAsBoolean() ? OPEN : clicks.hovered(button) ? CONTROL_HOVER : CONTROL_FILL, CONTROL_EDGE);
         // Three stops joined by a dashed line, then the word.
         int textWidth = metrics.stringWidth("Routes");
         double x = LEFT + (w - textWidth - 20) / 2.0;
@@ -44,7 +37,7 @@ final class RoutesButton implements Widget
         path.moveTo(x, y + 5);
         path.lineTo(x + 6, y - 5);
         path.lineTo(x + 12, y + 3);
-        g.setColor(ROUTE);
+        g.setColor(PlayerMarker.YELLOW);
         g.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[]{2.5f, 2f}, 0));
         g.draw(path);
         g.setColor(Color.WHITE);
@@ -52,7 +45,7 @@ final class RoutesButton implements Widget
         {
             g.fill(new Ellipse2D.Double(p[0] - 2, p[1] - 2, 4, 4));
         }
-        g.drawString("Routes", (float) (x + 20), middle(y, metrics));
+        text(g, "Routes", x + 20, middle(y, metrics));
         clicks.add(button, toggle, "Custom routes: your own routes with several stops, to order, save and run");
     }
 }

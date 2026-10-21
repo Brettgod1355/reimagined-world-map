@@ -594,6 +594,6 @@ final class InfoCard extends Fitted
 
     static String escape(String text)
     {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
+        return RouteFeature.RouteText.escape(text).replace("\n", "<br>");
     }
 }

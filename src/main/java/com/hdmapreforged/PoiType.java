@@ -1,59 +1,55 @@
 package com.hdmapreforged;
 
-import static com.hdmapreforged.Layer.*;
-
 import java.awt.*;
+import java.io.*;
+import java.nio.charset.*;
 import java.util.*;
 
 enum PoiType
 {
-    TELEPORT("Teleport", TELEPORTS, 0x9B59FF),
-    FAIRY_RING("Fairy ring", TRANSPORTS, 0x3DDC84),
-    SPIRIT_TREE("Spirit tree", TRANSPORTS, 0x2E9D4A),
-    GNOME_GLIDER("Gnome glider", TRANSPORTS, 0xE0B050),
-    BALLOON("Hot air balloon", TRANSPORTS, 0xE05A47),
-    QUETZAL("Quetzal", TRANSPORTS, 0x3FB6C9),
-    MUSHTREE("Magic mushtree", TRANSPORTS, 0xB070E0),
-    OBELISK("Wilderness obelisk", TRANSPORTS, 0x9AA3AD),
-    BOAT("Boat", TRANSPORTS, 0x4A90E2),
-    CHARTER("Charter ship", TRANSPORTS, 0x2F6FB8),
-    CANOE("Canoe", TRANSPORTS, 0xB07A45),
-    CARPET("Magic carpet", TRANSPORTS, 0xD9534F),
-    MINECART("Minecart", TRANSPORTS, 0x8D99A6),
-    PORTAL("Portal", TRANSPORTS, 0xC070FF),
-    LEVER("Lever", TRANSPORTS, 0xB0B0B0),
-    TRANSPORT("Transport", TRANSPORTS, 0x5DADE2),
-    DUNGEON_ENTRANCE("Dungeon entrance", DUNGEONS, 0xE08A2A),
-    MAP_EXIT("Map passage", DUNGEONS, 0x6FB7E0),
-    MOORING("Mooring", SAILING, 0x2E86C1),
-    SALVAGE("Salvage", SAILING, 0x7D6608),
-    RUNECRAFT_ALTAR("Runecrafting altar", SKILLING, 0xC0392B),
-    AGILITY_COURSE("Agility course", SKILLING, 0x27AE60),
-    AGILITY_SHORTCUT("Agility shortcut", SKILLING, 0x58D68D),
-    FARMING_PATCH("Farming patch", SKILLING, 0x8E6E3B),
-    MINIGAME("Minigame", ACTIVITIES, 0xD35400),
-    BANK("Bank", SERVICES, 0xF1C40F),
-    ALTAR("Altar", SERVICES, 0xE8E8F0),
-    ANVIL("Anvil", SERVICES, 0x95A5A6),
+    TELEPORT, FAIRY_RING, SPIRIT_TREE, GNOME_GLIDER, BALLOON, QUETZAL, MUSHTREE, OBELISK, BOAT, CHARTER, CANOE, CARPET,
+    MINECART, PORTAL, LEVER, TRANSPORT, DUNGEON_ENTRANCE, MAP_EXIT, MOORING, SALVAGE, RUNECRAFT_ALTAR, AGILITY_COURSE,
+    AGILITY_SHORTCUT, FARMING_PATCH, MINIGAME, BANK, ALTAR, ANVIL,
     // The game's own icons: drawn by MapIconLayer from the game's sprites, not as our badges.
-    SHOP("Shop", GAME_ICONS, 0xC8A060),
-    QUEST_START("Quest start", GAME_ICONS, 0x3C8CE6),
-    MAP_LINK("Map link", GAME_ICONS, 0x4AA3E8),
-    GAME_ICON("Map icon", GAME_ICONS, 0xB8B8B8),
+    SHOP, QUEST_START, MAP_LINK, GAME_ICON,
     /** A search result without an icon of its own: only selected, never drawn. */
-    FOUND("Search result", GAME_ICONS, 0x46DC5A),
+    FOUND,
     /** One's grave while it stands: drawn by {@link GraveMarker}. */
-    GRAVE("Grave", GAME_ICONS, 0x8E8E96);
+    GRAVE;
 
     final String displayName;
     final Layer layer;
     final Color color;
+    /** The game map element whose icon stands for this type (GameIconSprites); -1 none. */
+    final int element;
 
-    PoiType(String displayName, Layer layer, int rgb)
+    PoiType()
     {
-        this.displayName = displayName;
-        this.layer = layer;
-        color = new Color(rgb);
+        String[] cells = Rows.BY_TYPE.get(name());
+        displayName = cells[1];
+        layer = Layer.valueOf(cells[2]);
+        color = new Color(Integer.parseInt(cells[3], 16));
+        element = cells.length > 4 ? Integer.parseInt(cells[4]) : -1;
+    }
+
+    /** The types' names, layers, colours and game icons, bundled (data/poi_types.tsv). */
+    private static final class Rows
+    {
+        static final Map<String, String[]> BY_TYPE = new HashMap<>();
+
+        static
+        {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                PoiType.class.getResourceAsStream("data/poi_types.tsv"), StandardCharsets.UTF_8)))
+            {
+                reader.lines().filter(line -> !line.startsWith("#")).map(line -> line.split("\t"))
+                    .forEach(cells -> BY_TYPE.put(cells[0], cells));
+            }
+            catch (IOException e)
+            {
+                throw new UncheckedIOException(e);
+            }
+        }
     }
 
     /** Obelisks send you to a random other obelisk unless you can choose. */

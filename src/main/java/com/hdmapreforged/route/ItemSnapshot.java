@@ -3,6 +3,7 @@ package com.hdmapreforged.route;
 import lombok.*;
 import java.util.*;
 import java.util.regex.*;
+import java.util.stream.*;
 
 /**
  * Items carried and runes a worn staff gives without limit: what a route may use. The bank only through a
@@ -19,8 +20,9 @@ public final class ItemSnapshot
     static final int EARTH = 557;
     public static final int FIRE = 554;
     /** Combination runes (steam, mist, dust, smoke, mud, lava) by id, with the two runes each counts as. */
-    static final Map<Integer, int[]> COMBINATIONS = Map.of(4694, new int[]{WATER, FIRE}, 4695, new int[]{AIR, WATER},
-        4696, new int[]{AIR, EARTH}, 4697, new int[]{AIR, FIRE}, 4698, new int[]{WATER, EARTH}, 4699, new int[]{EARTH, FIRE});
+    static final RouteFiles.Table<Map<Integer, int[]>> COMBINATIONS = new RouteFiles.Table<>(() -> Pathfinder.list(
+        "combination rune ids", Pathfinder::ints).stream().filter(c -> c.length > 2)
+        .collect(Collectors.toMap(c -> c[0], c -> new int[]{c[1], c[2]}, (a, b) -> a)));
 
     public static final ItemSnapshot NONE = new ItemSnapshot(Collections.emptyMap(), Collections.emptySet());
     public static final ItemSnapshot EVERYTHING = new ItemSnapshot(Collections.emptyMap(), Collections.emptySet());
@@ -59,7 +61,7 @@ public final class ItemSnapshot
     static void add(Map<Integer, Long> into, int id, long quantity)
     {
         into.merge(id, quantity, Long::sum);
-        var parts = COMBINATIONS.get(id);
+        var parts = COMBINATIONS.get().get(id);
         if (parts != null)
         {
             for (int part : parts)
@@ -79,11 +81,11 @@ public final class ItemSnapshot
             return runes;
         }
         // The words that give each rune.
-        String[] words = {"air smoke mist dust", "water mud steam mist kodai", "earth lava mud dust", "fire lava steam smoke"};
+        var words = Pathfinder.list("staff runes");
         int[] ids = {AIR, WATER, EARTH, FIRE};
-        for (int i = 0; i < ids.length; i++)
+        for (int i = 0; i < Math.min(ids.length, words.size()); i++)
         {
-            if (Arrays.stream(words[i].split(" ")).anyMatch(n::contains))
+            if (Arrays.stream(words.get(i).split(" ")).anyMatch(w -> !w.isEmpty() && n.contains(w)))
             {
                 runes.add(ids[i]);
             }

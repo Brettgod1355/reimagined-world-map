@@ -122,10 +122,36 @@ public final class Pathfinder
         ShortcutPassage.known().forEach(s -> shortcutStarts.put(s.origin, 0));
         atShortcuts.forEach(s -> shortcutStarts.put(s.edge.from, 0));
         passages = Collections.unmodifiableList(edges);
-        passagesByOrigin = EdgeIndex.of(edges, 0);
-        passagesByDestination = EdgeIndex.byDestination(edges, 0);
+        passagesByOrigin = EdgeIndex.of(edges, 0, false);
+        passagesByDestination = EdgeIndex.of(edges, 0, true);
         heuristicPassages = edges.stream().filter(e -> shortCut(e, RUN)).collect(Collectors.toUnmodifiableList());
         walkingPassages = edges.stream().filter(e -> shortCut(e, WALK)).collect(Collectors.toUnmodifiableList());
+    }
+
+    /** Lists the planner and its texts use (the map version's lists.tsv): by name, its items; the first of a name. */
+    static final RouteFiles.Table<Map<String, List<String>>> LISTS = new RouteFiles.Table<>(() -> rows(
+        RouteFiles.DIR + "lists.tsv").stream().collect(Collectors.toMap(c -> c[0], c -> List.of(c).subList(1, c.length),
+        (a, b) -> a)));
+
+    /** A list by its name; empty while the map version has none. */
+    public static List<String> list(String name)
+    {
+        return LISTS.get().getOrDefault(name, List.of());
+    }
+
+    /** A list's items as {@code parse} reads them; an item it cannot read (throws, gives null) is left out. */
+    public static <T> List<T> list(String name, Function<String, T> parse)
+    {
+        return each(list(name), parse);
+    }
+
+    /** A list of "key=value" items as a map, each value as {@code parse} reads it; the first of a key. */
+    public static <T> Map<String, T> pairs(String list, Function<String, T> parse)
+    {
+        return list(list, item -> {
+            var p = item.split("=", 2);
+            return Map.entry(p[0], parse.apply(p[1]));
+        }).stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a));
     }
 
     public List<ShortcutPassage> shortcutPassages()
@@ -290,12 +316,17 @@ public final class Pathfinder
     /** Each row of a bundled table as {@code parse} reads it; a row it cannot read (throws, gives null) is left out. */
     public static <T> List<T> table(String resource, Function<String[], T> parse)
     {
+        return each(rows(resource), parse);
+    }
+
+    static <I, T> List<T> each(List<I> items, Function<I, T> parse)
+    {
         var read = new ArrayList<T>();
-        for (var cells : rows(resource))
+        for (var item : items)
         {
             try
             {
-                T row = parse.apply(cells);
+                T row = parse.apply(item);
                 if (row != null)
                 {
                     read.add(row);
@@ -303,7 +334,7 @@ public final class Pathfinder
             }
             catch (RuntimeException e)
             {
-                // That row only.
+                // That one only.
             }
         }
         return Collections.unmodifiableList(read);
@@ -353,11 +384,6 @@ public final class Pathfinder
         }
         int length = folded(e.from, e.to);
         return length > LONG_JUMP || e.cost < length * step;
-    }
-
-    public int resolveGoal(int target)
-    {
-        return resolveGoal(target, at -> false);
     }
 
     /** {@code out}: more ways out of a pocket than the passages (a request's own: fairy rings, boats, shortcuts). */
@@ -597,7 +623,7 @@ public final class Pathfinder
         all.addAll(request.edges);
         int startOffset = all.size();
         all.addAll(request.startEdges);
-        var requestByOrigin = EdgeIndex.of(request.edges, requestOffset);
+        var requestByOrigin = EdgeIndex.of(request.edges, requestOffset, false);
         int towards = goal >= 0 ? goal : target;
         int step = request.running ? RUN : WALK;
         // Walking, each tile costs a whole tick; at sea a half one (a block of 4 tiles costs 2 ticks).
@@ -778,7 +804,7 @@ public final class Pathfinder
         Backward(int goal, List<Edge> all, int requestOffset, RouteRequest request, boolean avoid)
         {
             this.all = all;
-            requestByDestination = EdgeIndex.byDestination(request.edges, requestOffset);
+            requestByDestination = EdgeIndex.of(request.edges, requestOffset, true);
             sailingLevel = request.sailingLevel;
             this.avoid = avoid;
             visit(goal);
@@ -1114,28 +1140,14 @@ public final class Pathfinder
                         : min(bound[i], cost[i] + scale * folded(to[i], from[pick]) + bound[pick]);
                 }
             }
-            var byOrigin = new IntMap(n);
-            int count = 0;
-            int[] keys = new int[n];
+            // Each origin once, in the order first met, with its least bound.
+            var byOrigin = new LinkedHashMap<Integer, Integer>();
             for (int i = 0; i < n; i++)
             {
-                int b = (int) min(Integer.MAX_VALUE, bound[i]);
-                int known = byOrigin.get(from[i]);
-                if (known == MISSING)
-                {
-                    keys[count++] = from[i];
-                }
-                if (known == MISSING || b < known)
-                {
-                    byOrigin.put(from[i], b);
-                }
+                byOrigin.merge(from[i], (int) min(Integer.MAX_VALUE, bound[i]), Math::min);
             }
-            int[][] made = {Arrays.copyOf(keys, count), new int[count]};
-            for (int i = 0; i < count; i++)
-            {
-                made[1][i] = byOrigin.get(keys[i]);
-            }
-            return made;
+            return new int[][]{byOrigin.keySet().stream().mapToInt(Integer::intValue).toArray(),
+                byOrigin.values().stream().mapToInt(Integer::intValue).toArray()};
         }
 
         int h(int node)

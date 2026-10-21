@@ -76,7 +76,7 @@ final class MapServer
         }, callback, Versions.NONE, MAX_BODY_BYTES);
     }
 
-    /** What a map version's tiles changed since the version before: that version, and the tiles' paths. */
+    /** What a map version's tiles changed since an earlier version: that version, and the tiles' paths. */
     @RequiredArgsConstructor
     static final class Changes
     {
@@ -87,11 +87,20 @@ final class MapServer
 
     static final Pattern TILE_PATH = Pattern.compile("-?\\d{1,6}/-?\\d/[0-3]_\\d{1,6}_\\d{1,6}\\.png");
 
-    /** The changes of {@code version}; null when the server has none (its first version, or not reachable). */
-    void changes(String version, Consumer<Changes> callback)
+    /**
+     * The changes of {@code version} since {@code have} when the server lists them ("since"), else since the version
+     * before; null when the server has none (its first version, or not reachable).
+     */
+    void changes(String version, String have, Consumer<Changes> callback)
     {
         get(isSafeVersion(version) ? url("tiles", version, "changed.json") : null, body -> {
             JsonObject o = gson.fromJson(text(body), JsonObject.class);
+            var since = o != null && o.get("since") instanceof JsonObject ? o.getAsJsonObject("since") : null;
+            if (since != null && have != null && since.get(have) instanceof JsonObject)
+            {
+                return new Changes(have, paths(since.getAsJsonObject(have), "changed"),
+                    paths(since.getAsJsonObject(have), "removed"));
+            }
             String from = o != null && o.has("from") ? o.get("from").getAsString() : null;
             return isSafeVersion(from) ? new Changes(from, paths(o, "changed"), paths(o, "removed")) : null;
         }, callback, null, MAX_BODY_BYTES);

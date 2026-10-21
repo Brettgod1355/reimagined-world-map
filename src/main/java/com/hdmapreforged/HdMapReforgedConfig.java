@@ -17,19 +17,20 @@ public interface HdMapReforgedConfig extends Config
     @ConfigSection(name = "Map", description = "Map behaviour and appearance", position = 1)
     String map = "map";
 
-    @ConfigSection(name = "Data and downloads", description = "What is downloaded, and how it is kept", position = 2)
+    @ConfigSection(name = "Data and downloads", description = "What is downloaded, and how it is kept", position = 4,
+        closedByDefault = true)
     String data = "data";
 
     @ConfigSection(name = "Route", description = "Right-click the map, Path to here. It only shows the way, nothing "
-        + "is walked or clicked for you", position = 3)
+        + "is walked or clicked for you", position = 2)
     String route = "route";
 
     @ConfigSection(name = "Own route planner", description = "Only for this plugin's own planner (Route planner: "
-        + "Reimagined World Map)", position = 4)
+        + "Reimagined World Map)", position = 3, closedByDefault = true)
     String planner = "planner";
 
     @ConfigSection(name = "Party", description = "Party members on the map, through RuneLite's party service",
-        position = 5)
+        position = 5, closedByDefault = true)
     String friends = "friends";
 
     @ConfigItem(keyName = "showTeleports", name = "Teleports", position = 0, section = icons,
@@ -191,8 +192,15 @@ public interface HdMapReforgedConfig extends Config
     }
 
     @ConfigItem(keyName = "checkMapNow", name = "Check for a new map now", position = 2, section = data,
-        description = "The map checks weekly by itself. Click to check right away")
+        description = "The map checks at each login by itself. Click to check right away")
     default boolean checkMapNow()
+    {
+        return false;
+    }
+
+    @ConfigItem(keyName = "downloadMapAgain", name = "Download the map again", position = 3, section = data,
+        description = "Only if the map shows wrong or broken parts: every tile is downloaded again as you look round")
+    default boolean downloadMapAgain()
     {
         return false;
     }

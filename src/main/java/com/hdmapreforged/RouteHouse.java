@@ -29,7 +29,6 @@ import net.runelite.api.*;
 import net.runelite.api.Point;
 import net.runelite.api.coords.*;
 import net.runelite.api.events.*;
-import net.runelite.api.gameval.*;
 import net.runelite.api.widgets.*;
 import net.runelite.client.eventbus.*;
 import net.runelite.client.events.*;
@@ -204,10 +203,6 @@ public final class RouteHouse
 
     static final int NEXUS_NAME = 660;
 
-    /** The nexus' 45 slots: runs of varbits one after another, from each run's first. */
-    static final int[][] NEXUS_SLOTS = {{VarbitID.POH_NEXUS_TELE_1, 15}, {VarbitID.POH_NEXUS_TELE_16, 3},
-        {VarbitID.POH_NEXUS_TELE_19, 12}, {VarbitID.POH_NEXUS_TELE_31, 5}, {VarbitID.POH_NEXUS_TELE_36, 10}};
-
     static final Pattern STAIRS = Pattern.compile(".*(tair|adder|rapdoor).*");
 
     /**
@@ -362,27 +357,19 @@ public final class RouteHouse
         }
     }
 
-    static int nexusSlot(int slot)
-    {
-        for (var run : NEXUS_SLOTS)
-        {
-            if (slot < run[1])
-            {
-                return run[0] + slot;
-            }
-            slot -= run[1];
-        }
-        return -1;
-    }
+    /** The varbits of the nexus' 45 slots: runs one after another, each its first and length (list "nexus slots"). */
+    static final RouteFiles.Table<int[]> NEXUS_SLOTS = new RouteFiles.Table<>(() -> Pathfinder.list("nexus slots",
+        item -> Arrays.copyOf(Pathfinder.ints(item), 2)).stream().flatMapToInt(run -> IntStream.range(run[0],
+        run[0] + run[1])).filter(varbit -> varbit >= 0).limit(45).toArray());
 
     /** "Portal Nexus: Varrock, Falador": its places from the game's varbits (slot, teleport, its name). */
     String nexus()
     {
         var places = new ArrayList<String>();
         var teleports = routes.client.getEnum(NEXUS_TELEPORTS);
-        for (int slot = 0; slot < 45 && teleports != null; slot++)
+        for (int varbit : teleports == null ? new int[0] : NEXUS_SLOTS.get())
         {
-            int id = routes.client.getVarbitValue(nexusSlot(slot));
+            int id = routes.client.getVarbitValue(varbit);
             int struct = id <= 0 ? -1 : teleports.getIntValue(id);
             var teleport = struct < 0 ? null : routes.client.getStructComposition(struct);
             String name = teleport == null ? null : teleport.getStringValue(NEXUS_NAME);
@@ -423,7 +410,7 @@ public final class RouteHouse
 
     static final int LOOK = SIZE * 4;
 
-    /** Set by {@link RouteFeature#setHouseFiles}. */
+    /** Set by the plugin when it starts. */
     volatile Filepath houseFolder;
 
     volatile Executor houseIo;
@@ -647,7 +634,7 @@ public final class RouteHouse
     }
 
     /** One's house at the surface map's edge: its picture per floor, and what stands where. */
-    void paintHouse(Graphics2D g, MapView.Projection p)
+    void paintHouse(Graphics2D g, Projection p)
     {
         var seen = plan;
         g.setFont(FontManager.getRunescapeSmallFont());
@@ -698,11 +685,8 @@ public final class RouteHouse
             "Fancy jewellery box", "Ornate jewellery box"});
         box.setSelectedIndex(Arrays.asList(BOXES).indexOf(HouseSettings.box(now)));
         String[] amulets = {"Mounted amulet of glory", "Mounted Xeric's talisman", "Mounted digsite pendant"};
-        var mounted = new JCheckBox[amulets.length];
-        for (int i = 0; i < amulets.length; i++)
-        {
-            mounted[i] = new JCheckBox(amulets[i], now.contains(MOUNTED[i]));
-        }
+        var mounted = IntStream.range(0, amulets.length).mapToObj(i -> new JCheckBox(amulets[i],
+            now.contains(MOUNTED[i]))).toArray(JCheckBox[]::new);
         // A superior garden has one of these.
         var garden = new JComboBox<String>(new String[]{"No fairy ring or spirit tree", "Fairy ring",
             "Spirit tree", "Both (a spiritual fairy tree, or two gardens)"});
@@ -715,14 +699,8 @@ public final class RouteHouse
         long account = houseOf;
         ActionListener save = e ->
         {
-            var amulet = new HashSet<String>();
-            for (int i = 0; i < mounted.length; i++)
-            {
-                if (mounted[i].isSelected())
-                {
-                    amulet.add(MOUNTED[i]);
-                }
-            }
+            var amulet = IntStream.range(0, amulets.length).filter(i -> mounted[i].isSelected())
+                .mapToObj(i -> MOUNTED[i]).collect(Collectors.toSet());
             editHouse(account, HouseSettings.features(BOXES[box.getSelectedIndex()], amulet,
                 garden.getSelectedIndex(), obelisk.isSelected(), portals.getText(), nexus.getText()));
         };

@@ -273,7 +273,7 @@ final class MapScreen extends JPanel implements MapView.Listener
             }
             popOut.setText("Dock");
             popOut.setToolTipText("Close this window; the sidebar's button opens it again");
-            maps.setPrototypeDisplayValue(new BaseMap(0, "Gielinor Surface", 0, 0, 0, 0, 0, 0));
+            maps.setPrototypeDisplayValue(new BaseMap(0, "Gielinor Surface", 0, 0, 0, 0, 0, 0, 0));
             add(controls, BorderLayout.NORTH);
             split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, view, cardScroll);
             split.setBorder(BorderFactory.createEmptyBorder());
@@ -293,7 +293,7 @@ final class MapScreen extends JPanel implements MapView.Listener
     void setTours(TourPanel.Actions actions)
     {
         boolean first = tours == null;
-        tours = actions == null ? null : new TourPanel(actions, this::showTours, view::focus);
+        tours = actions == null ? null : new TourPanel(actions, this::showTours, view::focus, null);
         if (first && tours != null)
         {
             // Only once the window or the game-view map shows this screen.

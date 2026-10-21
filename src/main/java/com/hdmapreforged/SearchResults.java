@@ -85,7 +85,8 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     /** What the search failed to find, for its Wiki button. */
     String failedName;
     /** The results clicked through from (a drop, a dropper), for Back. */
-    final History history = new History();
+    /** The results clicked through from, newest last, at most 20; Back takes the newest. */
+    final Deque<Visit> history = new ArrayDeque<>();
     /** The tab shown of the current result (a kind of place, "drops", "droppers"); null for the first. */
     String tab;
     /** Which of a monster's drop tables the Drops tab shows. */
@@ -118,41 +119,6 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         final Result result;
         final String tab;
         final int table;
-    }
-
-    /** The results clicked through from, newest last, at most 20; Back takes the newest. */
-    static final class History
-    {
-        final Deque<Visit> visits = new ArrayDeque<>();
-
-        void push(Visit visit)
-        {
-            visits.addLast(visit);
-            while (visits.size() > 20)
-            {
-                visits.removeFirst();
-            }
-        }
-
-        Visit pop()
-        {
-            return visits.pollLast();
-        }
-
-        Visit last()
-        {
-            return visits.peekLast();
-        }
-
-        boolean isEmpty()
-        {
-            return visits.isEmpty();
-        }
-
-        void clear()
-        {
-            visits.clear();
-        }
     }
 
     SearchResults(MapView view, Supplier<WorldData> world, Card card)
@@ -282,7 +248,11 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         {
             if (result != null && result != found)
             {
-                history.push(new Visit(result, tab, this.table));
+                history.addLast(new Visit(result, tab, this.table));
+                if (history.size() > 20)
+                {
+                    history.removeFirst();
+                }
             }
             show(found, null, table);
             return;
@@ -612,7 +582,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
     final Map<Group, Poi> foundPois = new IdentityHashMap<>();
 
     /** A place's arrows on the map: clicked, the place is selected, and the map shows the way there. */
-    public Poi hit(Point point, MapView.Projection projection)
+    public Poi hit(Point point, Projection projection)
     {
         Result shown = result;
         var viewMap = projection.map();
@@ -818,9 +788,9 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
         }
         if (!history.isEmpty())
         {
-            Visit back = history.last();
+            Visit back = history.peekLast();
             add(header, 0, link("← Back to " + back.result.title, () -> {
-                history.pop();
+                history.pollLast();
                 show(back.result, back.tab, back.table);
             }, width));
             header.add(Box.createVerticalStrut(4));
@@ -1609,13 +1579,13 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             g.setColor(color);
             g.draw(box);
             g.setColor(Color.WHITE);
-            g.drawString(label, 6f, (float) (1 + metrics.getHeight() - metrics.getDescent()));
+            MapView.text(g, label, 6, 1 + metrics.getHeight() - metrics.getDescent());
         });
     }
 
     static final Map<Color, Color> FADED = new ConcurrentHashMap<>();
 
-    public void paint(Graphics2D g, MapView.Projection projection)
+    public void paint(Graphics2D g, Projection projection)
     {
         Result shown = result;
         var viewMap = projection.map();
@@ -1655,7 +1625,7 @@ final class SearchResults implements MapView.Overlay, MapView.HitLayer
             }
             Color color = group.color != null ? group.color : DOT;
             Color fill = moved.getPlane() != projection.plane()
-                ? FADED.computeIfAbsent(color, c -> new Color(c.getRed(), c.getGreen(), c.getBlue(), 110)) : color;
+                ? FADED.computeIfAbsent(color, c -> RouteFeature.alpha(c, 110)) : color;
             BufferedImage arrow = arrowSprite(fill, r, device);
             double half = arrow.getWidth() / device / 2;
             double tall = arrow.getHeight() / device - 2;

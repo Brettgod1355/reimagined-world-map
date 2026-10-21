@@ -23,16 +23,12 @@ final class TextSprites
         g.setFont(font);
         var metrics = g.getFontMetrics();
         int ascent = metrics.getAscent();
-        BufferedImage sprite = cache.get(key);
-        if (sprite == null)
-        {
-            sprite = PoiIcons.sprite(metrics.stringWidth(text) + 4, metrics.getHeight() + 4, device, sg -> {
+        BufferedImage sprite = cache.computeIfAbsent(key, k -> PoiIcons.sprite(metrics.stringWidth(text) + 4,
+            metrics.getHeight() + 4, device, sg -> {
                 sg.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                 sg.setFont(font);
                 outlined(sg, text, 2, 2 + ascent, color);
-            });
-            cache.put(key, sprite);
-        }
+            }));
         PoiIcons.blit(g, transform, sprite, x - 2, y - ascent - 2);
     }
 

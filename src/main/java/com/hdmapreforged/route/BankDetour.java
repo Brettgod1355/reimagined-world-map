@@ -152,7 +152,7 @@ public final class BankDetour
             }
             String lower = name.toLowerCase(Locale.ROOT);
             held.merge(lower, n, Long::sum);
-            for (var c : COMBINED)
+            for (var c : COMBINED.get())
             {
                 if (lower.equals(c[0] + " rune"))
                 {
@@ -171,9 +171,9 @@ public final class BankDetour
         return taken;
     }
 
-    /** Combination runes and the two runes each holds. */
-    static final String[][] COMBINED = {{"dust", "air", "earth"}, {"mist", "air", "water"}, {"mud", "water", "earth"},
-        {"smoke", "air", "fire"}, {"steam", "water", "fire"}, {"lava", "earth", "fire"}};
+    /** Combination runes and the two runes each holds (list "combination runes"). */
+    static final RouteFiles.Table<String[][]> COMBINED = new RouteFiles.Table<>(() -> Pathfinder.list(
+        "combination runes", r -> r.split(" ")).stream().filter(c -> c.length > 2).toArray(String[][]::new));
 
     static final Pattern AMOUNT = Pattern.compile("(?:(\\d+) × )?(.+)");
 

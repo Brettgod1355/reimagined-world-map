@@ -2,29 +2,17 @@ package com.hdmapreforged;
 
 import java.io.*;
 import java.nio.charset.*;
-import lombok.*;
 import lombok.extern.slf4j.*;
 import net.runelite.client.util.*;
 
-/** The map server's map version as last seen, and when it was checked, kept on disk between sessions. */
+/** The map server's map version as last seen, kept on disk so the next start shows it before the server answers. */
 @Slf4j
-@RequiredArgsConstructor
 final class KnownVersion
 {
     static final String FILE = "server-map-version.txt";
 
-    final String version;
-    final long checkedAt;
-
-    /** Weekly; a check time in the future (a changed clock) counts as due. */
-    boolean due(long now)
-    {
-        // Seven days.
-        return now < checkedAt || now - checkedAt >= 7 * 24L * 60 * 60 * 1000;
-    }
-
-    /** Null when missing or unusable. */
-    static KnownVersion read(Filepath file)
+    /** Null when missing or unusable. Its first line; older plugins wrote when they asked on the second. */
+    static String read(Filepath file)
     {
         if (!file.isFile())
         {
@@ -32,23 +20,21 @@ final class KnownVersion
         }
         try
         {
-            var lines = new String(TileCache.read(file), StandardCharsets.UTF_8).split("\n");
-            String version = lines[0].trim();
-            return lines.length < 2 || !MapServer.isSafeVersion(version) ? null
-                : new KnownVersion(version, Long.parseLong(lines[1].trim()));
+            String version = new String(TileCache.read(file), StandardCharsets.UTF_8).split("\n")[0].trim();
+            return MapServer.isSafeVersion(version) ? version : null;
         }
-        catch (IOException | NumberFormatException e)
+        catch (IOException e)
         {
             log.debug("Ignoring unreadable {}", file, e);
             return null;
         }
     }
 
-    static void write(Filepath file, String version, long checkedAt)
+    static void write(Filepath file, String version)
     {
         try
         {
-            TileCache.writeAtomically(file, (version + "\n" + checkedAt + "\n").getBytes(StandardCharsets.UTF_8));
+            TileCache.writeAtomically(file, (version + "\n").getBytes(StandardCharsets.UTF_8));
         }
         catch (IOException e)
         {

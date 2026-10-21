@@ -61,12 +61,7 @@ final class Tour
 
     Tour(String name, List<Stop> stops)
     {
-        this(name, stops, false);
-    }
-
-    Tour(String name, List<Stop> stops, boolean loop)
-    {
-        this(name, stops, loop, Collections.emptySet());
+        this(name, stops, false, Collections.emptySet());
     }
 
     Tour(String name, List<Stop> stops, boolean loop, Set<String> avoid)
@@ -294,16 +289,9 @@ final class Tour
 
     /**
      * Exact open-path order from place 0 (the player); {@code cost[a][b]} negative means impossible. Returns places
-     * 1.. in order, without the start.
-     */
-    static List<Integer> fastestOrder(long[][] cost)
-    {
-        return fastestOrder(cost, null);
-    }
-
-    /**
-     * The same, where {@code once[a][b]} (when given) is the trip's cost with a teleport that can be cast once in the
-     * route (a home or minigame teleport, with its cooldown): at most one trip takes it, the rest cost {@code cost}.
+     * 1.. in order, without the start. {@code once[a][b]} (when given) is the trip's cost with a teleport that can be
+     * cast once in the route (a home or minigame teleport, with its cooldown): at most one trip takes it, the rest cost
+     * {@code cost}.
      */
     static List<Integer> fastestOrder(long[][] cost, long[][] once)
     {

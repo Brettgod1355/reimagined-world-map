@@ -25,11 +25,6 @@ final class BaseMap
     /** The map list it is of (set by it): its region table tells on which floor it draws some ground. */
     BaseMaps maps;
 
-    BaseMap(int id, String name, int minX, int minY, int maxX, int maxY, int centerX, int centerY)
-    {
-        this(id, name, minX, minY, maxX, maxY, centerX, centerY, id);
-    }
-
     boolean contains(int x, int y)
     {
         return x >= minX && x < maxX && y >= minY && y < maxY;

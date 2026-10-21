@@ -2,7 +2,7 @@ package com.hdmapreforged;
 
 import java.util.*;
 import java.util.function.*;
-import net.runelite.api.gameval.*;
+import com.hdmapreforged.route.*;
 
 /**
  * The spirit trees one plants (Port Sarim, Etceteria, Brimhaven, Hosidius, the Farming Guild) that stand grown for this
@@ -16,14 +16,9 @@ final class PlantedSpiritTrees
     static final String KEY = "plantedSpiritTrees";
     /** The patch state of a grown spirit tree one can travel by. */
     static final int GROWN = 20;
-    /** As the travel table's stops are named; their regions; the patch's varbit. */
-    static final Object[][] PATCHES = {
-        {"Port Sarim", new int[]{12082}, VarbitID.FARMING_TRANSMIT_A},
-        {"Etceteria", new int[]{10300}, VarbitID.FARMING_TRANSMIT_B},
-        {"Brimhaven", new int[]{11058, 11057}, VarbitID.FARMING_TRANSMIT_B},
-        {"Hosidius", new int[]{6967, 6711}, VarbitID.FARMING_TRANSMIT_F},
-        {"Farming Guild", new int[]{4922}, VarbitID.FARMING_TRANSMIT_A},
-    };
+    /** As the travel table's stops are named: the patch's varbit, then its regions (list "spirit tree patches"). */
+    static final RouteFiles.Table<Map<String, int[]>> PATCHES = new RouteFiles.Table<>(() -> Pathfinder.pairs(
+        "spirit tree patches", Pathfinder::ints));
 
     volatile Set<String> grown = Collections.emptySet();
 
@@ -52,14 +47,15 @@ final class PlantedSpiritTrees
     /** In {@code region}: reads its patch, if it has one. Whether what is known changed. Client thread. */
     boolean update(int region, IntUnaryOperator varbit)
     {
-        for (var patch : PATCHES)
+        for (var patch : PATCHES.get().entrySet())
         {
-            for (int id : (int[]) patch[1])
+            int[] read = patch.getValue();
+            for (int i = 1; i < read.length; i++)
             {
-                if (id == region)
+                if (read[i] == region)
                 {
-                    String name = (String) patch[0];
-                    boolean stands = varbit.applyAsInt((Integer) patch[2]) == GROWN;
+                    String name = patch.getKey();
+                    boolean stands = varbit.applyAsInt(read[0]) == GROWN;
                     if (stands == grown.contains(name))
                     {
                         return false;

@@ -27,7 +27,7 @@ import net.runelite.api.coords.*;
 
 /** The map: tiles, icons, transport lines and the player. x grows east, y north, one unit per tile; zoom is log2 pixels per tile. */
 @Accessors(fluent = true)
-final class MapView extends JComponent
+final class MapView extends JComponent implements Projection
 {
     interface Listener
     {
@@ -45,33 +45,6 @@ final class MapView extends JComponent
         void toggleMaximised();
 
         boolean isMaximised();
-    }
-
-    /** Where world points appear in the frame being painted; add 0.5 to a tile for its middle. */
-    interface Projection
-    {
-        double screenX(double worldX);
-
-        double screenY(double worldY);
-
-        /** Log2 of screen pixels per game tile. */
-        double zoom();
-
-        BaseMap map();
-
-        int plane();
-
-        int width();
-
-        int height();
-
-        boolean shows(WorldPoint point);
-
-        /** Where a game point is drawn on the map in view (the Kalphite Lair is drawn beside the desert caves). */
-        default WorldPoint shown(WorldPoint point)
-        {
-            return point;
-        }
     }
 
     interface Overlay
@@ -223,6 +196,7 @@ final class MapView extends JComponent
 
     double centerX = 3222;
     double centerY = 3218;
+    @Getter
     double zoom = 1;
     double targetX = centerX;
     double targetY = centerY;
@@ -261,57 +235,26 @@ final class MapView extends JComponent
     final List<MenuContributor> menuContributors = new ArrayList<>();
     final List<HitLayer> hitLayers = new ArrayList<>();
     @Getter
-    final Projection projection = new Projection()
+    final Projection projection = this;
+
+    public int width()
     {
-        public double screenX(double worldX)
-        {
-            return MapView.this.screenX(worldX);
-        }
+        return getWidth();
+    }
 
-        public double screenY(double worldY)
-        {
-            return MapView.this.screenY(worldY);
-        }
+    public int height()
+    {
+        return getHeight();
+    }
 
-        public double zoom()
-        {
-            return zoom;
-        }
-
-        public BaseMap map()
-        {
-            return map;
-        }
-
-        public int plane()
-        {
-            return plane;
-        }
-
-        public int width()
-        {
-            return getWidth();
-        }
-
-        public int height()
-        {
-            return getHeight();
-        }
-
-        public boolean shows(WorldPoint point)
-        {
-            // One's house: on the surface map, at its edge.
-            return point != null && maps != null && map != null && (HousePlan.contains(point.getX(), point.getY())
-                ? map.id == SURFACE || map.id == FULL : map.id == FULL
-                ? maps.find(point.getX(), point.getY()) != null || WorldMapMoves.drawn(point) != null
-                : WorldMapMoves.toDrawn(map.id, point) != null || maps.drawsGame(map, point));
-        }
-
-        public WorldPoint shown(WorldPoint point)
-        {
-            return MapView.this.shown(point);
-        }
-    };
+    public boolean shows(WorldPoint point)
+    {
+        // One's house: on the surface map, at its edge.
+        return point != null && maps != null && map != null && (HousePlan.contains(point.getX(), point.getY())
+            ? map.id == SURFACE || map.id == FULL : map.id == FULL
+            ? maps.find(point.getX(), point.getY()) != null || WorldMapMoves.drawn(point) != null
+            : WorldMapMoves.toDrawn(map.id, point) != null || maps.drawsGame(map, point));
+    }
 
     WorldPoint gamePoint(WorldPoint drawn)
     {
@@ -333,7 +276,7 @@ final class MapView extends JComponent
     @Getter
     volatile Predicate<WorldPoint> ground;
 
-    WorldPoint shown(WorldPoint game)
+    public WorldPoint shown(WorldPoint game)
     {
         return shownOn(map, game);
     }
@@ -924,12 +867,12 @@ final class MapView extends JComponent
         return pow(2, zoom);
     }
 
-    double screenX(double worldX)
+    public double screenX(double worldX)
     {
         return getWidth() / 2.0 + (worldX - centerX) * scale();
     }
 
-    double screenY(double worldY)
+    public double screenY(double worldY)
     {
         return getHeight() / 2.0 - (worldY - centerY) * scale();
     }
@@ -1564,7 +1507,7 @@ final class MapView extends JComponent
             g.draw(lines);
         }
         g.setStroke(linkStroke(width, dash));
-        g.setColor(LINK_COLORS.computeIfAbsent(color, c -> new Color(c.getRed(), c.getGreen(), c.getBlue(), 220)));
+        g.setColor(LINK_COLORS.computeIfAbsent(color, c -> RouteFeature.alpha(c, 220)));
         g.draw(lines);
     }
 
@@ -1945,7 +1888,7 @@ final class MapView extends JComponent
         g.setStroke(THIN);
         g.draw(box);
         g.setColor(Color.WHITE);
-        g.drawString(poi.name, (float) (left + 5), (float) (y + 2 + metrics.getAscent()));
+        text(g, poi.name, left + 5, y + 2 + metrics.getAscent());
     }
 
     /** The icon a click here would take (tests use it as a click). */
@@ -2179,7 +2122,7 @@ final class MapView extends JComponent
         g.setColor(CONTROL_EDGE);
         g.draw(box);
         g.setColor(Color.WHITE);
-        g.drawString(text, (float) (x + 12), (float) (y + 13 + (metrics.getAscent() - metrics.getDescent()) / 2.0));
+        text(g, text, x + 12, y + 13 + (metrics.getAscent() - metrics.getDescent()) / 2.0);
     }
 
     int backOffset;
@@ -2212,7 +2155,7 @@ final class MapView extends JComponent
         line(g, ax - 5, cy, ax + 5, cy);
         line(g, ax - 5, cy, ax - 1, cy - 4);
         line(g, ax - 5, cy, ax - 1, cy + 4);
-        g.drawString(to.name, (float) (x + 27), middle(cy, metrics));
+        text(g, to.name, x + 27, middle(cy, metrics));
     }
 
     /** A painted button of the control height. */
@@ -2243,11 +2186,16 @@ final class MapView extends JComponent
 
     static final Color BOX_SHADOW = new Color(0, 0, 0, 70);
 
+    /** Draws text at a point given in doubles. */
+    static void text(Graphics2D g, String text, double x, double y)
+    {
+        g.drawString(text, (float) x, (float) y);
+    }
+
     static void text(Graphics2D g, String text, Control control, FontMetrics metrics)
     {
         g.setColor(Color.WHITE);
-        g.drawString(text, (float) (control.shape.getCenterX() - metrics.stringWidth(text) / 2.0),
-            middle(control.shape.getCenterY(), metrics));
+        text(g, text, control.shape.getCenterX() - metrics.stringWidth(text) / 2.0, middle(control.shape.getCenterY(), metrics));
     }
 
     static float middle(double cy, FontMetrics metrics)
@@ -2443,8 +2391,10 @@ final class MapView extends JComponent
         {
             menu.add("Show my location").addActionListener(a -> centerOnPlayer());
         }
-        // A route or stop goes to the game's own spot, which the map may draw elsewhere (Dagannoth Kings' lair).
-        var point = gamePoint(new WorldPoint((int) floor(world.getX()), (int) floor(world.getY()), plane));
+        // A route or stop goes to the game's own spot, which the map may draw elsewhere (Dagannoth Kings' lair); on an icon
+        // to its place, as its card's Route does (Braindeath Island's rowboat in the sea: the jetty it is boarded from).
+        var point = clicked != null ? clicked.location
+            : gamePoint(new WorldPoint((int) floor(world.getX()), (int) floor(world.getY()), plane));
         menu.add("Nearest teleports to here").addActionListener(a -> {
             if (listener != null)
             {

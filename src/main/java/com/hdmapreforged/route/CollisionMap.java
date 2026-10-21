@@ -1,7 +1,6 @@
 package com.hdmapreforged.route;
 
 import java.io.*;
-import java.nio.charset.*;
 import java.util.*;
 import java.util.function.*;
 import java.util.zip.*;
@@ -9,8 +8,8 @@ import lombok.*;
 
 /**
  * Where one can walk, from the bundled collision.zip: per region and floor, bitsets of walkable tiles and of walls and
- * doors on the north and east edges, plus ground-floor water. Immutable after loading but for one's own house
- * ({@link #setHouse}, replaced whole), so any thread may read it.
+ * doors on the north and east edges. Immutable after loading but for one's own house ({@link #setHouse}, replaced
+ * whole), so any thread may read it.
  */
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 public final class CollisionMap
@@ -28,7 +27,6 @@ public final class CollisionMap
 
     /** By {@code region * 4 + plane}: five bitsets of 64 longs, or null. */
     final long[][] floors = new long[1 << 18][];
-    final long[][] water = new long[1 << 16][];
     final List<Transition> transitions;
     /** By packed tile: "Chop-down Vines (bring an axe)". */
     final Map<Integer, String> obstacles;
@@ -60,8 +58,8 @@ public final class CollisionMap
             }
             else if ("transitions.tsv".equals(entry.getName()))
             {
-                lines(RouteFiles.read(zip, MAX_TABLE_BYTES, "transitions.tsv"), line -> {
-                    Transition t = Transition.parse(line);
+                Pathfinder.rows(new ByteArrayInputStream(RouteFiles.read(zip, MAX_TABLE_BYTES, "transitions.tsv")), 1, line -> {
+                    Transition t = Transition.parse(line[0]);
                     if (t != null)
                     {
                         transitions.add(t);
@@ -70,7 +68,8 @@ public final class CollisionMap
             }
             else if ("obstacles.tsv".equals(entry.getName()))
             {
-                lines(RouteFiles.read(zip, MAX_TABLE_BYTES, "obstacles.tsv"), line -> obstacle(obstacles, line));
+                Pathfinder.rows(new ByteArrayInputStream(RouteFiles.read(zip, MAX_TABLE_BYTES, "obstacles.tsv")), 0,
+                    parts -> obstacle(obstacles, parts));
             }
         }
         if (bin == null)
@@ -81,17 +80,6 @@ public final class CollisionMap
         obstacles.keySet().forEach(node -> map.obstacleRegions[region(Tiles.x(node), Tiles.y(node))] = true);
         map.decode(bin);
         return map;
-    }
-
-    static void lines(byte[] bytes, Consumer<String> each) throws IOException
-    {
-        BufferedReader reader = new BufferedReader(
-            new InputStreamReader(new ByteArrayInputStream(bytes), StandardCharsets.UTF_8));
-        String line;
-        while ((line = reader.readLine()) != null)
-        {
-            each.accept(line);
-        }
     }
 
     void decode(byte[] bin) throws IOException
@@ -117,10 +105,8 @@ public final class CollisionMap
                     floors[region << 2 | z] = longs(in, LAYERS);
                 }
             }
-            if ((mask & 16) != 0)
-            {
-                water[region] = longs(in, 64);
-            }
+            // Ground floor water: only the development tools use it.
+            in.skipBytes((mask & 16) != 0 ? 64 * 8 : 0);
         }
     }
 
@@ -141,10 +127,9 @@ public final class CollisionMap
     }
 
     /** "x y plane <tab> name <tab> action <tab> what it takes"; bad lines are skipped. */
-    static void obstacle(Map<Integer, String> obstacles, String line)
+    static void obstacle(Map<Integer, String> obstacles, String[] parts)
     {
-        var parts = line.split("\t");
-        if (line.startsWith("#") || parts.length < 4)
+        if (parts.length < 4)
         {
             return;
         }
@@ -195,17 +180,6 @@ public final class CollisionMap
     public boolean walkable(int x, int y, int z)
     {
         return edge(x, y, z, WALK);
-    }
-
-    boolean hasWater(int region)
-    {
-        return region >= 0 && region < 1 << 16 && water[region] != null;
-    }
-
-    public boolean water(int x, int y)
-    {
-        int region = region(x, y);
-        return region >= 0 && water[region] != null && bit(water[region], 0, x, y);
     }
 
     boolean edge(int x, int y, int z, int offset)

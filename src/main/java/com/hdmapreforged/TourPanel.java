@@ -21,11 +21,11 @@ final class TourPanel
     {
         List<Tour> tours();
 
-        String editing();
+        String editingName();
 
         void save(List<Tour> tours, String editing);
 
-        void run(Tour tour);
+        void runTour(Tour tour);
 
         /**
          * Saves the fastest order if the stops are unchanged, then runs {@code done} even on failure or cancel. With
@@ -34,7 +34,7 @@ final class TourPanel
         void fastestOrder(Tour tour, boolean everything, Runnable done);
 
         /** A short message to the player. */
-        default void say(String text)
+        default void toast(String text)
         {
         }
 
@@ -71,9 +71,9 @@ final class TourPanel
         {
         }
 
-        String running();
+        String runningTour();
 
-        void stop();
+        void clearRoute();
     }
 
     final Actions actions;
@@ -86,11 +86,6 @@ final class TourPanel
     int orderings;
 
     final String back;
-
-    TourPanel(Actions actions, Consumer<IntFunction<JComponent>> show, Consumer<WorldPoint> focus)
-    {
-        this(actions, show, focus, null);
-    }
 
     void toggle()
     {
@@ -140,7 +135,7 @@ final class TourPanel
     {
         JPanel panel = column();
         var tours = new ArrayList<Tour>(actions.tours());
-        Tour current = Tour.named(tours, actions.editing());
+        Tour current = Tour.named(tours, actions.editingName());
 
         if (back != null)
         {
@@ -220,18 +215,18 @@ final class TourPanel
             panel.add(Box.createVerticalStrut(2));
         }
         JPanel go = row();
-        String running = actions.running();
+        String running = actions.runningTour();
         if (running != null)
         {
             go.add(button("Stop " + running, () -> {
-                actions.stop();
+                actions.clearRoute();
                 refresh();
             }));
         }
         else if (!current.stops.isEmpty())
         {
             go.add(button("Run", () -> {
-                actions.run(current);
+                actions.runTour(current);
                 refresh();
             }));
         }
@@ -304,7 +299,7 @@ final class TourPanel
 
     void copy(String text, String what)
     {
-        actions.say(actions.copy(text) ? what + " copied to the clipboard" : "Could not copy: the clipboard is in use");
+        actions.toast(actions.copy(text) ? what + " copied to the clipboard" : "Could not copy: the clipboard is in use");
     }
 
     /** Adds the routes with stops on the clipboard, each under a name not taken; the last added is the one edited. */
@@ -314,7 +309,7 @@ final class TourPanel
         found.removeIf(t -> t.stops.isEmpty());
         if (found.isEmpty())
         {
-            actions.say("Nothing to import: copy a route's text first (Export makes it)");
+            actions.toast("Nothing to import: copy a route's text first (Export makes it)");
             return;
         }
         String last = null;
@@ -333,7 +328,7 @@ final class TourPanel
         {
             save(tours, last);
         }
-        actions.say(added < found.size() ? "Only " + Tour.MAX_TOURS + " routes can be kept: " + added + " of "
+        actions.toast(added < found.size() ? "Only " + Tour.MAX_TOURS + " routes can be kept: " + added + " of "
             + found.size() + " imported" : added == 1 ? "\"" + last + "\" imported" : added + " routes imported");
     }
 

@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.function.*;
 import net.runelite.api.coords.*;
 import com.hdmapreforged.MapData.Icon;
-import com.hdmapreforged.MapView.Projection;
 
 /**
  * Draws the game's own map icons (their sprites, {@link GameIconSprites}) where places.json puts them, hoverable and

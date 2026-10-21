@@ -8,14 +8,13 @@ import lombok.*;
 
 /**
  * Where a boat can sail: ground floor water in CELL×CELL blocks, open sea when mostly water (boats keep off rivers
- * and shores). Each block takes the hazard level of the nearest named sea (approximate near borders). Immutable.
+ * and shores). Each block takes the hazard level of the nearest named sea (approximate near borders). Made once per
+ * map version by the map server (the version's sea.bin), with its seas (sea_areas.tsv). Immutable.
  */
-@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 public final class SeaMap
 {
     static final String AREAS = RouteFiles.DIR + "sea_areas.tsv";
-    /** Water tiles a block needs, of CELL * CELL. */
-    static final int MIN_WATER = 10;
     /** No sea here. */
     static final byte NONE = -2;
     /** Sea no boat can cross yet. */
@@ -36,9 +35,28 @@ public final class SeaMap
     final byte[][] blocks = new byte[1 << 15][];
     final List<Area> areas;
 
-    public static SeaMap build(CollisionMap collision) throws IOException
+    /**
+     * Per region with sea, sea.bin holds its number (two bytes) and its 256 blocks. A map version without one (up to
+     * cache-2727.40) has no sea: no sailing, but the planner still loads.
+     */
+    public static SeaMap load() throws IOException
     {
-        return build(collision, readAreas(RouteFiles.require(AREAS)));
+        var sea = new SeaMap(Collections.unmodifiableList(readAreas(RouteFiles.require(AREAS))));
+        try (var in = new DataInputStream(RouteFiles.require(RouteFiles.DIR + "sea.bin")))
+        {
+            for (int high; (high = in.read()) >= 0; )
+            {
+                byte[] cells = new byte[256];
+                int region = high << 8 | in.readUnsignedByte();
+                in.readFully(cells);
+                sea.blocks[region] = cells;
+            }
+        }
+        catch (IOException | RuntimeException e)
+        {
+            // What was read.
+        }
+        return sea;
     }
 
     /** The seas {@code in} lists; closes it. */
@@ -63,51 +81,6 @@ public final class SeaMap
             }
         });
         return areas;
-    }
-
-    public static SeaMap build(CollisionMap collision, List<Area> areas)
-    {
-        var sea = new SeaMap(Collections.unmodifiableList(areas));
-        for (int region = 0; region < 1 << 15; region++)
-        {
-            if (!collision.hasWater(region))
-            {
-                continue;
-            }
-            int baseX = (region >> 8) << 6;
-            int baseY = (region & 255) << 6;
-            byte[] cells = null;
-            for (int cx = 0; cx < 64 / CELL; cx++)
-            {
-                for (int cy = 0; cy < 64 / CELL; cy++)
-                {
-                    int count = 0;
-                    for (int dx = 0; dx < CELL; dx++)
-                    {
-                        for (int dy = 0; dy < CELL; dy++)
-                        {
-                            if (collision.water(baseX + cx * CELL + dx, baseY + cy * CELL + dy))
-                            {
-                                count++;
-                            }
-                        }
-                    }
-                    if (count < MIN_WATER)
-                    {
-                        continue;
-                    }
-                    if (cells == null)
-                    {
-                        cells = new byte[256];
-                        Arrays.fill(cells, NONE);
-                    }
-                    Area area = sea.nearest(baseX + cx * CELL + 2, baseY + cy * CELL + 2);
-                    cells[cx << 4 | cy] = area == null ? 0 : (byte) Math.max(CLOSED, Math.min(120, area.level));
-                }
-            }
-            sea.blocks[region] = cells;
-        }
-        return sea;
     }
 
     public Area nearest(int x, int y)
