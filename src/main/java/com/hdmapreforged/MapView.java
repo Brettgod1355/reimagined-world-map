@@ -218,6 +218,10 @@ final class MapView extends JComponent implements Projection
     /** Kinds whose destination lines are hidden. */
     Set<PoiType> linesOff = EnumSet.noneOf(PoiType.class);
     Consumer<String> linesChoice = value -> { };
+    /** Kinds of icons the Icons panel hides (the setting iconsOff). */
+    volatile Set<String> iconsOff = Set.of();
+    /** Opens or closes the Icons panel; null without one. */
+    Runnable iconsPanel;
     Runnable checkForMap = () -> { };
     volatile boolean mapUnavailable;
     Control pressedControl;
@@ -318,7 +322,9 @@ final class MapView extends JComponent implements Projection
         this.tiles = tiles;
         this.config = config;
         setLinesOff(config.linesOff());
+        setIconsOff(config.iconsOff());
         following = config.followPlayer();
+        filter = new Filter();
         setOpaque(true);
         // Never takes focus, so typing goes to the game.
         setFocusable(false);
@@ -516,16 +522,46 @@ final class MapView extends JComponent implements Projection
         var off = EnumSet.noneOf(PoiType.class);
         for (String name : value == null ? new String[0] : value.split(","))
         {
-            for (var t : PoiType.values())
+            var type = MapData.value(PoiType.class, name.trim());
+            if (type != null)
             {
-                if (t.name().equals(name.trim()))
-                {
-                    off.add(t);
-                }
+                off.add(type);
             }
         }
         linesOff = off;
         repaint();
+    }
+
+    void setIconsOff(String value)
+    {
+        iconsOff = value == null ? Set.of() : new HashSet<>(Arrays.asList(value.split("\n")));
+        repaint();
+    }
+
+    /** Whether the Icons panel shows its kind: of a stack of teleports, any one's. */
+    boolean kindShown(Poi poi)
+    {
+        for (var member : poi.members())
+        {
+            if (!iconsOff.contains(member.toggle()))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Of a stack, the picture of the first whose kind shows; 0 none. */
+    int picture(Poi poi)
+    {
+        for (var member : poi.members())
+        {
+            if (!iconsOff.contains(member.toggle()))
+            {
+                return member.picture;
+            }
+        }
+        return 0;
     }
 
     final List<ClickCatcher> clickCatchers = new CopyOnWriteArrayList<>();
@@ -638,7 +674,7 @@ final class MapView extends JComponent implements Projection
     /** Gets the game's sign for what one cannot use: a shortcut, mooring or resource whose needs are certainly unmet. */
     boolean locked(Poi poi)
     {
-        return LOCKABLE.contains(poi.type) && unlocks != null && config.markLocked() && !usable(poi, true);
+        return LOCKABLE.contains(poi.type) && unlocks != null && filter.markLocked && !usable(poi, true);
     }
 
     static final Set<PoiType> LOCKABLE = EnumSet.of(AGILITY_SHORTCUT, MOORING, SALVAGE, GAME_ICON);
@@ -1083,6 +1119,7 @@ final class MapView extends JComponent implements Projection
                 paintNoMap(g);
                 return;
             }
+            filter = new Filter();
             paintTiles(g);
             g.setRenderingHint(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON);
             g.setRenderingHint(KEY_STROKE_CONTROL, VALUE_STROKE_PURE);
@@ -1375,40 +1412,35 @@ final class MapView extends JComponent implements Projection
 
     static final Layer[] LAYERS = Layer.values();
 
-    /** Which layers show, read once per frame rather than per icon. */
+    /** This frame's filter, made as the frame starts; before the first frame, the view's first. */
+    Filter filter;
+
+    /** Which layers show at the zoom and the icon settings, read once per frame rather than per icon. */
     final class Filter
     {
         final boolean[] layers = new boolean[LAYERS.length];
         final boolean shortcuts;
         final boolean onlyUsable = config.onlyUsable();
+        final boolean markLocked = config.markLocked();
+        final boolean questStatus = config.questStatus();
+        final boolean hideCompleted = config.hideCompletedQuests();
 
         Filter()
         {
+            // Hidden below a zoom level each, so the zoomed-out map stays readable.
             for (Layer layer : LAYERS)
             {
-                layers[layer.ordinal()] = shown(layer);
+                layers[layer.ordinal()] = targetZoom >= layer.minZoom;
             }
-            shortcuts = config.showSkilling() && targetZoom >= 2;
-        }
-
-        /** Hidden below a zoom level each, so the zoomed-out map stays readable. */
-        boolean shown(Layer layer)
-        {
-            return toggled(layer) && targetZoom >= layer.minZoom;
+            shortcuts = targetZoom >= 2;
         }
 
         /** Shown and usable. */
         boolean shows(Poi poi)
         {
             return (poi.type == AGILITY_SHORTCUT && poi.type.layer == Layer.SKILLING ? shortcuts
-                : layers[poi.type.layer.ordinal()]) && usable(poi, onlyUsable);
+                : layers[poi.type.layer.ordinal()]) && kindShown(poi) && usable(poi, onlyUsable);
         }
-    }
-
-    /** The setting of a layer: the game's own icons of its kinds follow it too (a bank's sprite with the banks). */
-    boolean toggled(Layer layer)
-    {
-        return layer.setting.test(config);
     }
 
     boolean inGroup(Poi poi)
@@ -1437,7 +1469,7 @@ final class MapView extends JComponent implements Projection
         for (var link : links)
         {
             boolean usable = unlocks == null || unlocks.usable(link.needs);
-            if (!onThisMap(link.map) || !usable && config.onlyUsable())
+            if (!onThisMap(link.map) || !usable && filter.onlyUsable)
             {
                 continue;
             }
@@ -1533,7 +1565,6 @@ final class MapView extends JComponent implements Projection
         double step = floor(targetZoom * 2) / 2;
         double cellWorld = iconSize(step) * (step < -1 ? 1.5 : step < 1 ? 1.15 : 0.9) / pow(2, step);
         occupied.clear();
-        Filter filter = new Filter();
         Predicate<Poi> covered = badgeCover != null ? badgeCover.covers(projection) : poi -> false;
         var frame = new ArrayList<Drawn>();
         var last = new ArrayList<Poi>();
@@ -1575,7 +1606,7 @@ final class MapView extends JComponent implements Projection
             else if (free)
             {
                 g.setComposite(at.getPlane() == plane ? normal : AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.55f));
-                PoiIcons.paintCached(g, poi.type, x, y, size, false, locked(poi));
+                PoiIcons.paintCached(g, poi.type, picture(poi), x, y, size, false, locked(poi));
                 frame.add(new Drawn(poi, x, y, size / 2 + 2));
             }
         }
@@ -1586,7 +1617,7 @@ final class MapView extends JComponent implements Projection
             double x = screenX(at.getX() + 0.5);
             double y = screenY(at.getY() + 0.5);
             double s = poi == selected ? size * 1.25 : size * 1.1;
-            PoiIcons.paintCached(g, poi.type, x, y, s, poi == selected || inGroup(poi), locked(poi));
+            PoiIcons.paintCached(g, poi.type, picture(poi), x, y, s, poi == selected || inGroup(poi), locked(poi));
             frame.add(new Drawn(poi, x, y, s / 2 + 2));
         }
         drawn = frame;
@@ -1858,13 +1889,21 @@ final class MapView extends JComponent implements Projection
             return;
         }
         // Out of view: a pointer at the edge.
+        var edge = edge(x, y);
+        PlayerMarker.pointer(g, text, edge.getX(), edge.getY(), atan2(y - edge.getY(), x - edge.getX()), 1, PlayerMarker.YELLOW,
+            "You");
+    }
+
+    /** Where the line from the view's middle to a point off it crosses the view's edge, a little inside. */
+    Point2D edge(double x, double y)
+    {
         double cx = getWidth() / 2.0;
         double cy = getHeight() / 2.0;
         double dx = x - cx;
         double dy = y - cy;
         double t = min(dx == 0 ? Double.MAX_VALUE : (cx - 18) / abs(dx),
             dy == 0 ? Double.MAX_VALUE : (cy - 18) / abs(dy));
-        PlayerMarker.pointer(g, text, cx + dx * t, cy + dy * t, atan2(dy, dx));
+        return new Point2D.Double(cx + dx * t, cy + dy * t);
     }
 
     void paintLabel(Graphics2D g, Poi poi)
@@ -1957,6 +1996,7 @@ final class MapView extends JComponent implements Projection
         {
             backOffset = 0;
             paintBack(g, painted);
+            paintIconsButton(g, painted, getWidth() - MARGIN);
             paintWidgets(g, painted, getHeight() - MARGIN - 18);
             controls = painted;
             return;
@@ -1997,6 +2037,7 @@ final class MapView extends JComponent implements Projection
                 g.draw(new Rectangle2D.Double(mx - 6, my - 6, 12, 12));
             }
         }
+        paintIconsButton(g, painted, window != null ? w - MARGIN - 2 * CONTROL - 12 : w - MARGIN);
         int right = w - MARGIN - CONTROL;
         int bottom = getHeight() - MARGIN - 18 - CONTROL;
         Control out = control(g, painted, right, bottom, CONTROL, () -> zoomBy(-1), "Zoom out");
@@ -2052,6 +2093,19 @@ final class MapView extends JComponent implements Projection
         g.fill(triangle(down.shape.getCenterX(), down.shape.getCenterY(), false));
         paintWidgets(g, painted, widgetBottom(getHeight()));
         controls = painted;
+    }
+
+    /** Top right, left of the window's buttons. */
+    void paintIconsButton(Graphics2D g, List<Control> painted, int right)
+    {
+        if (iconsPanel != null)
+        {
+            g.setFont(CONTROL_FONT);
+            var metrics = g.getFontMetrics();
+            int width = metrics.stringWidth("Icons") + 28;
+            text(g, "Icons", control(g, painted, right - width, MARGIN, width, iconsPanel,
+                "Which icons the map shows, each kind on its own"), metrics);
+        }
     }
 
     void setMapUnavailable(boolean unavailable)

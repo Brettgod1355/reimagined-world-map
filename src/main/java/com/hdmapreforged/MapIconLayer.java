@@ -29,7 +29,6 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
     static final Color RING_SHADOW = new Color(0, 0, 0, 150);
 
     final MapView view;
-    final BooleanSupplier enabled;
     /** By 64×64 region, so a frame or mouse move only looks near the view. */
     Map<Integer, List<Icon>> byRegion = new HashMap<>();
     /** One icon per spot with a game sprite, by region. */
@@ -120,6 +119,11 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
             int key = region(icon.drawn.getX(), icon.drawn.getY());
             grid.computeIfAbsent(key, k -> new ArrayList<>()).add(icon);
             poiIcons.computeIfAbsent(icon.poi, k -> new ArrayList<>(1)).add(icon);
+            if (icon.poi.type == FAIRY_RING && icon.element >= 0)
+            {
+                // Ours, not the game's transport arrow: kept, as the game's is read only for elements not had.
+                GameIconSprites.ELEMENT_SPRITES.put(icon.element, GameIconSprites.FAIRY_RING);
+            }
             long spot = (long) icon.drawn.getX() << 32 | (long) icon.drawn.getY() << 2 | icon.drawn.getPlane();
             if (icon.element >= 0 && spots.add(spot))
             {
@@ -207,7 +211,6 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
             return;
         }
         double r = drawn / 2 + 1;
-        var toggled = toggles();
         madeNow = 0;
         later = false;
         for (var list : near(drawnByRegion, projection, -r, -r, projection.width() + r,
@@ -218,7 +221,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
                 double sx = projection.screenX(icon.drawn.getX());
                 double sy = projection.screenY(icon.drawn.getY());
                 if (sx < -r - 2 || sy < -r - 2 || sx > projection.width() + r + 2 || sy > projection.height() + r + 2
-                    || !toggled[layer(icon).ordinal()] || !onView(icon, projection) || hidden(icon))
+                    || !onView(icon, projection) || hidden(icon))
                 {
                     continue;
                 }
@@ -230,7 +233,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
                 var c = center(icon, projection);
                 g.drawImage(sprite, (int) round(c.getX() - sprite.getWidth() / 2.0),
                     (int) round(c.getY() - sprite.getHeight() / 2.0), null);
-                Color dot = view.config.questStatus() ? quest(icon) : null;
+                Color dot = view.filter.questStatus ? quest(icon) : null;
                 if (dot != null)
                 {
                     var spot = PlayerMarker.circle(c.getX() + drawn * 0.35, c.getY() + drawn * 0.35,
@@ -325,7 +328,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
 
     boolean shows(Icon icon, Projection projection)
     {
-        return showsAny(projection) && view.toggled(layer(icon)) && onView(icon, projection) && !hidden(icon);
+        return showsAny(projection) && onView(icon, projection) && !hidden(icon);
     }
 
     /** A quest start icon's dot (see {@link Unlocks#questColor}), else null. */
@@ -335,32 +338,16 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         return icon.poi.type != QUEST_START || unlocks == null ? null : unlocks.questColor(icon.poi.name);
     }
 
+    /** Its kind hidden in the Icons panel, or a finished quest's start hidden. */
     boolean hidden(Icon icon)
     {
-        return quest(icon) == Color.GREEN && view.config.hideCompletedQuests();
-    }
-
-    /** The setting a game icon follows besides its own: a bank's that of the banks; a map link the dungeon entrances. */
-    static Layer layer(Icon icon)
-    {
-        return icon.poi.type == MAP_LINK ? Layer.DUNGEONS : icon.poi.type.layer;
-    }
-
-    /** Each layer's setting, read once per frame rather than per icon. */
-    boolean[] toggles()
-    {
-        var toggled = new boolean[Layer.values().length];
-        for (Layer layer : Layer.values())
-        {
-            toggled[layer.ordinal()] = view.toggled(layer);
-        }
-        return toggled;
+        return view.iconsOff.contains(icon.toggle) || quest(icon) == Color.GREEN && view.filter.hideCompleted;
     }
 
     boolean showsAny(Projection projection)
     {
         // From tile level 0 on.
-        return projection.map() != null && tileLevel(projection.zoom()) >= 0 && enabled.getAsBoolean();
+        return projection.map() != null && tileLevel(projection.zoom()) >= 0;
     }
 
     /** On the map in view and its floor, or on the ground floor's view a floor drawn flat on it. */
@@ -381,10 +368,9 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         {
             return poi -> false;
         }
-        var toggled = toggles();
         return poi -> {
             var icon = covering.get(poi);
-            return icon != null && toggled[layer(icon).ordinal()] && GameIconSprites.element(icon.element) != null
+            return icon != null && !view.iconsOff.contains(icon.toggle) && GameIconSprites.element(icon.element) != null
                 && onView(icon, projection);
         };
     }
@@ -413,7 +399,6 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
         double reach = drawnSize(projection) / 2 + 1;
         Icon best = null;
         double bestDistance = reach;
-        var toggled = toggles();
         for (var list : near(byRegion, projection, point.x - reach - 8, point.y - reach - 8,
             point.x + reach + 8, point.y + reach + 8))
         {
@@ -422,7 +407,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
                 double sx = projection.screenX(icon.drawn.getX());
                 double sy = projection.screenY(icon.drawn.getY());
                 if (abs(sx - point.x) > reach + 4 || abs(sy - point.y) > reach + 4
-                    || !toggled[layer(icon).ordinal()] || !onView(icon, projection) || hidden(icon))
+                    || !onView(icon, projection) || hidden(icon))
                 {
                     continue;
                 }
@@ -457,7 +442,7 @@ final class MapIconLayer implements MapView.Overlay, MapView.HitLayer
     /** Draws the game's sprites once read from the client; then rings the hovered and selected. */
     public void paint(Graphics2D g, Projection projection)
     {
-        if (GameIconSprites.hasElements() && enabled.getAsBoolean())
+        if (GameIconSprites.hasElements())
         {
             paintLarger(g, projection);
         }

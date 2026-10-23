@@ -201,12 +201,15 @@ public final class GameWalk
         Arrays.fill(via, (byte) -1);
         int start = HALF * size + HALF;
         via[start] = 8;
-        var queue = new ArrayDeque<Integer>();
-        queue.add(start);
+        // Each tile is queued once: no boxing, as the walk is searched many times a route.
+        int[] queue = new int[size * size];
+        int head = 0;
+        int tail = 0;
+        queue[tail++] = start;
         int goal = wanted[start] ? start : -1;
-        while (!queue.isEmpty() && goal < 0)
+        while (head < tail && goal < 0)
         {
-            int cell = queue.poll();
+            int cell = queue[head++];
             int cx = cell % size;
             int cy = cell / size;
             for (int d = 0; d < 8; d++)
@@ -220,7 +223,7 @@ public final class GameWalk
                 if (goal < 0 && map.canStep(cx + ox, cy + oy, z, DX[d], DY[d]))
                 {
                     via[ny * size + nx] = (byte) d;
-                    queue.add(ny * size + nx);
+                    queue[tail++] = ny * size + nx;
                     goal = wanted[ny * size + nx] ? ny * size + nx : -1;
                 }
             }
@@ -229,20 +232,19 @@ public final class GameWalk
         {
             return null;
         }
-        // Back from the goal, each tile put before the one after it.
-        var cells = new ArrayDeque<Integer>();
-        for (int cell = goal; cell != start; )
+        // Back from the goal (into the queue, done with), then each tile put before the one after it.
+        int n = 0;
+        for (int cell = goal; cell != start; n++)
         {
-            cells.push(cell);
+            queue[n] = cell;
             int d = via[cell];
             cell = (cell / size - DY[d]) * size + (cell % size - DX[d]);
         }
-        int[] path = new int[cells.size() + 1];
+        int[] path = new int[n + 1];
         path[0] = from;
-        int k = 1;
-        for (int c : cells)
+        for (int k = 0; k < n; k++)
         {
-            path[k++] = pack(c % size + ox, c / size + oy, z);
+            path[n - k] = pack(queue[k] % size + ox, queue[k] / size + oy, z);
         }
         return path;
     }

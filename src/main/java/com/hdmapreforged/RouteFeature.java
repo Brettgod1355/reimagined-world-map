@@ -165,6 +165,8 @@ public final class RouteFeature implements TourPanel.Actions
     // Nothing on the game's own world map: projecting a long route there every frame is too heavy.
     final List<Overlay> overlays = List.of(new GameOverlay(), new MinimapOverlay());
     final MapView.Overlay mapOverlay = this::paintMap;
+    /** Each map's destination arrow. */
+    final Map<MapView, MapView.Widget> destinations = new ConcurrentHashMap<>();
     final MapView.MenuContributor menu = this::contribute;
 
     volatile ExecutorService searches;
@@ -404,7 +406,22 @@ public final class RouteFeature implements TourPanel.Actions
         sentFrom = -1;
         sentTiles = false;
         sentLines = false;
+        sentHead = null;
         lastHdTilesCheck = Integer.MIN_VALUE / 2;
+    }
+
+    /** The text over the head HD World Markers was sent, with its colour; null none. Client thread. */
+    String sentHead;
+
+    /** Client thread: the text over the player's head goes to HD World Markers when it changes; null takes it away. */
+    void head(String text, Color color, Player player)
+    {
+        String now = text == null ? null : text + color;
+        if (!Objects.equals(now, sentHead))
+        {
+            sentHead = now;
+            eventBus.post(TileMarkersBridge.head(text, color, player));
+        }
     }
 
     void updateHdTiles(int player)
@@ -418,6 +435,7 @@ public final class RouteFeature implements TourPanel.Actions
             boolean on = pluginOn(List.of(TileMarkersBridge.PLUGIN_NAME)) != null;
             if (!on && hdTiles)
             {
+                head(null, null, null);
                 eventBus.post(TileMarkersBridge.clear());
                 sentAhead = null;
                 sentTiles = false;
@@ -632,6 +650,8 @@ public final class RouteFeature implements TourPanel.Actions
         {
             fastest(targets, true, () -> pluginAsked.get() != asked || controller != c, wilderness, best -> {
                 log.debug("Following another plugin's directions to {}", best);
+                // A new place shows its steps on the open map, as one asked for here does.
+                bringUp = c.target() != pack(best);
                 fromPlugin = true;
                 pluginWilderness = wilderness;
                 routeAvoid.clear();
@@ -917,11 +937,16 @@ public final class RouteFeature implements TourPanel.Actions
         int generation = loads.incrementAndGet();
         screens = on;
         // At the lowest priority a busy client starved searches for seconds.
-        searches = daemon("Reimagined World Map route", Thread.NORM_PRIORITY - 1);
-        background = daemon("Reimagined World Map route extras", Thread.MIN_PRIORITY);
+        searches = Executors.newSingleThreadExecutor(HdMapReforgedPlugin.threads("Reimagined World Map route",
+            Thread.NORM_PRIORITY - 1));
+        background = Executors.newSingleThreadExecutor(HdMapReforgedPlugin.threads("Reimagined World Map route extras",
+            Thread.MIN_PRIORITY));
         for (var screen : on)
         {
             screen.view.addOverlay(mapOverlay);
+            MapView.Widget arrow = (g, w, h, bottom, clicks) -> paintDestination(screen.view, g, clicks);
+            destinations.put(screen.view, arrow);
+            screen.view.addWidget(arrow);
             screen.view.menuContributors.add(menu);
             screen.card.setRouter(this::routeTo);
             screen.setStopAdder(this::addStop);
@@ -1002,16 +1027,6 @@ public final class RouteFeature implements TourPanel.Actions
         });
     }
 
-    static ExecutorService daemon(String name, int priority)
-    {
-        return Executors.newSingleThreadExecutor(r -> {
-            Thread thread = new Thread(r, name);
-            thread.setDaemon(true);
-            thread.setPriority(priority);
-            return thread;
-        });
-    }
-
     /** Counts starts and stops, so a load finishing after a stop is dropped. */
     final AtomicInteger loads = new AtomicInteger();
 
@@ -1030,11 +1045,15 @@ public final class RouteFeature implements TourPanel.Actions
         if (hdTiles)
         {
             hdTiles = false;
-            clientThread.invokeLater(() -> eventBus.post(TileMarkersBridge.clear()));
+            clientThread.invokeLater(() -> {
+                head(null, null, null);
+                eventBus.post(TileMarkersBridge.clear());
+            });
         }
         for (var screen : screens)
         {
             screen.view.removeOverlay(mapOverlay);
+            screen.view.removeWidget(destinations.remove(screen.view));
             screen.view.menuContributors.remove(menu);
             screen.showRoute(null, false);
             screen.view.areaBounds = p -> null; // holds the collision map
@@ -1628,6 +1647,8 @@ public final class RouteFeature implements TourPanel.Actions
         });
     }
 
+    static final Pattern COUNTED = Pattern.compile("(?:(\\d+) × )?(.+)");
+
     /** Whether everything the route's bank step names ("Rune pouch, 3 × Air rune") is carried; false when it cannot tell. */
     static boolean allTaken(Route route, Map<String, Long> carried, boolean pouch)
     {
@@ -1638,7 +1659,7 @@ public final class RouteFeature implements TourPanel.Actions
         }
         for (String item : bank.name.substring("Bank: ".length()).split(", "))
         {
-            var m = Pattern.compile("(?:(\\d+) × )?(.+)").matcher(item);
+            var m = COUNTED.matcher(item);
             if (!m.matches())
             {
                 return false;
@@ -3091,6 +3112,63 @@ public final class RouteFeature implements TourPanel.Actions
         }
     }
 
+    static final double DESTINATION_SCALE = 1.8;
+
+    /** Where the route goes (its end, else the spot asked for), or Shortest Path's target as the planner; -1 none. */
+    int destination()
+    {
+        var handed = handedOver;
+        var c = controller;
+        Route route = ahead;
+        return shortestPathPlanner() ? handed == null ? -1 : pack(handed)
+            : route != null && route.end >= 0 ? route.end : c == null ? -1 : c.target();
+    }
+
+    /**
+     * A big arrow above the destination, or at the view's edge pointing at it; on another map at the last of the route
+     * this one draws (a way in). A click shows the destination.
+     */
+    void paintDestination(MapView view, Graphics2D g, MapView.Clicks clicks)
+    {
+        int to = destination();
+        int at = to;
+        Route route = ahead;
+        if (to >= 0 && !view.shows(worldPoint(to)))
+        {
+            at = -1;
+            for (int i = route == null ? 0 : route.steps.size(); --i >= 0 && at < 0; )
+            {
+                var points = route.steps.get(i).points;
+                for (int j = points.length; --j >= 0 && at < 0; )
+                {
+                    at = view.shows(worldPoint(points[j])) ? points[j] : -1;
+                }
+            }
+        }
+        if (at < 0)
+        {
+            return;
+        }
+        double x = x(view, at);
+        // Its tip just above the route's end dot.
+        double y = y(view, at) - 8 - 12 * DESTINATION_SCALE;
+        double angle = PI / 2;
+        if (x < 0 || y < 0 || x > view.getWidth() || y > view.getHeight())
+        {
+            var edge = view.edge(x, y);
+            angle = atan2(y - edge.getY(), x - edge.getX());
+            // Back in by what it is longer than the player's, so its tip stays in view.
+            x = edge.getX() - cos(angle) * 12 * (DESTINATION_SCALE - 1);
+            y = edge.getY() - sin(angle) * 12 * (DESTINATION_SCALE - 1);
+        }
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        PlayerMarker.pointer(g, view.text, x, y, angle, DESTINATION_SCALE, END, null);
+        var point = worldPoint(to);
+        double r = 13 * DESTINATION_SCALE;
+        clicks.add(new RoundRectangle2D.Double(x - r, y - r, 2 * r, 2 * r, 8, 8), () -> view.focus(point),
+            "Destination: click to show it");
+    }
+
     /** Whether a step is named on its tile in the game: not a teleport, which is cast anywhere (said over the head). */
     static boolean onItsTile(Step step)
     {
@@ -3181,7 +3259,7 @@ public final class RouteFeature implements TourPanel.Actions
         if (onIt && !hdTiles && view != null)
         {
             tag(g, yourHouse.local(view, namedAt(jump)), said(whole(route), jump, house.inside()),
-                lacks(jump), 0);
+                lacks(jump) ? CANNOT : jump(), 0);
         }
         String text = nextText(route, at);
         if (text == null || now != null && now == jump && onIt)
@@ -3193,10 +3271,21 @@ public final class RouteFeature implements TourPanel.Actions
             // The step itself, not an obstacle on the way: into the house with what to use there.
             text = said(whole(route), now, house.inside());
         }
-        tag(g, player.getLocalLocation(), text, now != null && lacks(now), player.getLogicalHeight() + 60);
+        Color color = now != null && lacks(now) ? CANNOT : jump();
+        if (hdTiles)
+        {
+            // Drawn by HD World Markers, as the tiles' names are.
+            headSaid = true;
+            head(text, color, player);
+            return;
+        }
+        tag(g, player.getLocalLocation(), text, color, player.getLogicalHeight() + 60);
     }
 
-    void tag(Graphics2D g, LocalPoint at, String text, boolean lacks, int height)
+    /** Whether this frame's text over the head was sent to HD World Markers. */
+    boolean headSaid;
+
+    void tag(Graphics2D g, LocalPoint at, String text, Color color, int height)
     {
         // The font first: the text is centred with it.
         g.setFont(FontManager.getRunescapeSmallFont());
@@ -3205,7 +3294,7 @@ public final class RouteFeature implements TourPanel.Actions
         {
             g.setColor(Color.BLACK);
             g.drawString(text, spot.getX() + 1, spot.getY() + 1);
-            g.setColor(lacks ? CANNOT : jump());
+            g.setColor(color);
             g.drawString(text, spot.getX(), spot.getY());
         }
     }
@@ -3551,10 +3640,15 @@ public final class RouteFeature implements TourPanel.Actions
             }
             var view = client.getTopLevelWorldView();
             boolean instance = view == null || view.isInstance();
+            headSaid = false;
             if (route != null && (!instance || house.inside()))
             {
                 // Not in other instances (their tiles copy a template); in the house the portal is the next thing.
                 paintNextAction(g, route, player);
+            }
+            if (!headSaid && hdTiles)
+            {
+                head(null, null, player);
             }
             // With the route done its tiles still fade away; HD World Markers draws them when it is on.
             if (route == null && fading.isEmpty() || instance && !house.own() || hdTiles)

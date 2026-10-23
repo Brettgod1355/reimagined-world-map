@@ -1,9 +1,11 @@
 package com.hdmapreforged.route;
 
 import java.util.*;
+import java.util.stream.*;
 import lombok.*;
 
-/** Immutable. */
+/** Immutable; {@code withX}: the same with another field. */
+@With
 @AllArgsConstructor
 public final class RouteRequest
 {
@@ -29,14 +31,9 @@ public final class RouteRequest
      * through it ({@link #throughWilderness()}).
      */
     public final boolean avoidWilderness;
-    /**
-     * The same with their boat, searched when this one (left without it) does not arrive; else null. {@code withBoat}:
-     * this one with it.
-     */
-    @With
+    /** The same with their boat, searched when this one (left without it) does not arrive; else null. */
     public final RouteRequest boat;
-    /** A way past a bank first, for what is kept there (setting); else null. {@code withBank}: the same with one. */
-    @With
+    /** A way past a bank first, for what is kept there (setting); else null. */
     public final BankDetour bank;
 
     public RouteRequest(int start, int target, List<Edge> startEdges, List<Edge> edges, int sailingLevel, boolean running,
@@ -52,18 +49,17 @@ public final class RouteRequest
             running, nodeLimit, avoidWilderness, null, null);
     }
 
-    /** The same ways between other ends. */
+    /** The same ways between other ends, with no bank first. */
     public RouteRequest between(int start, int target)
     {
-        return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, avoidWilderness,
-            boat == null ? null : boat.between(start, target), null);
+        return withStart(start).withTarget(target).withBank(null)
+            .withBoat(boat == null ? null : boat.between(start, target));
     }
 
     /** The same ways, through the Wilderness too: searched when staying out of it does not arrive. */
     public RouteRequest throughWilderness()
     {
-        return new RouteRequest(start, target, startEdges, edges, sailingLevel, running, nodeLimit, false,
-            boat == null ? null : boat.throughWilderness(), bank);
+        return withAvoidWilderness(false).withBoat(boat == null ? null : boat.throughWilderness());
     }
 
     /** Whether a search may use the same ways as with {@code other} (jumps and sea): what it reaches differs by start only. */
@@ -76,13 +72,7 @@ public final class RouteRequest
 
     static boolean same(List<Edge> a, List<Edge> b)
     {
-        for (int i = 0; i < a.size() && a.size() == b.size(); i++)
-        {
-            if (a.get(i).from != b.get(i).from || a.get(i).to != b.get(i).to)
-            {
-                return false;
-            }
-        }
-        return a.size() == b.size();
+        return a.size() == b.size() && IntStream.range(0, a.size())
+            .allMatch(i -> a.get(i).from == b.get(i).from && a.get(i).to == b.get(i).to);
     }
 }

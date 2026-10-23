@@ -227,30 +227,32 @@ public final class CollisionMap
     /** Nearest walkable tile within {@code radius} (Chebyshev rings, then straight distance), packed, or -1. */
     public int nearestWalkable(int x, int y, int z, int radius)
     {
-        return nearestWalkable(x, y, z, radius, x, y);
+        return nearest(x, y, z, 0, radius, x, y, null, false);
     }
 
-    /** Ties go farthest from {@code (awayX, awayY)}: a shortcut's near side, not a pocket between its stones. */
-    public int nearestWalkable(int x, int y, int z, int radius, int awayX, int awayY)
-    {
-        return nearestWalkable(x, y, z, radius, awayX, awayY, null);
-    }
-
-    /** The same, but tiles {@code avoid} names (a shut-in pocket) only when no other is within reach. */
+    /**
+     * The same, ties going farthest from {@code (awayX, awayY)} (a shortcut's near side, not a pocket between its
+     * stones), and tiles {@code avoid} names (a shut-in pocket) only when no other is within reach.
+     */
     public int nearestWalkable(int x, int y, int z, int radius, int awayX, int awayY, IntPredicate avoid)
     {
-        int plain = nearest(x, y, z, radius, awayX, awayY, null);
+        int plain = nearest(x, y, z, 0, radius, awayX, awayY, null, false);
         if (avoid == null || plain < 0 || !avoid.test(plain))
         {
             return plain;
         }
-        int open = nearest(x, y, z, radius, awayX, awayY, avoid);
+        int open = nearest(x, y, z, 0, radius, awayX, awayY, avoid, false);
         return open >= 0 ? open : plain;
     }
 
-    int nearest(int x, int y, int z, int radius, int awayX, int awayY, IntPredicate avoid)
+    /**
+     * The nearest walkable tile in rings {@code first} to {@code radius} round (x, y) that {@code avoid} does not name
+     * (null: any): by straight distance, ties farthest from (awayX, awayY); {@code scanned}: the first met, west to east
+     * and south to north. Packed, or -1.
+     */
+    int nearest(int x, int y, int z, int first, int radius, int awayX, int awayY, IntPredicate avoid, boolean scanned)
     {
-        for (int r = 0; r <= radius; r++)
+        for (int r = first; r <= radius; r++)
         {
             int best = -1;
             double bestDistance = Double.MAX_VALUE;
@@ -264,7 +266,7 @@ public final class CollisionMap
                         continue;
                     }
                     double away = (x + dx - awayX) * (double) (x + dx - awayX) + (y + dy - awayY) * (double) (y + dy - awayY);
-                    double d = (dx * dx + dy * dy) * 1e6 - away;
+                    double d = scanned ? 0 : (dx * dx + dy * dy) * 1e6 - away;
                     if (d < bestDistance)
                     {
                         bestDistance = d;

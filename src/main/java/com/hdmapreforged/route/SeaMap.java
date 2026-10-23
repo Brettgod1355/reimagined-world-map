@@ -37,11 +37,11 @@ public final class SeaMap
 
     /**
      * Per region with sea, sea.bin holds its number (two bytes) and its 256 blocks. A map version without one (up to
-     * cache-2727.40) has no sea: no sailing, but the planner still loads.
+     * cache-2727.40) or without its seas has no sea: no sailing, but the planner still loads.
      */
-    public static SeaMap load() throws IOException
+    public static SeaMap load()
     {
-        var sea = new SeaMap(Collections.unmodifiableList(readAreas(RouteFiles.require(AREAS))));
+        var sea = new SeaMap(readAreas());
         try (var in = new DataInputStream(RouteFiles.require(RouteFiles.DIR + "sea.bin")))
         {
             for (int high; (high = in.read()) >= 0; )
@@ -59,28 +59,11 @@ public final class SeaMap
         return sea;
     }
 
-    /** The seas {@code in} lists; closes it. */
-    static List<Area> readAreas(InputStream in) throws IOException
+    /** The seas sea_areas.tsv lists (name, ocean (not used), x, y, hazard, level); blank lines are short rows too. */
+    static List<Area> readAreas()
     {
-        var areas = new ArrayList<Area>();
-        Pathfinder.rows(in, -1, c -> {
-            // Blank lines are short rows too.
-            if (c.length < 6)
-            {
-                return;
-            }
-            try
-            {
-                // Name, ocean (not used), x, y, hazard, level.
-                areas.add(new Area(c[0], Integer.parseInt(c[2].trim()), Integer.parseInt(c[3].trim()), c[4],
-                    Integer.parseInt(c[5].trim())));
-            }
-            catch (NumberFormatException e)
-            {
-                // Skip the row.
-            }
-        });
-        return areas;
+        return Pathfinder.table(AREAS, c -> c.length < 6 ? null : new Area(c[0], Integer.parseInt(c[2].trim()),
+            Integer.parseInt(c[3].trim()), c[4], Integer.parseInt(c[5].trim())));
     }
 
     public Area nearest(int x, int y)

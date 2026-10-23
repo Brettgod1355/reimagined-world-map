@@ -70,8 +70,12 @@ final class PlayerMarker
         return new Ellipse2D.Double(x - r, y - r, r * 2, r * 2);
     }
 
-    /** An arrow at {@code (x, y)} pointing at {@code angle} (radians, screen coordinates). */
-    static void pointer(Graphics2D g, TextSprites text, double x, double y, double angle)
+    /**
+     * An arrow at {@code (x, y)} pointing at {@code angle} (radians, screen coordinates), {@code scale} times its size;
+     * {@code label} may be null.
+     */
+    static void pointer(Graphics2D g, TextSprites text, double x, double y, double angle, double scale, Color color,
+        String label)
     {
         var arrow = new Path2D.Double();
         arrow.moveTo(12, 0);
@@ -81,16 +85,20 @@ final class PlayerMarker
         arrow.closePath();
         var at = AffineTransform.getTranslateInstance(x, y);
         at.rotate(angle);
+        at.scale(scale, scale);
         Shape shape = at.createTransformedShape(arrow);
         g.setColor(SHADOW);
         g.setStroke(new BasicStroke(4f, CAP_ROUND, JOIN_ROUND));
         g.draw(shape);
-        g.setColor(YELLOW);
+        g.setColor(color);
         g.fill(shape);
         g.setColor(Color.BLACK);
         g.setStroke(new BasicStroke(1.2f));
         g.draw(shape);
-        label(g, text, "You", x - cos(angle) * 22, y - sin(angle) * 22 + 4);
+        if (label != null)
+        {
+            label(g, text, label, x - cos(angle) * 22, y - sin(angle) * 22 + 4);
+        }
     }
 
     static void label(Graphics2D g, TextSprites text, String label, double cx, double top)

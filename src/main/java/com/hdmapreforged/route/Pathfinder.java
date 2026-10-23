@@ -58,9 +58,10 @@ public final class Pathfinder
      * players who meet its needs. Read only after the constructor.
      */
     final IntMap closedSteps = new IntMap(64);
-    /** The heuristic's jump bounds as last worked out, by goal and the request's jumps: re-plans and Fastest order. */
-    final Map<List<Integer>, int[][]> bounds = Collections.synchronizedMap(new LruMap<>(8, BOUNDS_KEPT));
-    static final int BOUNDS_KEPT = 4;
+    /** The heuristic's jump bounds as last worked out, by goal and the request's jumps: re-plans and a tour's stops. */
+    final Map<List<Integer>, int[][]> bounds = Collections.synchronizedMap(new LruMap<>(32, BOUNDS_KEPT));
+    /** Enough for a tour's stops (up to 12) and the player's own target. */
+    static final int BOUNDS_KEPT = 16;
 
     public Pathfinder(CollisionMap map, SeaMap sea)
     {
@@ -469,41 +470,11 @@ public final class Pathfinder
         return near >= 0 ? near : start;
     }
 
-    /** Nearest walkable non-pocket tile, else nearest walkable, else -1. */
+    /** Nearest walkable non-pocket tile round (not on) the spot, else the first walkable one met, else -1. */
     int nearestOpen(int x, int y, int z, int radius, IntPredicate out)
     {
-        int fallback = -1;
-        for (int r = 1; r <= radius; r++)
-        {
-            int best = -1;
-            int bestDistance = Integer.MAX_VALUE;
-            for (int dx = -r; dx <= r; dx++)
-            {
-                for (int dy = -r; dy <= r; dy++)
-                {
-                    if (max(abs(dx), abs(dy)) != r || !map.walkable(x + dx, y + dy, z))
-                    {
-                        continue;
-                    }
-                    int node = pack(x + dx, y + dy, z);
-                    int d = dx * dx + dy * dy;
-                    if (fallback < 0)
-                    {
-                        fallback = node;
-                    }
-                    if (d < bestDistance && !pocket(node, out))
-                    {
-                        best = node;
-                        bestDistance = d;
-                    }
-                }
-            }
-            if (best >= 0)
-            {
-                return best;
-            }
-        }
-        return fallback;
+        int open = map.nearest(x, y, z, 1, radius, x, y, at -> pocket(at, out), false);
+        return open >= 0 ? open : map.nearest(x, y, z, 1, radius, x, y, null, true);
     }
 
     /** A small shut-in area (behind bank booths) with no passages; ground left by an Agility shortcut is not one. */
@@ -570,26 +541,17 @@ public final class Pathfinder
         {
             return route;
         }
-        for (int r = 1; r <= SNAP_RADIUS; r++)
+        // The first open tile round the target that the target is not reached from.
+        int near = map.nearest(x(target), y(target), z(target), 1, SNAP_RADIUS, 0, 0,
+            at -> !route.reached.contains(at) || pocket(at) || cancelled.getAsBoolean(), true);
+        if (near < 0)
         {
-            for (int dx = -r; dx <= r; dx++)
-            {
-                for (int dy = -r; dy <= r; dy++)
-                {
-                    int near = pack(x(target) + dx, y(target) + dy, z(target));
-                    if (max(abs(dx), abs(dy)) == r && map.walkable(x(near), y(near), z(near))
-                        && route.reached.contains(near) && !pocket(near) && !cancelled.getAsBoolean())
-                    {
-                        var ways = route.throughWilderness ? request.throughWilderness() : request;
-                        Route there = walkOrSail(ways.between(request.start, near).withBank(request.bank), cancelled,
-                            costLimit);
-                        // Still out of reach itself: the proof stays, so it is not searched again from here.
-                        return there.outcome != FOUND ? route : there.near(route);
-                    }
-                }
-            }
+            return route;
         }
-        return route;
+        var ways = route.throughWilderness ? request.throughWilderness() : request;
+        Route there = walkOrSail(ways.between(request.start, near).withBank(request.bank), cancelled, costLimit);
+        // Still out of reach itself: the proof stays, so it is not searched again from here.
+        return there.outcome != FOUND ? route : there.near(route);
     }
 
     Route walkOrSail(RouteRequest request, BooleanSupplier cancelled, int costLimit)
@@ -638,7 +600,13 @@ public final class Pathfinder
                 key.addAll(List.of(e.from, e.to, e.cost));
             }
         }
-        var made = bounds.computeIfAbsent(key, k -> Heuristic.bounds(jumps, towards, scale));
+        // Worked out without the map's lock: a tour's searches must not hold up the player's.
+        var made = bounds.get(key);
+        if (made == null)
+        {
+            made = Heuristic.bounds(jumps, towards, scale);
+            bounds.putIfAbsent(key, made);
+        }
         var heuristic = new Heuristic(towards, scale, made[0], made[1]);
 
         var nodes = new NodeTable();
@@ -1036,21 +1004,9 @@ public final class Pathfinder
         if (run.size() >= 2)
         {
             int[] points = new int[run.size()];
-            int doors = 0;
             for (int i = 0; i < points.length; i++)
             {
                 points[i] = run.get(points.length - 1 - i);
-            }
-            for (int i = 1; i < points.length; i++)
-            {
-                int a = points[i - 1];
-                int b = points[i];
-                int dx = x(b) - x(a);
-                int dy = y(b) - y(a);
-                if (!isSea(a) && (dx == 0 || dy == 0) && map.door(x(a), y(a), z(a), dx, dy))
-                {
-                    doors++;
-                }
             }
             int cost = nodes.cost(points[points.length - 1]) - nodes.cost(points[0]);
             boolean sailing = isSea(points[0]);
@@ -1070,6 +1026,19 @@ public final class Pathfinder
                             detail.append(detail.length() > 0 ? "; " : "").append(obstacle);
                         }
                     }
+                }
+            }
+            // Doors on the walk as drawn.
+            int doors = 0;
+            for (int i = 1; i < points.length; i++)
+            {
+                int a = points[i - 1];
+                int b = points[i];
+                int dx = x(b) - x(a);
+                int dy = y(b) - y(a);
+                if (!isSea(a) && (dx == 0 || dy == 0) && map.door(x(a), y(a), z(a), dx, dy))
+                {
+                    doors++;
                 }
             }
             reversed.add(new Step(sailing ? Step.Kind.SAIL : Step.Kind.WALK, points, null,

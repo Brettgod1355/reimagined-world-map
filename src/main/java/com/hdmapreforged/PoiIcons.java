@@ -24,16 +24,20 @@ final class PoiIcons
     /** The pixels they hold together: zooming makes a size per quarter pixel, and 4000 large ones were tens of MB. */
     static final AtomicLong SPRITE_PIXELS = new AtomicLong();
 
-    /** {@link #paint} from a cached image: painting hundreds of badges shape by shape was most of a frame's cost. */
-    static void paintCached(Graphics2D g, PoiType type, double cx, double cy, double size, boolean emphasised,
-        boolean locked)
+    /**
+     * {@link #paint} from a cached image: painting hundreds of badges shape by shape was most of a frame's cost.
+     * {@code picture}: the game's ({@link Poi#picture}), drawn instead once it is had.
+     */
+    static void paintCached(Graphics2D g, PoiType type, int picture, double cx, double cy, double size,
+        boolean emphasised, boolean locked)
     {
         var transform = g.getTransform();
         double device = device(transform);
         // Quarter pixels of badge size, so zooming changes the image in small steps.
         int quarter = (int) round(size * 4);
-        long key = (long) type.ordinal() << 40 | (locked ? 1L << 39 : 0) | (long) quarter << 16 | round(device * 10) << 1
-            | (emphasised ? 1 : 0);
+        var framed = picture(picture);
+        long key = (long) (framed == null ? 0 : picture & 0x3ffff) << 46 | (long) type.ordinal() << 40
+            | (locked ? 1L << 39 : 0) | (long) quarter << 16 | round(device * 10) << 1 | (emphasised ? 1 : 0);
         double drawnSize = quarter / 4.0;
         // Room around the badge for the shadow and the emphasis ring.
         double extent = drawnSize + (ceil(drawnSize * 0.35) + 2) * 2;
@@ -48,12 +52,60 @@ final class PoiIcons
             }
             sprite = sprite(extent, extent, device, sg -> {
                 sg.setRenderingHint(KEY_STROKE_CONTROL, VALUE_STROKE_PURE);
-                paint(sg, type, extent / 2, extent / 2, drawnSize, emphasised, locked);
+                if (framed != null)
+                {
+                    paintGameIcon(sg, framed, extent / 2, extent / 2, drawnSize, emphasised);
+                }
+                else
+                {
+                    paint(sg, type, extent / 2, extent / 2, drawnSize, emphasised, locked);
+                }
             });
             SPRITES.put(key, sprite);
             SPRITE_PIXELS.addAndGet((long) sprite.getWidth() * sprite.getHeight());
         }
         blit(g, transform, sprite, cx - extent / 2, cy - extent / 2);
+    }
+
+    /** The game's pictures by {@link Poi#picture}, in a game map icon's round frame; {@link #NONE} while asked for. */
+    static final Map<Integer, BufferedImage> PICTURES = new ConcurrentHashMap<>();
+    static final BufferedImage NONE = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+    /** Asks the game for a picture (an item's, or a sprite's as ~id), calling back with it on any thread. */
+    static BiConsumer<Integer, Consumer<BufferedImage>> load = (id, done) -> { };
+    /** Each picture had, so the maps are drawn again. */
+    static Runnable loaded = () -> { };
+
+    /** Null while not had (asked for once). */
+    static BufferedImage picture(int id)
+    {
+        if (id == 0)
+        {
+            return null;
+        }
+        if (PICTURES.putIfAbsent(id, NONE) == null)
+        {
+            load.accept(id, image -> {
+                if (image == null)
+                {
+                    return;
+                }
+                // Twice a game icon's 15 pixels: its frame, the picture within.
+                PICTURES.put(id, sprite(30, 30, 1, g -> {
+                    g.setColor(new Color(0xbfbfbf));
+                    g.fill(new Ellipse2D.Double(1, 1, 28, 28));
+                    g.setColor(Color.BLACK);
+                    g.setStroke(new BasicStroke(2));
+                    g.draw(new Ellipse2D.Double(1, 1, 28, 28));
+                    double fit = 22.0 / max(image.getWidth(), image.getHeight());
+                    g.setRenderingHint(KEY_INTERPOLATION, VALUE_INTERPOLATION_BILINEAR);
+                    g.drawImage(image, new AffineTransform(fit, 0, 0, fit, 15 - image.getWidth() * fit / 2,
+                        15 - image.getHeight() * fit / 2), null);
+                }));
+                loaded.run();
+            });
+        }
+        var had = PICTURES.get(id);
+        return had == NONE ? null : had;
     }
 
     /** Draws a screen-resolution sprite on whole screen pixels: at fractions Java2D resamples it each draw (slow). */
@@ -168,6 +220,7 @@ final class PoiIcons
     static void clearCache()
     {
         SPRITES.clear();
+        PICTURES.clear();
     }
 
     /** The game's own map icon for the type if it has one, else a round badge in the type's color with a glyph. */

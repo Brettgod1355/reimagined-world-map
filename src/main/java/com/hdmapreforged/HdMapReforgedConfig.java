@@ -11,10 +11,8 @@ public interface HdMapReforgedConfig extends Config
     String GROUP = "hdmapreforged";
     int MIN_DROP_VALUE = 1000;
 
-    @ConfigSection(name = "Icons", description = "Which icons the map shows", position = 0)
-    String icons = "icons";
-
-    @ConfigSection(name = "Map", description = "Map behaviour and appearance", position = 1)
+    @ConfigSection(name = "Map", description = "Map behaviour and appearance. Which icons it shows: its Icons button",
+        position = 1)
     String map = "map";
 
     @ConfigSection(name = "Data and downloads", description = "What is downloaded, and how it is kept", position = 4,
@@ -33,94 +31,38 @@ public interface HdMapReforgedConfig extends Config
         position = 5, closedByDefault = true)
     String friends = "friends";
 
-    @ConfigItem(keyName = "showTeleports", name = "Teleports", position = 0, section = icons,
-        description = "Teleport spells, items and minigame teleports")
-    default boolean showTeleports()
+    /** The map's Icons panel: kinds of icons hidden ({@link Poi#toggle}, {@link MapData.Icon#toggle}), one a line. */
+    @ConfigItem(keyName = "iconsOff", name = "", description = "", hidden = true)
+    default String iconsOff()
     {
-        return true;
+        return "";
     }
 
-    @ConfigItem(keyName = "showTransports", name = "Transport networks", position = 1, section = icons,
-        description = "Fairy rings, spirit trees, gliders, balloons, boats, carts, carpets and more")
-    default boolean showTransports()
-    {
-        return true;
-    }
-
-    @ConfigItem(keyName = "showDungeons", name = "Dungeon entrances", position = 2, section = icons,
-        description = "Ladders, stairs and holes to another map. Click one to look inside")
-    default boolean showDungeons()
-    {
-        return true;
-    }
-
-    @ConfigItem(keyName = "showSailing", name = "Sailing", position = 3, section = icons,
-        description = "Moorings and salvage spots")
-    default boolean showSailing()
-    {
-        return true;
-    }
-
-    @ConfigItem(keyName = "showSkilling", name = "Skilling", position = 4, section = icons,
-        description = "Runecrafting altars, agility courses and shortcuts, farming patches")
-    default boolean showSkilling()
-    {
-        return true;
-    }
-
-    @ConfigItem(keyName = "showActivities", name = "Minigames", position = 5, section = icons,
-        description = "Minigame locations")
-    default boolean showActivities()
-    {
-        return true;
-    }
-
-    @ConfigItem(keyName = "showServices", name = "Banks, altars and anvils", position = 6, section = icons,
-        description = "Shown when zoomed in")
-    default boolean showServices()
-    {
-        return true;
-    }
-
-    @ConfigItem(keyName = "showGameIcons", name = "Game map icons", position = 7, section = icons,
-        description = "The game's own map icons: shops, quest starts, map links and more")
-    default boolean showGameIcons()
-    {
-        return true;
-    }
-
-    @ConfigItem(keyName = "questStatus", name = "Quest status", position = 8, section = icons,
-        description = "A dot on quest start icons: green finished, yellow started, red not started")
+    @ConfigItem(keyName = "questStatus", name = "", description = "", hidden = true)
     default boolean questStatus()
     {
         return true;
     }
 
-    @ConfigItem(keyName = "hideCompletedQuests", name = "Hide completed quests", position = 9, section = icons,
-        description = "No quest start icons for finished quests")
+    @ConfigItem(keyName = "hideCompletedQuests", name = "", description = "", hidden = true)
     default boolean hideCompletedQuests()
     {
         return false;
     }
 
-    @ConfigItem(keyName = "markLocked", name = "Mark what I can't use", position = 10, section = icons,
-        description = "A red sign on shortcuts, moorings and resources whose level, quest or unlock you lack")
+    @ConfigItem(keyName = "markLocked", name = "", description = "", hidden = true)
     default boolean markLocked()
     {
         return true;
     }
 
-    @ConfigItem(keyName = "onlyUsable", name = "Only what I can use", position = 11, section = icons,
-        description = "Hide icons and routes whose level, quest or unlock you lack (needs you logged in)")
+    @ConfigItem(keyName = "onlyUsable", name = "", description = "", hidden = true)
     default boolean onlyUsable()
     {
         return false;
     }
 
-    @Range(min = 10, max = 40)
-    @Units(Units.PIXELS)
-    @ConfigItem(keyName = "iconSize", name = "Icon size", position = 12, section = icons,
-        description = "Size of map icons. The game's own icons grow in whole steps to stay sharp")
+    @ConfigItem(keyName = "iconSize", name = "", description = "", hidden = true)
     default int iconSize()
     {
         return 18;

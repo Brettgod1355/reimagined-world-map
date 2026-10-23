@@ -19,7 +19,7 @@ import net.runelite.client.util.*;
 import okhttp3.*;
 
 /**
- * Map tiles from our map server, in memory, optionally on disk, downloaded a few at a time. Each frame queues tiles farthest first
+ * Map tiles from our map server, in memory and on disk, downloaded a few at a time. Each frame queues tiles farthest first
  * and loads at frame end, so the middle loads first; tiles scrolled away before their turn are dropped.
  */
 @Slf4j
@@ -34,7 +34,7 @@ final class TileCache
     static final long MB = 1024 * 1024;
     /**
      * 128 MB of tiles in view: past it the views draw a coarser level, a quarter of the tiles (a 4K window's upper floor
-     * would need 2,000 tiles, 500 MB, just above a whole zoom). A higher memory setting raises it.
+     * would need 2,000 tiles, 500 MB, just above a whole zoom).
      */
     static final int MAX_TILES = 512;
     /** Kept while no map is open, for the next opening. */
@@ -97,9 +97,8 @@ final class TileCache
     /** Bytes on disk as last counted, plus writes since; a trim runs once it passes the limit. */
     final AtomicLong diskBytes = new AtomicLong();
     final AtomicBoolean trimQueued = new AtomicBoolean();
-    boolean configured;
     volatile String version;
-    volatile boolean diskCache;
+    /** Tiles held in memory past those in view; the tests raise or lower it. */
     volatile int memoryLimit = 256;
     volatile int diskLimitMb = 1000;
     /** What each open view needs; the memory cache never shrinks below their sum, or tiles in view would reload. */
@@ -123,27 +122,12 @@ final class TileCache
         return TILE_SIZE / Math.pow(2, zoom);
     }
 
-    void configure(boolean diskCache, int memoryLimit, int diskLimitMb)
+    /** The disk cache's size (setting); lowered, it trims at once. */
+    void configure(int diskLimitMb)
     {
-        boolean wasOn;
-        boolean first;
-        int oldLimit;
-        synchronized (this)
-        {
-            wasOn = this.diskCache;
-            oldLimit = this.diskLimitMb;
-            first = !configured;
-            configured = true;
-            this.diskCache = diskCache;
-            this.memoryLimit = memoryLimit;
-            this.diskLimitMb = diskLimitMb;
-            trim();
-        }
-        if (!diskCache && (wasOn || first))
-        {
-            execute(this::deleteCachedTiles);
-        }
-        else if (diskCache && wasOn && diskLimitMb < oldLimit)
+        int oldLimit = this.diskLimitMb;
+        this.diskLimitMb = diskLimitMb;
+        if (diskLimitMb < oldLimit)
         {
             requestTrim();
         }
@@ -158,7 +142,7 @@ final class TileCache
     {
         var old = versionFolder(from);
         var fresh = versionFolder(to);
-        if (!diskCache || !old.isDirectory() || fresh.exists())
+        if (!old.isDirectory() || fresh.exists())
         {
             return false;
         }
@@ -243,10 +227,6 @@ final class TileCache
 
     void rememberMissing(String tileVersion, Key key)
     {
-        if (!diskCache)
-        {
-            return;
-        }
         synchronized (missingFile)
         {
             try
@@ -267,7 +247,7 @@ final class TileCache
     void loadMissing(String tileVersion)
     {
         var file = versionFolder(tileVersion).joinSegment(MISSING);
-        if (!diskCache || !file.isFile())
+        if (!file.isFile())
         {
             return;
         }
@@ -387,7 +367,7 @@ final class TileCache
     BufferedImage keep(Filepath file, byte[] bytes, Color under) throws IOException
     {
         BufferedImage image = decode(bytes, under);
-        if (image != null && diskCache)
+        if (image != null)
         {
             write(file, bytes);
         }
@@ -538,7 +518,7 @@ final class TileCache
     /** Files that are no tile are removed so they download again; a failed read leaves the file. */
     BufferedImage readCached(Filepath file, Color under)
     {
-        if (!diskCache || !file.isFile())
+        if (!file.isFile())
         {
             return null;
         }
@@ -940,10 +920,6 @@ final class TileCache
     {
         try
         {
-            if (!diskCache)
-            {
-                return;
-            }
             long counted = diskBytes.get();
             long now = System.currentTimeMillis();
             var entries = new ArrayList<Entry>();
@@ -999,23 +975,6 @@ final class TileCache
             }
         }
         return removed;
-    }
-
-    /** Background thread: the disk cache was switched off, so its tiles go. */
-    void deleteCachedTiles()
-    {
-        if (diskCache)
-        {
-            return;
-        }
-        for (var dir : versionDirs())
-        {
-            if (MapServer.isSafeVersion(dir.getFileName()))
-            {
-                deleteTree(dir);
-            }
-        }
-        diskBytes.set(0);
     }
 
     List<Filepath> versionDirs()

@@ -49,6 +49,9 @@ final class MapData
         final boolean flat;
         /** The name of its key on the game's world map ("Shipwright"), or null. */
         final String kind;
+        /** What the Icons panel shows and hides it by: its type's name, else its key's ("Fairy ring (AIQ)": "Fairy ring"). */
+        final String toggle;
+        final Layer group;
 
         Icon(WorldPoint location, BaseMap map, Poi poi, boolean own, int element, String kind)
         {
@@ -61,6 +64,13 @@ final class MapData
             flat = map != null && drawn != null && drawn.getPlane() > 0
                 && drawn.getPlane() < WorldMapMoves.floorsDrawnFlat(map.id, drawn.getX(), drawn.getY());
             this.kind = kind;
+            var type = poi.type;
+            String name = kind == null || type.layer != Layer.DUNGEONS && type != PoiType.SHOP && type != PoiType.GAME_ICON
+                ? type.displayName : kind.replaceFirst(" \\(.*\\)$", "");
+            var row = PoiType.key(name);
+            toggle = row == null || row[1].isEmpty() ? name : row[1];
+            var listed = row == null ? null : value(Layer.class, row[2]);
+            group = listed == null ? type.layer : listed;
         }
     }
 
@@ -274,6 +284,10 @@ final class MapData
             {
                 poi.drawnAt = drawn;
             }
+            if (poi != null && place.picture != null)
+            {
+                poi.picture = place.picture;
+            }
             if (poi == null)
             {
                 // The places nearby are left out with it, keeping their numbers.
@@ -381,6 +395,8 @@ final class MapData
         String wiki;
         Integer target;
         String note;
+        /** The game's picture for it ({@link Poi#picture}). */
+        Integer picture;
         /** Not drawn (top-level places only). */
         Boolean hidden;
         List<LinkJson> links;

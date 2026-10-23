@@ -201,6 +201,13 @@ final class RoutePanels
                 line.add(more, BorderLayout.EAST);
                 panel.add(capped(line));
             }
+            // After the last step: where it all goes, as the arrow on the map.
+            int end = route.end >= 0 ? route.end : target;
+            JButton destination = flat("\u25BC Destination", "Show the destination on the map",
+                () -> focus.accept(worldPoint(end)));
+            destination.setForeground(END);
+            destination.setMargin(new Insets(1, 0, 1, 0));
+            panel.add(destination);
             if (unsure)
             {
                 add(panel, 4, label("Some steps may need a quest, level or item the map does not know about.", width,

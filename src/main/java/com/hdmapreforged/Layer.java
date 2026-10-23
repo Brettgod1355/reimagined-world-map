@@ -1,22 +1,23 @@
 package com.hdmapreforged;
 
-import java.util.function.*;
 import lombok.*;
 
-/** Icon groups toggled together, in order of precedence when icons overlap. */
+/** Icon groups, in order of precedence when icons overlap; the Icons panel lists their kinds under their titles. */
 @RequiredArgsConstructor
 enum Layer
 {
-    DUNGEONS(-0.5, HdMapReforgedConfig::showDungeons),
-    TRANSPORTS(Double.NEGATIVE_INFINITY, HdMapReforgedConfig::showTransports),
-    TELEPORTS(-2.5, HdMapReforgedConfig::showTeleports),
-    SAILING(-1.5, HdMapReforgedConfig::showSailing),
-    SKILLING(1.5, HdMapReforgedConfig::showSkilling),
-    ACTIVITIES(-1, HdMapReforgedConfig::showActivities),
-    SERVICES(1, HdMapReforgedConfig::showServices),
-    GAME_ICONS(Double.NEGATIVE_INFINITY, config -> true);
+    DUNGEONS("Dungeons and passages", -0.5),
+    TRANSPORTS("Transport", Double.NEGATIVE_INFINITY),
+    TELEPORTS("Teleports", -2.5),
+    SAILING("Sailing", -1.5),
+    SKILLING("Skilling", 1.5),
+    ACTIVITIES("Minigames", -1),
+    SERVICES("Services", 1),
+    SHOPS("Shops", Double.NEGATIVE_INFINITY),
+    QUESTS("Quests", Double.NEGATIVE_INFINITY),
+    GAME_ICONS("Other map icons", Double.NEGATIVE_INFINITY);
 
+    final String title;
     /** Hidden below this zoom, so the zoomed-out map stays readable. */
     final double minZoom;
-    final Predicate<HdMapReforgedConfig> setting;
 }

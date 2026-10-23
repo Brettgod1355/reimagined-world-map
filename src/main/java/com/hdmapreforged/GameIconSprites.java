@@ -5,6 +5,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import net.runelite.api.*;
 import net.runelite.api.worldmap.*;
+import net.runelite.client.util.*;
 
 /** The game's own world map icons, read from the client: drawn as the game's icons, and so our icons look like them. */
 final class GameIconSprites
@@ -79,10 +80,13 @@ final class GameIconSprites
         return image != null && image.getWidth() > 0 && image.getHeight() > 0 ? image : null;
     }
 
+    /** Fairy rings: the game draws its transport arrow for them; ours, as the game draws its icons. */
+    static final BufferedImage FAIRY_RING = ImageUtil.loadImageResource(GameIconSprites.class, "fairy_ring.png");
+
     /** Null when not loaded yet, or a type we draw ourselves. */
     static BufferedImage get(PoiType type)
     {
-        return SPRITES.get(type);
+        return type == PoiType.FAIRY_RING ? FAIRY_RING : SPRITES.get(type);
     }
 
     static void clear()

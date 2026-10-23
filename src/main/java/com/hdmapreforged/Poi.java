@@ -37,6 +37,15 @@ final class Poi
      */
     WorldPoint drawnAt;
 
+    /** The game's picture the map draws it with: an item's id, a sprite's as {@code ~id}; 0 none (its type's icon). */
+    int picture;
+
+    /** What the Icons panel shows and hides it by: a teleport's group ("Amulet of glory"), else its type's name. */
+    String toggle()
+    {
+        return type == PoiType.TELEPORT && group != null ? group : type.displayName;
+    }
+
     /** Where the map draws it. */
     WorldPoint drawn()
     {

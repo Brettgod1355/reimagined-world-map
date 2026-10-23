@@ -1,6 +1,5 @@
 package com.hdmapreforged.route;
 
-import java.io.*;
 import java.util.*;
 
 /** Where a boat lies at each Sailing port (ports.tsv, from the game cache), keyed by SAILING_BOAT_n_PORT values. */
@@ -8,12 +7,12 @@ public final class Ports
 {
     public static final String RESOURCE = RouteFiles.DIR + "ports.tsv";
 
-    /** Port id → packed tile of the boat. */
-    public static Map<Integer, Integer> load() throws IOException
+    /** Port id → packed tile of the boat; none without the table. */
+    public static Map<Integer, Integer> load()
     {
-        InputStream in = RouteFiles.require(RESOURCE);
         var ports = new HashMap<Integer, Integer>();
-        Pathfinder.rows(in, 0, c -> {
+        for (var c : Pathfinder.rows(RESOURCE))
+        {
             try
             {
                 // Short rows and blank lines fail here too.
@@ -24,7 +23,7 @@ public final class Ports
             {
                 // Skip the row.
             }
-        });
+        }
         return Collections.unmodifiableMap(ports);
     }
 }

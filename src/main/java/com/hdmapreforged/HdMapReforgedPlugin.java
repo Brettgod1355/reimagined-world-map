@@ -71,6 +71,9 @@ public class HdMapReforgedPlugin extends Plugin
     ItemManager itemManager;
 
     @Inject
+    SpriteManager spriteManager;
+
+    @Inject
     HdMapReforgedConfig config;
 
     @Inject
@@ -189,8 +192,8 @@ public class HdMapReforgedPlugin extends Plugin
         failedMaps = 0;
         // Turned on at the login screen, the next login asks; turned on in the game, the next loading screen does not.
         loggedOut = client.getGameState() != GameState.LOGGED_IN;
-        io = Executors.newFixedThreadPool(4, runnable -> daemon(runnable, "Reimagined World Map tiles"));
-        dataIo = Executors.newSingleThreadExecutor(runnable -> daemon(runnable, "Reimagined World Map data"));
+        io = Executors.newFixedThreadPool(4, threads("Reimagined World Map tiles", Thread.NORM_PRIORITY));
+        dataIo = Executors.newSingleThreadExecutor(threads("Reimagined World Map data", Thread.NORM_PRIORITY));
         home = getPluginDirectory();
         MapServer.use(developerMode);
         server = new MapServer(okHttpClient, gson);
@@ -234,6 +237,7 @@ public class HdMapReforgedPlugin extends Plugin
         for (var on : new MapScreen[]{screen, fullScreen})
         {
             on.view.linesChoice = value -> configManager.setConfiguration(GROUP, "linesOff", value);
+            on.icons.set = (key, value) -> configManager.setConfiguration(GROUP, key, value);
             on.view.checkForMap = () -> runData(this::checkForMap);
             on.setNpcPictures(pictures);
         }
@@ -243,6 +247,19 @@ public class HdMapReforgedPlugin extends Plugin
         versionsAskMs = developerMode ? 30_000L : VERSIONS_ASK_MS;
         // The screens start empty until a map version's files are had and read on the data thread.
         runData(() -> resolveVersions(false));
+        // The game's pictures of teleports and runecrafting altars: an item's, or a sprite's (~id).
+        PoiIcons.load = (id, done) -> {
+            if (id > 0)
+            {
+                var image = itemManager.getImage(id);
+                image.onLoaded(() -> done.accept(image));
+            }
+            else
+            {
+                spriteManager.getSpriteAsync(~id, 0, done);
+            }
+        };
+        PoiIcons.loaded = this::refreshLater;
         whenGameLoaded(started, () -> GameIconSprites.load(client), PoiIcons::clearCache);
     }
 
@@ -265,18 +282,22 @@ public class HdMapReforgedPlugin extends Plugin
 
     MapIconLayer gameIconLayer(MapScreen on)
     {
-        var layer = new MapIconLayer(on.view, config::showGameIcons, config::iconSize);
+        var layer = new MapIconLayer(on.view, config::iconSize);
         on.view.addOverlay(layer);
         on.view.hitLayers.add(layer);
         on.view.setBadgeCover(layer::covers);
         return layer;
     }
 
-    static Thread daemon(Runnable runnable, String name)
+    /** Daemon threads called {@code name} at {@code priority}, for the plugin's own executors. */
+    static ThreadFactory threads(String name, int priority)
     {
-        Thread thread = new Thread(runnable, name);
-        thread.setDaemon(true);
-        return thread;
+        return runnable -> {
+            Thread thread = new Thread(runnable, name);
+            thread.setDaemon(true);
+            thread.setPriority(priority);
+            return thread;
+        };
     }
 
     /** Also safe after a startUp that failed half-way: only what was made is undone. */
@@ -292,6 +313,8 @@ public class HdMapReforgedPlugin extends Plugin
         }
         GameIconSprites.clear();
         PoiIcons.clearCache();
+        PoiIcons.load = (id, done) -> { };
+        PoiIcons.loaded = () -> { };
         party.stop();
         route.stop();
         if (button != null)
@@ -472,12 +495,14 @@ public class HdMapReforgedPlugin extends Plugin
      */
     volatile boolean gameTakesText;
     /**
-     * Whether an open interface takes keys itself (the jewellery box's letters, a menu's numbers): looked at again on
-     * the two client ticks after one opens or closes, as its scripts set its key handler when it loads; until then the
-     * game gets typed keys, so a key pressed at once never opens the map past the interface.
+     * Whether an open interface takes keys itself (the jewellery box's letters, a menu's numbers, the settings' search
+     * once clicked): looked at on the two client ticks after one opens or closes, and every fifth tick besides, as its
+     * scripts set its key handler when it loads or later (the search's after the server sets its varbit). On those two
+     * ticks the game gets typed keys, so a key pressed at once never opens the map past the interface.
      */
     volatile boolean interfaceTakesKeys;
     volatile int interfacesChanged = 2;
+    int clientTicks;
 
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded event)
@@ -497,9 +522,13 @@ public class HdMapReforgedPlugin extends Plugin
         boolean text = false;
         if (client.getGameState() == GameState.LOGGED_IN)
         {
-            if (interfacesChanged > 0)
+            boolean changed = interfacesChanged > 0;
+            if (changed)
             {
                 interfacesChanged--;
+            }
+            if (changed || ++clientTicks % 5 == 0)
+            {
                 interfaceTakesKeys = modalTakesKeys();
             }
             var chat = client.getWidget(InterfaceID.Chatbox.UNIVERSE);
@@ -723,13 +752,16 @@ public class HdMapReforgedPlugin extends Plugin
             case "linesOff":
                 screens(s -> s.view.setLinesOff(config.linesOff()));
                 return;
+            case "iconsOff":
+                screens(s -> s.view.setIconsOff(config.iconsOff()));
+                return;
         }
         refreshLater();
     }
 
     void configureTiles()
     {
-        tiles.configure(true, 256, config.diskCacheMb());
+        tiles.configure(config.diskCacheMb());
     }
 
     void tileLoaded()

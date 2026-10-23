@@ -4,13 +4,14 @@ import java.awt.*;
 import java.util.*;
 import java.util.List;
 import lombok.*;
+import net.runelite.api.Player;
 import net.runelite.api.coords.*;
 import net.runelite.client.events.*;
 
 /**
- * The route's ground tiles via HD World Markers' public plugin messages ({@code tiles}, {@code lines} and
- * {@code clear}, one owner; its guide's "For plugin developers"). It clears them on logout, world hop, connection loss
- * and a profile change: they are sent again after.
+ * The route's ground tiles and texts via HD World Markers' public plugin messages ({@code tiles}, {@code lines},
+ * {@code texts} and {@code clear}; its guide's "For plugin developers"). It clears them on logout, world hop, connection
+ * loss and a profile change: they are sent again after.
  */
 final class TileMarkersBridge
 {
@@ -79,6 +80,18 @@ final class TileMarkersBridge
             list.add(entry);
         }
         return message("lines", list);
+    }
+
+    /**
+     * The text over the player's head ({@code texts}, following the player); its own owner, so clearing the tiles leaves
+     * it. A null text takes it away.
+     */
+    static PluginMessage head(String text, Color color, Player player)
+    {
+        var data = new HashMap<String, Object>();
+        data.put("owner", OWNER + "-text");
+        data.put("texts", text == null ? List.of() : List.of(Map.of("text", text, "color", color, "player", player)));
+        return new PluginMessage(NAMESPACE, "texts", data);
     }
 
     static PluginMessage clear()

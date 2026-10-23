@@ -15,7 +15,8 @@ final class PartyMapRules
     static final long IDLE_LEAVE_MILLIS = 30 * 60_000;
     /** Every tick something changed, as RuneLite's own Party plugin sends its status. */
     static final int MIN_SEND_TICKS = 1;
-    static final int GEAR_TICKS = 1;
+    /** Gear at most every three seconds: a message is some 600 bytes, and a fight changes it most ticks. */
+    static final int GEAR_TICKS = 5;
     static final int MAX_DROPS_PER_LOOT = 4;
     /** Sent at least this often while standing still, so newcomers and fading work. */
     static final int HEARTBEAT_TICKS = 50;

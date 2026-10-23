@@ -139,7 +139,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         card.setItemSearch(npcs::findItem);
         npcs.setPlaces(this::place);
         cardScroll = scroll(card);
-        for (Floating floating : new Floating[]{cardFloat, npcFloat, toursFloat, houseFloat})
+        for (Floating floating : new Floating[]{cardFloat, npcFloat, toursFloat, houseFloat, iconsFloat})
         {
             floating.addPropertyChangeListener("folded", e -> placeFloatingCard());
         }
@@ -207,6 +207,13 @@ final class MapScreen extends JPanel implements MapView.Listener
         });
         plain(popOut, null, 4, e -> togglePopOut.run());
         card.setOnRebuilt(this::placeFloatingCard);
+        icons = new IconPanel(config, () -> {
+            if (iconsShown)
+            {
+                showIcons(true);
+            }
+        });
+        view.iconsPanel = () -> showIcons(!iconsShown);
         layers.addComponentListener(new ComponentAdapter()
         {
             public void componentResized(ComponentEvent e)
@@ -373,6 +380,18 @@ final class MapScreen extends JPanel implements MapView.Listener
     final JPanel housePanel = new JPanel(new BorderLayout());
     final Floating houseFloat = new Floating("Your house", () -> showHouse(null));
 
+    final IconPanel icons;
+    final JPanel iconsPanel = new JPanel(new BorderLayout());
+    final Floating iconsFloat = new Floating("Icons", () -> showIcons(false));
+    boolean iconsShown;
+
+    /** The Icons panel: over the game at the top right, below its button; elsewhere in the card. */
+    void showIcons(boolean show)
+    {
+        iconsShown = show;
+        showFloatingElseSection(iconsPanel, iconsFloat, PALETTE_LAYER + 2, show ? icons::section : null);
+    }
+
     /** The "Your house" panel: over the game in a panel of its own, elsewhere in the card; null closes it. */
     void showHouse(IntFunction<JComponent> section)
     {
@@ -455,6 +474,12 @@ final class MapScreen extends JPanel implements MapView.Listener
             toursFloat.setBounds(20 + MapView.floorGroupWidth(view.getFontMetrics(MapView.CONTROL_FONT)),
                 bottomY - toursHeight, FLOATING_WIDTH, toursHeight);
             toursFloat.revalidate();
+        }
+        if (iconsFloat.isVisible())
+        {
+            // Clear of the zoom and follow buttons, as the card.
+            iconsFloat.setBounds(w - FLOATING_WIDTH - 12, 58, FLOATING_WIDTH, fit(iconsFloat, iconsPanel, h - 204));
+            iconsFloat.revalidate();
         }
         for (Floating floating : new Floating[]{npcFloat, houseFloat})
         {
@@ -571,6 +596,7 @@ final class MapScreen extends JPanel implements MapView.Listener
             .filter(poi -> poi.type == previous.type && poi.location.equals(previous.location)).findFirst().orElse(null));
         viewChanged();
         this.data = data;
+        icons.setData(data);
     }
 
     void setUnlocks(Unlocks unlocks)
@@ -588,8 +614,7 @@ final class MapScreen extends JPanel implements MapView.Listener
         {
             boolean arrives = poi.type == PoiType.TELEPORT || poi.type.layer == Layer.TRANSPORTS && !poi.links().isEmpty()
                 || poi.nearby().stream().anyMatch(p -> p.type == PoiType.TELEPORT);
-            if (arrives && poi.map != null && poi.map == target && view.usable(poi)
-                && (poi.type == PoiType.TELEPORT ? config.showTeleports() : config.showTransports()))
+            if (arrives && poi.map != null && poi.map == target && view.usable(poi) && view.kindShown(poi))
             {
                 found.add(poi);
             }
@@ -842,8 +867,6 @@ final class MapScreen extends JPanel implements MapView.Listener
                 case ICON:
                     var poi = (Poi) hit.target;
                     return poi.map != null && view.usable(poi);
-                case GAME_ICON:
-                    return config.showGameIcons();
                 case PLACE:
                 case MAP:
                     // The game labels some spots with the monsters there ("Abyssal demons"), some maps are a boss's

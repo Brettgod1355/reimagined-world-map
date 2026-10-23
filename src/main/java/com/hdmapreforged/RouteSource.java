@@ -7,7 +7,6 @@ import static com.hdmapreforged.RouteFeature.pack;
 
 import com.hdmapreforged.route.*;
 import com.hdmapreforged.route.Edge.Kind;
-import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.*;
@@ -25,7 +24,7 @@ final class RouteSource
     static final int PORT_RADIUS = 24;
     /** How far from its dock a port's boat lies, at most (Port Piscarilius: 34 tiles). */
     static final int BOAT_REACH = 40;
-    static final Pattern SAILING = Pattern.compile("(\\d+)\\s+Sailing", Pattern.CASE_INSENSITIVE);
+    static final Pattern SAILING = Pattern.compile("\\b(\\d{1,3})\\s+Sailing", Pattern.CASE_INSENSITIVE);
 
     @RequiredArgsConstructor
     static final class Options
@@ -61,25 +60,10 @@ final class RouteSource
         final int carpet;
         final int ship;
 
+        /** By {@link PoiType#saving}: none, or the shortcut, transport, canoe, carpet or ship setting. */
         int tiles(PoiType type)
         {
-            switch (type)
-            {
-                case AGILITY_SHORTCUT:
-                    return shortcut;
-                case CANOE:
-                    return canoe;
-                case CARPET:
-                    return carpet;
-                case BOAT:
-                case CHARTER:
-                    return ship;
-                case PORTAL:
-                case LEVER:
-                    return 0;
-                default:
-                    return transport;
-            }
+            return new int[]{0, shortcut, transport, canoe, carpet, ship}[type.saving];
         }
     }
 
@@ -124,17 +108,12 @@ final class RouteSource
 
     final class Call
     {
-        final Set<String> avoiding;
-        final Saving saving;
         final Unlocks realUnlocks;
         final Unlocks missingLevels;
         final ItemSnapshot missingItems;
-        /** With the bank's items too: what is carried without them (to say what to take out); else null. */
-        final ItemSnapshot carried;
         /** What may be used: carried, and with the bank's items too. */
         final ItemSnapshot items;
         final int realSailing;
-        final boolean fallback;
         final long minute = System.currentTimeMillis() / 60_000;
 
         final IntFunction<String> itemNames;
@@ -150,15 +129,11 @@ final class RouteSource
         {
             this.options = options;
             itemNames = RouteSource.this.itemNames;
-            avoiding = options.avoid;
-            saving = options.saving;
             realUnlocks = unlocks;
             missingLevels = options.ignoreLevels ? unlocks : null;
             missingItems = options.ignoreItems ? state.items : null;
-            carried = state.carried;
             items = state.items;
             realSailing = !options.ignoreLevels ? 99 : state.sailing ? state.sailingLevel : 0;
-            fallback = options.fallback;
             this.unlocks = options.ignoreLevels ? null : unlocks;
             state = options.ignoreLevels ? state.with(state.items, 99, true) : state;
             this.state = options.ignoreItems ? state.with(ItemSnapshot.EVERYTHING, state.sailingLevel, state.sailing) : state;
@@ -167,8 +142,8 @@ final class RouteSource
         /** Whether the route leaves out a way by its name or by its kind; either may be null. */
         boolean avoids(String name, String category)
         {
-            return name != null && avoiding.contains(name.toLowerCase(ROOT))
-                || category != null && avoiding.contains(typeKey(category));
+            return name != null && options.avoid.contains(name.toLowerCase(ROOT))
+                || category != null && options.avoid.contains(typeKey(category));
         }
 
         RouteRequest request(int start, int target, List<Poi> pois, int nodeLimit)
@@ -229,9 +204,9 @@ final class RouteSource
             }
             if (state.inHouse || options.teleports)
             {
-                house(pois, teleportsByName, startEdges, edges);
+                house(all, teleportsByName, startEdges, edges);
             }
-            if (!avoiding.isEmpty())
+            if (!options.avoid.isEmpty())
             {
                 // Also the house's ways (its jewellery box, portals), by name or kind as the route's steps show them.
                 Predicate<Edge> avoided = e -> avoids(e.name, e.category);
@@ -340,7 +315,7 @@ final class RouteSource
             String name = member.name.toLowerCase(ROOT);
             String category = member.group != null && !member.group.isEmpty() ? member.group : "Teleports";
             boolean once = onceOnly(name, member.group);
-            if (avoids(name, category) || once && avoiding.contains(ONCE_ONLY))
+            if (avoids(name, category) || once && options.avoid.contains(ONCE_ONLY))
             {
                 return;
             }
@@ -354,7 +329,7 @@ final class RouteSource
                 detail(TELEPORT, member.needs),
                 // Half ticks: 4 ticks (a teleport spell, a tablet); a home or minigame teleport takes 24 ticks to cast.
                 once ? 48 : 8, category)
-                .weighed(saving.teleport + lacking + (charged(member.group, state) ? 1 : 0)));
+                .weighed(options.saving.teleport + lacking + (charged(member.group, state) ? 1 : 0)));
         }
 
         void transport(Poi poi, List<Edge> into)
@@ -371,7 +346,6 @@ final class RouteSource
             {
                 return;
             }
-            var kind = kind(poi.type);
             for (var link : poi.links())
             {
                 if (!usable(link.needs) || !carried(poi.type, link.needs)
@@ -393,7 +367,7 @@ final class RouteSource
                 String name = describe(poi, link);
                 // A shortcut left out before 0.3.2 was saved with its other side ("… → other side").
                 if (avoids(name, poi.type.displayName) || poi.type == AGILITY_SHORTCUT && link.label != null
-                    && avoiding.contains((name + " → " + link.label).toLowerCase(ROOT)))
+                    && options.avoid.contains((name + " → " + link.label).toLowerCase(ROOT)))
                 {
                     continue;
                 }
@@ -404,9 +378,9 @@ final class RouteSource
                     // The fee apart: it cannot be checked, so it is not something the player lacks.
                     needs = needs == null ? "Needs: " + fee.text : needs + ". Also needs: " + fee.text;
                 }
-                into.add(new Edge(from, to, kind, name, needs, cost(poi.type) * dials(poi.type, link.label)
+                into.add(new Edge(from, to, poi.type.kind, name, needs, poi.type.cost * dials(poi.type, link.label)
                     + (fee == null ? 0 : fee.cost),
-                    poi.type.displayName).weighed(saving.tiles(poi.type)));
+                    poi.type.displayName).weighed(options.saving.tiles(poi.type)));
             }
         }
 
@@ -502,7 +476,7 @@ final class RouteSource
         /** The fallback takes a teleport whose item the player lacks only as a last resort (else all of it would be red). */
         int lacking(Needs needs)
         {
-            return fallback && missingItems != null && !needs.items.isEmpty()
+            return options.fallback && missingItems != null && !needs.items.isEmpty()
                 && !missingItems.has(needs.items) ? LACKING_ITEM : 0;
         }
 
@@ -617,7 +591,7 @@ final class RouteSource
                 {
                     starts.add(new Edge(Edge.ANYWHERE, plan.arrival, Kind.TELEPORT, teleport,
                         detail(TELEPORT, needs(best)), 10, "Teleports")
-                        .weighed(saving.teleport + lacking));
+                        .weighed(options.saving.teleport + lacking));
                 }
                 if (door >= 0)
                 {
@@ -631,7 +605,7 @@ final class RouteSource
                 {
                     starts.add(new Edge(Edge.ANYWHERE, e.to, Kind.HOUSE, teleport + " → " + e.name,
                         both(detail(TELEPORT, needs(best)), e.detail), 10 + e.cost)
-                        .weighed(saving.teleport + lacking));
+                        .weighed(options.saving.teleport + lacking));
                 }
                 if (door >= 0)
                 {
@@ -677,7 +651,7 @@ final class RouteSource
                 {
                     if (poi.type == OBELISK && usable(poi.needs))
                     {
-                        addHouse(into, poi.location, "House obelisk: " + poi.name, cost(OBELISK), null);
+                        addHouse(into, poi.location, "House obelisk: " + poi.name, OBELISK.cost, null);
                     }
                 }
             }
@@ -745,7 +719,7 @@ final class RouteSource
          */
         String bankNeeds(PoiType type, Needs needs)
         {
-            boolean enough = carried == null || carried.has(needs.items)
+            boolean enough = state.carried == null || state.carried.has(needs.items)
                 || type == FAIRY_RING && unlocks != null && unlocks.lumbridgeElite();
             return enough ? null : BankDetour.FROM_BANK + fromBank(needs.items);
         }
@@ -756,7 +730,7 @@ final class RouteSource
          */
         String fromBank(String column)
         {
-            return itemLines(Arrays.stream(ItemSnapshot.ALL.split(column)).filter(all -> !carried.has(all))
+            return itemLines(Arrays.stream(ItemSnapshot.ALL.split(column)).filter(all -> !state.carried.has(all))
                 .map(all -> Arrays.stream(ItemSnapshot.ANY.split(all)).filter(items::has).findFirst().map(String::trim)
                     .orElse(all)).collect(Collectors.toList()), itemNames, "items");
         }
@@ -805,44 +779,36 @@ final class RouteSource
         return needs;
     }
 
-    /** Where to stand at each bank (banks.tsv): by its icon's tile, the tiles beside its booths, nearest the icon first. */
-    static final RouteFiles.Table<Map<Integer, int[]>> BANKS = new RouteFiles.Table<>(() -> Pathfinder.table(
-        RouteFiles.DIR + "banks.tsv", cells -> new int[]{parse(cells[0]), parse(cells[1])}).stream()
-        .filter(row -> row[0] >= 0 && row[1] >= 0).collect(Collectors.groupingBy(row -> row[0],
-            Collectors.collectingAndThen(Collectors.toList(), rows -> rows.stream().mapToInt(row -> row[1]).toArray()))));
-
-    /** The booth or chest each stand of banks.tsv uses (its fifth column), by the stand. */
-    static final RouteFiles.Table<Map<Integer, Integer>> BOOTHS = new RouteFiles.Table<>(() -> Pathfinder.table(
-        RouteFiles.DIR + "banks.tsv", cells -> new int[]{parse(cells[1]), parse(cells[4])}).stream()
-        .filter(row -> row[0] >= 0 && row[1] >= 0).collect(Collectors.toMap(row -> row[0], row -> row[1], (a, b) -> a)));
+    /**
+     * Each bank's rows of banks.tsv: its icon's tile, a tile to stand on beside one of its booths or chests (nearest the
+     * icon first), and that booth (its fifth column); -1 where a cell is no tile.
+     */
+    static final RouteFiles.Table<List<int[]>> BANKS = new RouteFiles.Table<>(() -> Pathfinder.table(RouteFiles.DIR
+        + "banks.tsv", cells -> new int[]{parse(cells[0]), parse(cells[1]), parse(cells[4])}));
 
     /** Where a bank step is named: on the booth or chest used from {@code stand}, else the stand. */
     static int booth(int stand)
     {
-        return BOOTHS.get().getOrDefault(stand, stand);
+        for (int[] row : BANKS.get())
+        {
+            if (row[1] == stand && stand >= 0 && row[2] >= 0)
+            {
+                return row[2];
+            }
+        }
+        return stand;
     }
 
     /** Where to stand to use the bank whose icon is at {@code icon}: by each of its booths, else the icon itself. */
     static int[] bankStands(int icon)
     {
-        var stands = BANKS.get().get(icon);
-        return stands != null ? stands : new int[]{icon};
+        int[] stands = BANKS.get().stream().filter(row -> row[0] == icon && row[1] >= 0).mapToInt(row -> row[1]).toArray();
+        return stands.length > 0 ? stands : new int[]{icon};
     }
 
     /** Where a boat can lie: the game's ports. */
-    static final RouteFiles.Table<int[]> PORTS = new RouteFiles.Table<>(RouteSource::readPorts);
-
-    static int[] readPorts()
-    {
-        try
-        {
-            return Ports.load().values().stream().mapToInt(Integer::intValue).toArray();
-        }
-        catch (IOException e)
-        {
-            return new int[0];
-        }
-    }
+    static final RouteFiles.Table<int[]> PORTS = new RouteFiles.Table<>(() -> Ports.load().values().stream()
+        .mapToInt(Integer::intValue).toArray());
 
     /** gates.tsv by column: Name, Origin, Destination, Skills, Items, Quests, Varbits; {@code #} lines are comments. */
     static List<Gate> readGates()
@@ -871,19 +837,11 @@ final class RouteSource
         return column < cells.length ? cells[column].trim() : "";
     }
 
-    /** {@code "x y plane"}, or null. */
+    /** {@code "x y plane"} on the map, or null. */
     static WorldPoint point(String cell)
     {
-        var parts = cell.split("\\s+");
-        try
-        {
-            return parts.length != 3 ? null
-                : new WorldPoint(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
-        }
-        catch (NumberFormatException e)
-        {
-            return null;
-        }
+        int at = parse(cell);
+        return at < 0 ? null : RouteFeature.worldPoint(at);
     }
 
     /** How a gate named by its action starts (list "actions"); (?!) matches nothing: without the list all are opened. */
@@ -983,6 +941,9 @@ final class RouteSource
             : String.join(", ", Arrays.copyOf(codes, codes.length - 1)) + ", then " + codes[codes.length - 1];
     }
 
+    /** Codes dialled one after another ("AIR-DLR-DJQ-AJS"). */
+    static final Pattern CODES = Pattern.compile("[A-Z]{3}(-[A-Z]{3})+");
+
     /** How many rings one goes through to a stop: the codes of a sequence ("AIR-DLR-DJQ-AJS"), else one. */
     static int dials(PoiType type, String name)
     {
@@ -992,23 +953,7 @@ final class RouteSource
         }
         int dash = name.indexOf(" – ");
         String code = dash < 0 ? name : name.substring(0, dash);
-        return code.matches("[A-Z]{3}(-[A-Z]{3})+") ? code.split("-").length : 1;
-    }
-
-    static Kind kind(PoiType type)
-    {
-        switch (type)
-        {
-            case BOAT:
-            case CHARTER:
-                return Kind.SHIP;
-            case AGILITY_SHORTCUT:
-            case PORTAL:
-            case LEVER:
-                return Kind.ENTRANCE;
-            default:
-                return Kind.TRANSPORT;
-        }
+        return CODES.matcher(code).matches() ? code.split("-").length : 1;
     }
 
     /** In the avoid set: no home or minigame teleport at all (an order's trips without the one cast they get). */
@@ -1025,37 +970,6 @@ final class RouteSource
     {
         return step.kind == Route.Step.Kind.TELEPORT && step.name != null
             && onceOnly(step.name.toLowerCase(ROOT), step.category);
-    }
-
-    static int cost(PoiType type)
-    {
-        switch (type)
-        {
-            case FAIRY_RING:
-            case SPIRIT_TREE:
-            case MUSHTREE:
-                return 10;
-            case LEVER:
-            case AGILITY_SHORTCUT:
-            case OBELISK:
-                return 8;
-            case PORTAL:
-                return 6;
-            // A ship's trip is a few seconds of its map interlude, a boat's with its talk more.
-            case MINECART:
-            case GNOME_GLIDER:
-            case QUETZAL:
-                return 12;
-            case CHARTER:
-            case BALLOON:
-                return 14;
-            case CANOE:
-                return 60;
-            case CARPET:
-                return 100;
-            default:
-                return 20;
-        }
     }
 
     static String dockLevel(Poi poi)

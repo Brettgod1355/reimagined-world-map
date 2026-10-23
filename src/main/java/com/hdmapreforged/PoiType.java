@@ -1,5 +1,6 @@
 package com.hdmapreforged;
 
+import com.hdmapreforged.route.*;
 import java.awt.*;
 import java.io.*;
 import java.nio.charset.*;
@@ -22,6 +23,10 @@ enum PoiType
     final Color color;
     /** The game map element whose icon stands for this type (GameIconSprites); -1 none. */
     final int element;
+    /** For routes: a trip's half ticks, its kind of jump, and the setting weighing it (RouteSource.Saving). */
+    final int cost;
+    final Edge.Kind kind;
+    final int saving;
 
     PoiType()
     {
@@ -29,10 +34,19 @@ enum PoiType
         displayName = cells[1];
         layer = Layer.valueOf(cells[2]);
         color = new Color(Integer.parseInt(cells[3], 16));
-        element = cells.length > 4 ? Integer.parseInt(cells[4]) : -1;
+        element = cells[4].isEmpty() ? -1 : Integer.parseInt(cells[4]);
+        cost = Integer.parseInt(cells[5]);
+        kind = Edge.Kind.valueOf(cells[6]);
+        saving = Integer.parseInt(cells[7]);
     }
 
-    /** The types' names, layers, colours and game icons, bundled (data/poi_types.tsv). */
+    /** A game map icon's key with no type: the name the Icons panel shows it by (empty: its own) and its group; or null. */
+    static String[] key(String name)
+    {
+        return Rows.BY_TYPE.get(name);
+    }
+
+    /** The types' names, layers, colours and game icons, bundled (data/poi_types.tsv), then the keys'. */
     private static final class Rows
     {
         static final Map<String, String[]> BY_TYPE = new HashMap<>();
