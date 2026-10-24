@@ -75,6 +75,14 @@ public interface HdMapReforgedConfig extends Config
         return false;
     }
 
+    @ConfigItem(keyName = "showSidebar", name = "Sidebar button", position = -2,
+        description = "The map's button in RuneLite's sidebar, with the route's steps, custom routes and the party. "
+            + "Without it, open the map with its hotkey or the world map orb")
+    default boolean showSidebar()
+    {
+        return true;
+    }
+
     @ConfigItem(keyName = "openMapKey", name = "Open map hotkey",
         description = "Opens and closes the map. Escape also closes it")
     default Keybind openMapKey()
