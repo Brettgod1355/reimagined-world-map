@@ -217,7 +217,7 @@ public class HdMapReforgedPlugin extends Plugin
             .priority(6)
             .panel(panel)
             .build();
-        clientToolbar.addNavigation(button);
+        placeSidebarButton();
         party.start(screen.view, fullScreen.view);
         // Where the house's picture is kept per account, and the thread that reads and writes it.
         route.yourHouse.houseFolder = home.joinSegment("house");
@@ -755,8 +755,24 @@ public class HdMapReforgedPlugin extends Plugin
             case "iconsOff":
                 screens(s -> s.view.setIconsOff(config.iconsOff()));
                 return;
+            case "showSidebar":
+                placeSidebarButton();
+                return;
         }
         refreshLater();
+    }
+
+    /** The sidebar button, unless turned off. The panel stays made either way: the route writes its steps to it. */
+    void placeSidebarButton()
+    {
+        if (config.showSidebar())
+        {
+            clientToolbar.addNavigation(button);
+        }
+        else
+        {
+            clientToolbar.removeNavigation(button);
+        }
     }
 
     void configureTiles()
