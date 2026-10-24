@@ -29,7 +29,6 @@ import net.runelite.client.game.*;
 import net.runelite.client.party.*;
 import net.runelite.client.party.events.*;
 import net.runelite.client.party.messages.*;
-import net.runelite.client.plugins.party.messages.*;
 import net.runelite.client.util.*;
 
 /**
@@ -415,15 +414,15 @@ public final class PartyMap implements MapPanel.Friends, FriendsWidget.Images
         repaint();
     }
 
-    /** RuneLite's Party plugin's messages, for members without this plugin. */
+    /** RuneLite's own party data (1.13.4 on), for members without this plugin; a coord only when it changed. */
     @Subscribe
-    public void onLocationUpdate(LocationUpdate message)
+    public void onPartyData(PartyData message)
     {
-        if (isLocal(message.getMemberId()))
+        if (message.getCoord() == null || isLocal(message.getMemberId()))
         {
             return;
         }
-        var point = message.getWorldPoint();
+        var point = WorldPoint.fromCoord(message.getCoord());
         if (!HdMapPartyLocation.plausible(point))
         {
             return;
